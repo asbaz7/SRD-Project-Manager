@@ -1,0 +1,17 @@
+name = "rd-task-tracker"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static files (style.css) are served automatically from here before
+# the Worker script runs, for any request that matches a file in it.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Created by `npx wrangler d1 create rd-task-tracker-db` — see README.md.
+# After running that command, paste the database_id it prints below.
+[[d1_databases]]
+binding = "DB"
+database_name = "rd-task-tracker-db"
+database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
