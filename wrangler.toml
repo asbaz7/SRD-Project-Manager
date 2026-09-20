@@ -14,4 +14,4 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "rd-task-tracker-db"
-database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
+database_id = "37c552a0-9ec2-4d73-864a-f1964c18c654"
