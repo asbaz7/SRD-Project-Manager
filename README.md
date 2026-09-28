@@ -1,6 +1,6 @@
-# SRD Dashboard
+# South Regional Department Dashboard
 
-A simple, read-only dashboard of atolls, islands, gensets and projects for SRD management.
+A simple, read-only dashboard of atolls, islands, gensets and projects for the South Regional Department (SRD).
 There is no login.
 
 - Atolls, islands and gensets (model, capacity) come from Supabase.
