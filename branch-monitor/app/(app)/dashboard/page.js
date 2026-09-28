@@ -28,7 +28,7 @@ export default async function DashboardPage() {
 
   const { data: gensets = [], error } = await supabase
     .from("gensets")
-    .select("id,genset_number,model,rated_kw,operating_kw,reported_condition,condition_status,issue_note,source_imported_on,powerhouses(id,name,islands(id,name,atolls(code,name)))");
+    .select("id,genset_number,model,rated_kw,operating_kw,reported_condition,condition_status,issue_note,source_name,source_imported_on,powerhouses(id,name,islands(id,name,atolls(code,name)))");
 
   const rows = [...gensets].sort((a, b) => {
     const aa = a.powerhouses?.islands?.atolls?.code || "";
@@ -65,16 +65,16 @@ export default async function DashboardPage() {
     <PageHeader
       eyebrow="Electricity continuity"
       title="Genset condition monitor"
-      description="Current genset register from the supplied land-powerhouse records. Any abnormal, incomplete or unverified genset condition is shown as an attention item."
+      description="Genset register for all land powerhouses in the supplied K, ADh, V and M statistical summaries. Any reported fault is pulled to the top automatically."
     />
 
     {error && <p className="alert danger" role="alert">The genset register could not be loaded. Reload the page to retry.</p>}
 
     <div className="stats-grid">
-      <Stat label="Powerhouses" value={powerhouseIds.size} hint="With genset records" />
-      <Stat label="Gensets" value={rows.length} hint="Registered from supplied records" />
+      <Stat label="Powerhouses" value={powerhouseIds.size} hint="Land powerhouses in supplied records" />
+      <Stat label="Gensets" value={rows.length} hint="Listed in powerhouse genset tables" />
       <Stat label="Normal" value={normal.length} hint="Reported running / OK" />
-      <Stat label="Needs attention" value={abnormal.length} tone={abnormal.length ? "danger" : ""} hint={critical.length ? `${critical.length} critical / unavailable` : "Includes incomplete or unverified records"} />
+      <Stat label="Needs attention" value={abnormal.length} tone={abnormal.length ? "danger" : ""} hint={critical.length ? `${critical.length} critical / major fault` : "Reported faults"} />
     </div>
 
     {abnormal.length > 0 && <Card>
@@ -82,14 +82,16 @@ export default async function DashboardPage() {
         <div>
           <div className="eyebrow">Immediate visibility</div>
           <h2>Gensets requiring attention</h2>
+          <p className="muted">Every genset marked with a minor or major fault in the supplied records appears here.</p>
         </div>
       </div>
       <div className="list">
         {abnormal.map((g) => <div className="list-row" key={g.id}>
           <div>
-            <strong>{g.powerhouses?.islands?.atolls?.code} · {g.powerhouses?.islands?.name} · {g.genset_number}</strong>
-            <span>{g.model} · {g.rated_kw ?? "—"} kW rated</span>
-            <p>{g.issue_note || g.reported_condition || "Condition requires verification."}</p>
+            <strong>{g.powerhouses?.islands?.atolls?.code} · {g.powerhouses?.islands?.name} · Genset {g.genset_number}</strong>
+            <span>{g.model} · {g.rated_kw ?? "—"} kW rated · {g.operating_kw ?? "—"} kW operating</span>
+            <p><strong>{g.reported_condition || "Condition requires verification."}</strong>{g.issue_note ? ` — ${g.issue_note}` : ""}</p>
+            {g.source_name && <small className="muted">Source: {g.source_name}</small>}
           </div>
           <Badge tone={conditionTone(g.condition_status)}>{conditionLabel(g.condition_status)}</Badge>
         </div>)}
@@ -99,14 +101,17 @@ export default async function DashboardPage() {
     <div style={{ display: "grid", gap: "16px", marginTop: "16px" }}>
       {groups.map((group) => {
         const groupAttention = group.gensets.filter((g) => g.condition_status !== "normal").length;
+        const groupCritical = group.gensets.filter((g) => ["critical", "out_of_service"].includes(g.condition_status)).length;
         return <Card key={group.key}>
           <div className="card-head">
             <div>
               <div className="eyebrow">{group.atoll} Atoll · {group.island}</div>
               <h2>{group.powerhouse}</h2>
-              <p className="muted">{group.gensets.length} genset{group.gensets.length === 1 ? "" : "s"} · {groupAttention ? `${groupAttention} requiring attention` : "No reported genset issues"}</p>
+              <p className="muted">{group.gensets.length} genset{group.gensets.length === 1 ? "" : "s"} · {groupCritical ? `${groupCritical} major fault` : groupAttention ? `${groupAttention} minor fault${groupAttention === 1 ? "" : "s"}` : "No reported genset faults"}</p>
             </div>
-            <Badge tone={groupAttention ? "priority-high" : "status-completed"}>{groupAttention ? "Attention" : "Normal"}</Badge>
+            <Badge tone={groupCritical ? "priority-critical" : groupAttention ? "priority-high" : "status-completed"}>
+              {groupCritical ? "Critical" : groupAttention ? "Attention" : "Normal"}
+            </Badge>
           </div>
 
           <div className="table-wrap">
@@ -131,7 +136,10 @@ export default async function DashboardPage() {
                     <Badge tone={conditionTone(g.condition_status)}>{conditionLabel(g.condition_status)}</Badge>
                     <br/><small>{g.reported_condition || "No condition supplied"}</small>
                   </td>
-                  <td>{g.issue_note ? <strong>{g.issue_note}</strong> : <span className="muted">No reported issue</span>}</td>
+                  <td>
+                    {g.issue_note ? <strong>{g.issue_note}</strong> : <span className="muted">No reported issue</span>}
+                    {g.source_name && <><br/><small className="muted">{g.source_name}</small></>}
+                  </td>
                 </tr>)}
               </tbody>
             </table>
@@ -141,7 +149,7 @@ export default async function DashboardPage() {
     </div>
 
     <p className="muted" style={{ marginTop: "16px" }}>
-      This first screen uses only the genset information already present in the supplied records. “Normal” means the source reported the unit as running/OK; it is not live telemetry.
+      Condition labels are taken from the supplied statistical-summary genset tables. “Normal” means the source reports the unit as Running or Running, OK; this screen is not live telemetry.
     </p>
   </>;
 }
