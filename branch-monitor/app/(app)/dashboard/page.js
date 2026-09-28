@@ -59,10 +59,10 @@ export default async function DashboardPage() {
       <strong>{totalIssues} genset issue{totalIssues === 1 ? "" : "s"} currently recorded.</strong> Drill down through the affected atoll to view the powerhouse and genset.
     </div>}
 
-    <div className="hierarchy-grid">
-      {summaries.map((atoll) => <Link key={atoll.id} href={`/atolls/${encodeURIComponent(atoll.code)}`} className="hierarchy-card">
-        <div className="hierarchy-card-head">
-          <div>
+    <div className="atoll-list">
+      {summaries.map((atoll) => <Link key={atoll.id} href={`/atolls/${encodeURIComponent(atoll.code)}`} className="atoll-nav-card">
+        <div className="atoll-nav-main">
+          <div className="atoll-nav-title">
             <div className="eyebrow">Atoll</div>
             <h2>{atoll.code} · {atoll.name}</h2>
           </div>
@@ -70,14 +70,14 @@ export default async function DashboardPage() {
             {atoll.critical ? "Critical" : atoll.attention ? "Attention" : "Normal"}
           </Badge>
         </div>
-        <div className="hierarchy-metrics">
-          <span><strong>{atoll.islandCount}</strong> islands</span>
-          <span><strong>{atoll.powerhouseCount}</strong> powerhouses</span>
-          <span><strong>{atoll.gensetCount}</strong> gensets</span>
+        <div className="atoll-nav-metrics">
+          <div><strong>{atoll.islandCount}</strong><span>Islands</span></div>
+          <div><strong>{atoll.powerhouseCount}</strong><span>Powerhouses</span></div>
+          <div><strong>{atoll.gensetCount}</strong><span>Gensets</span></div>
         </div>
-        <div className="hierarchy-footer">
+        <div className="atoll-nav-footer">
           <span>{atoll.issues ? `${atoll.issues} genset issue${atoll.issues === 1 ? "" : "s"}` : "No genset issues recorded"}</span>
-          <strong>View islands →</strong>
+          <span className="atoll-nav-action">View islands <b>→</b></span>
         </div>
       </Link>)}
     </div>
