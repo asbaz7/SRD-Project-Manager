@@ -66,6 +66,7 @@ export default async function PowerhousePage({ params }) {
       eyebrow={`${atoll.code} Atoll · ${island.name} · Powerhouse`}
       title={powerhouse.name}
       description="Gensets registered under this powerhouse. Unit Heads can update a condition and add an issue note."
+      actions={<Link href={`/powerhouses/${id}/engine-reports`} className="btn primary">Engine condition reports</Link>}
     />
 
     <div className="stats-grid">
