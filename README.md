@@ -1,15 +1,24 @@
-# SRD Project Manager
+# SRD Genset Dashboard
 
-This repository contains the current SRD Project Manager / Branch Monitor application.
+A simple, read-only dashboard of atolls, islands and gensets for SRD management.
+There is no login; the data is read directly from Supabase.
 
-## Active application
+The app lives in `branch-monitor/`:
 
-The production application is maintained in:
+- `app/page.js` – overview: totals and installed capacity by atoll
+- `app/atolls/[code]/page.js` – islands in an atoll
+- `app/islands/[id]/page.js` – gensets on an island
+- `lib/data.js` – Supabase queries
 
-`branch-monitor/`
+## Develop
 
-It includes the authenticated project, work, island/location, team, activity, and management dashboard features, with Supabase-backed data and Cloudflare Workers deployment support.
+```bash
+cd branch-monitor
+npm ci
+npm run dev
+```
 
-The previous root-level RD Task Tracker has been removed to avoid confusion and is no longer part of the active system.
+## Deploy
 
-See `branch-monitor/README.md` for setup, database, and deployment instructions.
+Cloudflare Workers Builds deploys `main` automatically
+(build: `npm ci && npm run build:vinext`, deploy: `npm run deploy:vinext`, root: `branch-monitor`).
