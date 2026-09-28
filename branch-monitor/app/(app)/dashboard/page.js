@@ -1,5 +1,6 @@
 import { requireApprovedUser } from "@/lib/auth";
 import { Badge, Card, PageHeader, Stat } from "@/components/UI";
+import { updateGensetConditionAction } from "@/app/actions";
 
 function conditionTone(status) {
   if (status === "normal") return "status-completed";
@@ -9,11 +10,18 @@ function conditionTone(status) {
 }
 
 function conditionLabel(status) {
-  if (status === "normal") return "Normal";
-  if (status === "attention") return "Attention";
-  if (status === "critical") return "Critical";
+  if (status === "normal") return "Running";
+  if (status === "attention") return "Minor fault";
+  if (status === "critical") return "Major fault";
   if (status === "out_of_service") return "Out of service";
   return "Unknown";
+}
+
+function conditionValue(status) {
+  if (status === "attention") return "minor_fault";
+  if (status === "critical") return "major_fault";
+  if (status === "out_of_service") return "out_of_service";
+  return "running";
 }
 
 function sortGensets(a, b) {
@@ -24,7 +32,8 @@ function sortGensets(a, b) {
 }
 
 export default async function DashboardPage() {
-  const { supabase } = await requireApprovedUser();
+  const { supabase, profile } = await requireApprovedUser();
+  const canEditCondition = ["hod", "unit_head"].includes(profile?.role);
 
   const { data: gensets = [], error } = await supabase
     .from("gensets")
@@ -65,7 +74,7 @@ export default async function DashboardPage() {
     <PageHeader
       eyebrow="Electricity continuity"
       title="Genset condition monitor"
-      description="Genset register for all land powerhouses in the supplied K, ADh, V and M statistical summaries. Any reported fault is pulled to the top automatically."
+      description="Current genset register for all land powerhouses. Unit Heads can update a genset condition and record a note whenever an issue occurs."
     />
 
     {error && <p className="alert danger" role="alert">The genset register could not be loaded. Reload the page to retry.</p>}
@@ -73,7 +82,7 @@ export default async function DashboardPage() {
     <div className="stats-grid">
       <Stat label="Powerhouses" value={powerhouseIds.size} hint="Land powerhouses in supplied records" />
       <Stat label="Gensets" value={rows.length} hint="Listed in powerhouse genset tables" />
-      <Stat label="Normal" value={normal.length} hint="Reported running / OK" />
+      <Stat label="Running" value={normal.length} hint="Current recorded condition" />
       <Stat label="Needs attention" value={abnormal.length} tone={abnormal.length ? "danger" : ""} hint={critical.length ? `${critical.length} critical / major fault` : "Reported faults"} />
     </div>
 
@@ -82,7 +91,7 @@ export default async function DashboardPage() {
         <div>
           <div className="eyebrow">Immediate visibility</div>
           <h2>Gensets requiring attention</h2>
-          <p className="muted">Every genset marked with a minor or major fault in the supplied records appears here.</p>
+          <p className="muted">Any genset changed from Running appears here immediately with its issue note.</p>
         </div>
       </div>
       <div className="list">
@@ -136,7 +145,22 @@ export default async function DashboardPage() {
                     <br/><small>{g.reported_condition || "No condition supplied"}</small>
                   </td>
                   <td>
-                    {g.issue_note ? <strong>{g.issue_note}</strong> : <span className="muted">No reported issue</span>}
+                    {canEditCondition ? <form action={updateGensetConditionAction.bind(null, g.id)} style={{ display: "grid", gap: "8px", minWidth: "230px" }}>
+                      <select name="condition" defaultValue={conditionValue(g.condition_status)} aria-label={`Condition for ${group.island} genset ${g.genset_number}`}>
+                        <option value="running">Running</option>
+                        <option value="minor_fault">Minor fault</option>
+                        <option value="major_fault">Major fault</option>
+                        <option value="out_of_service">Out of service</option>
+                      </select>
+                      <input
+                        name="note"
+                        type="text"
+                        defaultValue={g.issue_note || ""}
+                        placeholder="Issue note (required if not running)"
+                        aria-label={`Issue note for ${group.island} genset ${g.genset_number}`}
+                      />
+                      <button className="btn" type="submit">Save condition</button>
+                    </form> : g.issue_note ? <strong>{g.issue_note}</strong> : <span className="muted">No issue recorded</span>}
                   </td>
                 </tr>)}
               </tbody>
@@ -147,7 +171,7 @@ export default async function DashboardPage() {
     </div>
 
     <p className="muted" style={{ marginTop: "16px" }}>
-      Condition labels reflect the recorded genset condition. “Normal” means the unit is recorded as Running or Running, OK; this screen is not live telemetry.
+      Conditions are operational records maintained in the system. Unit Heads can change a condition and add an issue note; this screen is not live telemetry.
     </p>
   </>;
 }
