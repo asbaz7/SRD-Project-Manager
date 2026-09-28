@@ -116,3 +116,9 @@ region hint, but Cloudflare's network is global). For an internal task
 tracker this is generally fine, but if STELCO has any policy about
 where company data can be hosted, worth a quick check with whoever
 handles that before pointing your team at the live URL.
+
+## Branch Monitor application
+
+The newer authenticated Branch Monitor, including island statistics, is in
+[`branch-monitor/`](branch-monitor/). See its README for Cloudflare Workers
+build settings. Its database and deployment are separate from this legacy tracker.
