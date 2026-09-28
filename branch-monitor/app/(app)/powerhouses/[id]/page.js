@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireApprovedUser } from "@/lib/auth";
-import { updateGensetConditionAction } from "@/app/actions";
 import { Badge, Card, PageHeader, Stat } from "@/components/UI";
 
 function conditionTone(status) {
@@ -16,14 +15,7 @@ function conditionLabel(status) {
   if (status === "attention") return "Minor fault";
   if (status === "critical") return "Major fault";
   if (status === "out_of_service") return "Out of service";
-  return "Unknown";
-}
-
-function conditionValue(status) {
-  if (status === "attention") return "minor_fault";
-  if (status === "critical") return "major_fault";
-  if (status === "out_of_service") return "out_of_service";
-  return "running";
+  return "No report";
 }
 
 function sortGensets(a, b) {
@@ -36,13 +28,23 @@ function sortGensets(a, b) {
 export default async function PowerhousePage({ params }) {
   const { id } = await params;
   const { supabase, profile } = await requireApprovedUser();
-  const canEditCondition = ["developer", "hod", "unit_head"].includes(profile?.role);
+  const canEditReports = ["developer", "hod", "unit_head"].includes(profile?.role);
 
-  const { data: powerhouse } = await supabase
-    .from("powerhouses")
-    .select("id,name,operational_status,islands(id,name,atolls(id,code,name)),gensets(id,genset_number,model,rated_kw,operating_kw,reported_condition,condition_status,issue_note)")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: powerhouse }, { data: latestReport }] = await Promise.all([
+    supabase
+      .from("powerhouses")
+      .select("id,name,operational_status,islands(id,name,atolls(id,code,name)),gensets(id,genset_number,model,rated_kw,operating_kw,reported_condition,condition_status,issue_note)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("engine_condition_reports")
+      .select("report_month")
+      .eq("powerhouse_id", id)
+      .eq("report_status", "submitted")
+      .order("report_month", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (!powerhouse) notFound();
 
@@ -50,7 +52,11 @@ export default async function PowerhousePage({ params }) {
   const running = gensets.filter((g) => g.condition_status === "normal").length;
   const attention = gensets.filter((g) => g.condition_status === "attention").length;
   const critical = gensets.filter((g) => ["critical", "out_of_service"].includes(g.condition_status)).length;
+  const unreported = gensets.filter((g) => g.condition_status === "unknown").length;
   const issueCount = attention + critical;
+  const reportMonth = latestReport?.report_month
+    ? new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(latestReport.report_month + "T00:00:00Z"))
+    : null;
   const island = powerhouse.islands;
   const atoll = island.atolls;
 
@@ -65,8 +71,13 @@ export default async function PowerhousePage({ params }) {
     <PageHeader
       eyebrow={`${atoll.code} Atoll · ${island.name} · Powerhouse`}
       title={powerhouse.name}
-      description="Gensets registered under this powerhouse. Unit Heads can update a condition and add an issue note."
-      actions={<Link href={`/powerhouses/${id}/engine-reports`} className="btn primary">Engine condition reports</Link>}
+      description={reportMonth
+        ? `Genset conditions are taken from the latest submitted engine condition report (${reportMonth}).`
+        : "No engine condition report has been submitted yet, so genset conditions are unknown."}
+      actions={<>
+        <Link href={`/powerhouses/${id}/engine-reports`} className="btn secondary">Engine condition reports</Link>
+        {canEditReports && <Link href={`/powerhouses/${id}/engine-reports/new`} className="btn primary">Update via monthly report</Link>}
+      </>}
     />
 
     <div className="stats-grid">
@@ -74,6 +85,7 @@ export default async function PowerhousePage({ params }) {
       <Stat label="Running" value={running} />
       <Stat label="Minor faults" value={attention} tone={attention ? "danger" : ""} />
       <Stat label="Major / unavailable" value={critical} tone={critical ? "danger" : ""} />
+      {unreported > 0 && <Stat label="No report" value={unreported} hint="Not in a submitted engine report" />}
     </div>
 
     {issueCount > 0 && <Card>
@@ -84,10 +96,10 @@ export default async function PowerhousePage({ params }) {
         </div>
       </div>
       <div className="compact-list">
-        {gensets.filter((g) => g.condition_status !== "normal").map((g) => <div key={g.id}>
+        {gensets.filter((g) => ["attention", "critical", "out_of_service"].includes(g.condition_status)).map((g) => <div key={g.id}>
           <span>Genset {g.genset_number} · {g.model}</span>
           <Badge tone={conditionTone(g.condition_status)}>{conditionLabel(g.condition_status)}</Badge>
-          <small>{g.issue_note || "No issue note recorded"}</small>
+          <small>{g.issue_note || g.reported_condition || "No fault details recorded"}</small>
         </div>)}
       </div>
     </Card>}
@@ -108,7 +120,7 @@ export default async function PowerhousePage({ params }) {
               <th>Rated</th>
               <th>Operating</th>
               <th>Condition</th>
-              <th>{canEditCondition ? "Update condition" : "Issue note"}</th>
+              <th>Reported status</th>
             </tr>
           </thead>
           <tbody>
@@ -121,24 +133,7 @@ export default async function PowerhousePage({ params }) {
                 <Badge tone={conditionTone(g.condition_status)}>{conditionLabel(g.condition_status)}</Badge>
                 {g.issue_note && <><br/><small>{g.issue_note}</small></>}
               </td>
-              <td>
-                {canEditCondition ? <form action={updateGensetConditionAction.bind(null, g.id)} className="genset-condition-form">
-                  <select name="condition" defaultValue={conditionValue(g.condition_status)} aria-label={`Condition for genset ${g.genset_number}`}>
-                    <option value="running">Running</option>
-                    <option value="minor_fault">Minor fault</option>
-                    <option value="major_fault">Major fault</option>
-                    <option value="out_of_service">Out of service</option>
-                  </select>
-                  <input
-                    name="note"
-                    type="text"
-                    defaultValue={g.issue_note || ""}
-                    placeholder="Issue note if not running"
-                    aria-label={`Issue note for genset ${g.genset_number}`}
-                  />
-                  <button className="btn primary" type="submit">Save</button>
-                </form> : <span className="muted">{g.issue_note || "No issue recorded"}</span>}
-              </td>
+              <td><span className="muted">{g.reported_condition || "—"}</span></td>
             </tr>)}
           </tbody>
         </table>

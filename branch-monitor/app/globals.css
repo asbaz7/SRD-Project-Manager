@@ -69,8 +69,8 @@ label{display:grid;gap:6px;font-size:.82rem;font-weight:700;color:var(--navy-800
 .hierarchy-metrics{display:flex;gap:24px;flex-wrap:wrap;padding:14px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 .hierarchy-metrics span{display:flex;align-items:baseline;gap:5px;color:var(--muted);font-size:.84rem}.hierarchy-metrics strong{font-size:1.25rem;color:var(--navy-950)}
 .hierarchy-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.84rem}.hierarchy-footer span{color:var(--muted)}.hierarchy-footer strong{color:var(--teal-dark)}
-.genset-condition-form{display:grid;grid-template-columns:minmax(130px,.8fr) minmax(210px,1.5fr) auto;gap:8px;align-items:center;min-width:430px}.genset-condition-form .btn{white-space:nowrap}
-@media(max-width:760px){.hierarchy-grid{grid-template-columns:1fr}.hierarchy-card{padding:16px}.hierarchy-footer{align-items:flex-start;flex-direction:column}.genset-condition-form{grid-template-columns:1fr;min-width:260px}}
+
+@media(max-width:760px){.hierarchy-grid{grid-template-columns:1fr}.hierarchy-card{padding:16px}.hierarchy-footer{align-items:flex-start;flex-direction:column}}
 
 
 /* Clean atoll navigation */

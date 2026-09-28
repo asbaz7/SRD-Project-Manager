@@ -112,8 +112,8 @@ export async function saveEngineConditionReportAction(powerhouseId, formData) {
     if (error) throw new Error(error.message);
   }
 
-  revalidatePath("/engine-reports");
-  revalidatePath(`/powerhouses/${powerhouseId}`);
-  revalidatePath(`/powerhouses/${powerhouseId}/engine-reports`);
+  // Genset conditions are derived from submitted reports (see DB triggers),
+  // so every page showing genset condition must be refreshed.
+  revalidatePath("/", "layout");
   redirect(`/powerhouses/${powerhouseId}/engine-reports`);
 }
