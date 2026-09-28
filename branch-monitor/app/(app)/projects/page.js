@@ -44,9 +44,9 @@ export default async function ProjectsPage() {
         const atoll = project.powerhouses?.islands?.atolls?.code;
         const island = project.powerhouses?.islands?.name;
         const location = project.location_text || [atoll, island].filter(Boolean).join(" · ") || "Location not recorded";
-        return <Link key={project.id} href={`/projects/${project.id}`} className="project-register-card">
-          <div className="project-register-top">
-            <div>
+        return <section key={project.id} className="project-list-card">
+          <div className="project-list-head">
+            <div className="project-list-title">
               <div className="eyebrow">{project.code}</div>
               <h2>{project.title}</h2>
               <p>{location}</p>
@@ -56,20 +56,23 @@ export default async function ProjectsPage() {
             </Badge>
           </div>
 
-          <div className="project-register-metrics">
-            <div><span>Start</span><strong>{formatDate(project.start_date)}</strong></div>
-            <div><span>Completion</span><strong>{formatDate(project.completion_date)}</strong></div>
-            <div><span>Progress</span><strong>{project.progress_override ?? (project.status === "completed" ? 100 : 0)}%</strong></div>
-            <div><span>Budget</span><strong>MVR {money(project.budget)}</strong></div>
-            <div><span>SRD expenditure</span><strong>MVR {money(project.exp_srd)}</strong></div>
-            <div><span>Work sections</span><strong>{project.project_record_tasks?.length || 0}</strong></div>
+          <div className="project-list-metrics">
+            <div className="project-list-metric"><span>Start</span><strong>{formatDate(project.start_date)}</strong></div>
+            <div className="project-list-metric"><span>Completion</span><strong>{formatDate(project.completion_date)}</strong></div>
+            <div className="project-list-metric"><span>Progress</span><strong>{project.progress_override ?? (project.status === "completed" ? 100 : 0)}%</strong></div>
+            <div className="project-list-metric"><span>Budget</span><strong>{project.budget == null ? "—" : `MVR ${money(project.budget)}`}</strong></div>
+            <div className="project-list-metric"><span>SRD expenditure</span><strong>{project.exp_srd == null ? "—" : `MVR ${money(project.exp_srd)}`}</strong></div>
+            <div className="project-list-metric"><span>Work sections</span><strong>{project.project_record_tasks?.length || 0}</strong></div>
           </div>
 
-          <div className="project-register-bottom">
-            <span>{project.scope || "Scope not recorded"}</span>
-            <strong>Open project record →</strong>
+          <div className="project-list-foot">
+            <div>
+              <span>Scope</span>
+              <p>{project.scope || "Scope not recorded"}</p>
+            </div>
+            <Link href={`/projects/${project.id}`} className="btn primary">Open project record</Link>
           </div>
-        </Link>;
+        </section>;
       })}
     </div>
   </>;
