@@ -2,7 +2,7 @@ import Link from "next/link";
 import { logoutAction } from "@/app/actions";
 
 const nav = [
-  ["/dashboard", "Gensets"],
+  ["/dashboard", "Operations"],
 ];
 
 export default function AppShell({ profile, children }) {
