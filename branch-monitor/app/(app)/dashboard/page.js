@@ -1,47 +1,147 @@
-import Link from "next/link";
-import { getIslandStatistics } from "@/lib/island-statistics";
-import { IslandStatusSummary } from "@/components/IslandStatus";
 import { requireApprovedUser } from "@/lib/auth";
-import { getDashboardData } from "@/lib/queries";
-import { Card, Empty, PageHeader, PriorityBadge, Progress, Stat, StatusBadge } from "@/components/UI";
-import { formatDate } from "@/lib/format";
+import { Badge, Card, PageHeader, Stat } from "@/components/UI";
+
+function conditionTone(status) {
+  if (status === "normal") return "status-completed";
+  if (status === "attention") return "priority-high";
+  if (status === "critical" || status === "out_of_service") return "priority-critical";
+  return "status-planned";
+}
+
+function conditionLabel(status) {
+  if (status === "normal") return "Normal";
+  if (status === "attention") return "Attention";
+  if (status === "critical") return "Critical";
+  if (status === "out_of_service") return "Out of service";
+  return "Unknown";
+}
+
+function sortGensets(a, b) {
+  const ai = Number.parseInt(String(a.genset_number).replace(/\D/g, ""), 10);
+  const bi = Number.parseInt(String(b.genset_number).replace(/\D/g, ""), 10);
+  if (Number.isFinite(ai) && Number.isFinite(bi) && ai !== bi) return ai - bi;
+  return String(a.genset_number).localeCompare(String(b.genset_number));
+}
 
 export default async function DashboardPage() {
-  const { supabase, profile } = await requireApprovedUser();
-  const [dashboard, statistics] = await Promise.all([getDashboardData(supabase), getIslandStatistics(supabase)]);
-  const { projects, works, blockers, atolls, units, delegations } = dashboard;
-  const activeProjects = projects.filter((p) => ["planned", "active", "on_hold"].includes(p.status));
-  const overdue = works.filter((w) => w.due_date && new Date(w.due_date) < new Date() && !["verified", "closed"].includes(w.status));
-  const critical = works.filter((w) => w.priority === "critical");
-  const attention = blockers.filter((b) => b.escalated_to_hod).slice(0, 8);
+  const { supabase } = await requireApprovedUser();
+
+  const { data: gensets = [], error } = await supabase
+    .from("gensets")
+    .select("id,genset_number,model,rated_kw,operating_kw,reported_condition,condition_status,issue_note,source_imported_on,powerhouses(id,name,islands(id,name,atolls(code,name)))");
+
+  const rows = [...gensets].sort((a, b) => {
+    const aa = a.powerhouses?.islands?.atolls?.code || "";
+    const ba = b.powerhouses?.islands?.atolls?.code || "";
+    const ai = a.powerhouses?.islands?.name || "";
+    const bi = b.powerhouses?.islands?.name || "";
+    return aa.localeCompare(ba) || ai.localeCompare(bi) || sortGensets(a, b);
+  });
+
+  const abnormal = rows.filter((g) => g.condition_status !== "normal");
+  const normal = rows.filter((g) => g.condition_status === "normal");
+  const critical = rows.filter((g) => ["critical", "out_of_service"].includes(g.condition_status));
+  const powerhouseIds = new Set(rows.map((g) => g.powerhouses?.id).filter(Boolean));
+
+  const groups = [];
+  for (const genset of rows) {
+    const ph = genset.powerhouses;
+    const key = ph?.id || "unassigned";
+    let group = groups.find((x) => x.key === key);
+    if (!group) {
+      group = {
+        key,
+        powerhouse: ph?.name || "Powerhouse not linked",
+        island: ph?.islands?.name || "Island not linked",
+        atoll: ph?.islands?.atolls?.code || "—",
+        gensets: [],
+      };
+      groups.push(group);
+    }
+    group.gensets.push(genset);
+  }
+
   return <>
-    <PageHeader eyebrow="Department overview" title={`Good day, ${profile.full_name.split(" ")[0]}`} description="Live operational picture across SRD-managed branches." actions={<><Link className="btn secondary" href="/works/new">New work</Link><Link className="btn primary" href="/projects/new">New project</Link></>} />
+    <PageHeader
+      eyebrow="Electricity continuity"
+      title="Genset condition monitor"
+      description="Current genset register from the supplied land-powerhouse records. Any abnormal, incomplete or unverified genset condition is shown as an attention item."
+    />
+
+    {error && <p className="alert danger" role="alert">The genset register could not be loaded. Reload the page to retry.</p>}
+
     <div className="stats-grid">
-      <Stat label="Active projects" value={activeProjects.length} hint={`${projects.length} total`} />
-      <Stat label="Open works" value={works.length} hint="Across all units" />
-      <Stat label="Overdue" value={overdue.length} tone={overdue.length ? "danger" : ""} hint="Needs schedule review" />
-      <Stat label="Critical priority" value={critical.length} tone={critical.length ? "danger" : ""} hint="Open critical works" />
+      <Stat label="Powerhouses" value={powerhouseIds.size} hint="With genset records" />
+      <Stat label="Gensets" value={rows.length} hint="Registered from supplied records" />
+      <Stat label="Normal" value={normal.length} hint="Reported running / OK" />
+      <Stat label="Needs attention" value={abnormal.length} tone={abnormal.length ? "danger" : ""} hint={critical.length ? `${critical.length} critical / unavailable` : "Includes incomplete or unverified records"} />
     </div>
-    {statistics.error ? <p className="alert danger" role="alert">Island statistics could not be loaded. <Link href="/islands">View island status</Link></p> : <IslandStatusSummary records={statistics.records} />}
-    <div className="dashboard-grid">
-      <Card>
-        <div className="card-head"><div><div className="eyebrow">Management attention</div><h2>Escalations & blockers</h2></div><Link href="/activity">View activity</Link></div>
-        {attention.length === 0 ? <Empty title="No escalated blockers">Nothing currently requires HOD escalation.</Empty> : <div className="list">{attention.map((b) => <Link key={b.id} className="list-row" href={`/works/${b.work_items?.id}`}><div><strong>{b.work_items?.title}</strong><span>{b.work_items?.powerhouses?.islands?.atolls?.code} · {b.work_items?.powerhouses?.islands?.name} · {b.category.replaceAll("_", " ")}</span></div><PriorityBadge priority={b.work_items?.priority} /></Link>)}</div>}
-      </Card>
-      <Card>
-        <div className="card-head"><div><div className="eyebrow">Coverage</div><h2>Unit heads</h2></div><Link href="/team">Manage</Link></div>
-        <div className="compact-list">{units.map((u) => { const row = delegations.find((x) => x.unit_id === u.id); return <div key={u.id}><span>{u.name}</span><strong>{row?.acting_head_name || row?.primary_head_name || "Not assigned"}</strong>{row?.acting_head_name && <small>Acting until {formatDate(row.ends_at)}</small>}</div>; })}</div>
-      </Card>
+
+    {abnormal.length > 0 && <Card>
+      <div className="card-head">
+        <div>
+          <div className="eyebrow">Immediate visibility</div>
+          <h2>Gensets requiring attention</h2>
+        </div>
+      </div>
+      <div className="list">
+        {abnormal.map((g) => <div className="list-row" key={g.id}>
+          <div>
+            <strong>{g.powerhouses?.islands?.atolls?.code} · {g.powerhouses?.islands?.name} · {g.genset_number}</strong>
+            <span>{g.model} · {g.rated_kw ?? "—"} kW rated</span>
+            <p>{g.issue_note || g.reported_condition || "Condition requires verification."}</p>
+          </div>
+          <Badge tone={conditionTone(g.condition_status)}>{conditionLabel(g.condition_status)}</Badge>
+        </div>)}
+      </div>
+    </Card>}
+
+    <div style={{ display: "grid", gap: "16px", marginTop: "16px" }}>
+      {groups.map((group) => {
+        const groupAttention = group.gensets.filter((g) => g.condition_status !== "normal").length;
+        return <Card key={group.key}>
+          <div className="card-head">
+            <div>
+              <div className="eyebrow">{group.atoll} Atoll · {group.island}</div>
+              <h2>{group.powerhouse}</h2>
+              <p className="muted">{group.gensets.length} genset{group.gensets.length === 1 ? "" : "s"} · {groupAttention ? `${groupAttention} requiring attention` : "No reported genset issues"}</p>
+            </div>
+            <Badge tone={groupAttention ? "priority-high" : "status-completed"}>{groupAttention ? "Attention" : "Normal"}</Badge>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Genset</th>
+                  <th>Model</th>
+                  <th>Rated</th>
+                  <th>Operating</th>
+                  <th>Condition</th>
+                  <th>Issue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.gensets.sort(sortGensets).map((g) => <tr key={g.id}>
+                  <td><strong>{g.genset_number}</strong></td>
+                  <td>{g.model}</td>
+                  <td>{g.rated_kw == null ? "—" : `${g.rated_kw} kW`}</td>
+                  <td>{g.operating_kw == null ? "Not supplied" : `${g.operating_kw} kW`}</td>
+                  <td>
+                    <Badge tone={conditionTone(g.condition_status)}>{conditionLabel(g.condition_status)}</Badge>
+                    <br/><small>{g.reported_condition || "No condition supplied"}</small>
+                  </td>
+                  <td>{g.issue_note ? <strong>{g.issue_note}</strong> : <span className="muted">No reported issue</span>}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+        </Card>;
+      })}
     </div>
-    <div className="dashboard-grid wide-left">
-      <Card>
-        <div className="card-head"><div><div className="eyebrow">Portfolio</div><h2>Current projects</h2></div><Link href="/projects">All projects</Link></div>
-        {activeProjects.length === 0 ? <Empty title="No active projects" /> : <div className="project-grid">{activeProjects.slice(0, 8).map((p) => <Link className="project-mini" href={`/projects/${p.id}`} key={p.id}><div className="project-mini-top"><strong>{p.code}</strong><StatusBadge status={p.status} /></div><h3>{p.title}</h3><span>{p.atoll_code || "—"} · {p.island_name || "Department-wide"}</span><Progress value={p.progress} /><small>{p.progress}% complete · due {formatDate(p.due_date)}</small></Link>)}</div>}
-      </Card>
-      <Card>
-        <div className="card-head"><div><div className="eyebrow">Network</div><h2>Branch footprint</h2></div><Link href="/locations">Locations</Link></div>
-        <div className="compact-list">{atolls.map((a) => <div key={a.id}><span>{a.code} Atoll</span><strong>{a.islands?.reduce((n, i) => n + (i.powerhouses?.length || 0), 0) || 0} branches</strong><small>{a.islands?.length || 0} islands registered</small></div>)}</div>
-      </Card>
-    </div>
+
+    <p className="muted" style={{ marginTop: "16px" }}>
+      This first screen uses only the genset information already present in the supplied records. “Normal” means the source reported the unit as running/OK; it is not live telemetry.
+    </p>
   </>;
 }
