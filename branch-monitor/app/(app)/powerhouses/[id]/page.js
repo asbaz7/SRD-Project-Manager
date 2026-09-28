@@ -36,7 +36,7 @@ function sortGensets(a, b) {
 export default async function PowerhousePage({ params }) {
   const { id } = await params;
   const { supabase, profile } = await requireApprovedUser();
-  const canEditCondition = ["hod", "unit_head"].includes(profile?.role);
+  const canEditCondition = ["developer", "hod", "unit_head"].includes(profile?.role);
 
   const { data: powerhouse } = await supabase
     .from("powerhouses")
