@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "srd-powerhouse-monitor",
+  "name": "srd-project-manager",
   "compatibility_date": "2026-09-28",
   "compatibility_flags": [
     "nodejs_compat"
