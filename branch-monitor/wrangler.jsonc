@@ -8,7 +8,8 @@
   "main": "vinext/server/fetch-handler",
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://chcguyzzbnbrwrkfjdkw.supabase.co",
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_EV9Xb1fYiu0XdXTuua-bow_PgkrViO2"
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_EV9Xb1fYiu0XdXTuua-bow_PgkrViO2",
+    "NEXT_PUBLIC_SHEET_ID": "10O3zuGn9wIZNgASjSOyGuL1FmzcIAvKOF1L1BkGsx7A"
   },
   "previews": {},
   "assets": {
