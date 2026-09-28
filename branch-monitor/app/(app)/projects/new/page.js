@@ -26,7 +26,7 @@ export default async function NewProjectPage({ searchParams }) {
 
         <div className="span-2 form-section-title"><span>Ownership & status</span></div>
         <label>Lead unit<select name="lead_unit_id" required><option value="">Select unit</option>{refs.units.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
-        <label>Project lead<select name="lead_user_id"><option value="">Use active Unit Head</option>{refs.profiles.filter((p) => ["hod","unit_head"].includes(p.role)).map((p) => <option value={p.id} key={p.id}>{p.full_name}</option>)}</select></label>
+        <label>Project lead<select name="lead_user_id"><option value="">Use active Unit Head</option>{refs.profiles.filter((p) => ["developer","hod","unit_head"].includes(p.role)).map((p) => <option value={p.id} key={p.id}>{p.full_name}</option>)}</select></label>
         <label>Priority<select name="priority" defaultValue="medium"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label>
         <label>Status<select name="status" defaultValue="planned"><option value="planned">Planned</option><option value="active">Active</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select></label>
         <label>Start date<input name="start_date" type="date" /></label>
