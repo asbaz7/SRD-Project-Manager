@@ -10,6 +10,7 @@
     "NEXT_PUBLIC_SUPABASE_URL": "https://chcguyzzbnbrwrkfjdkw.supabase.co",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_EV9Xb1fYiu0XdXTuua-bow_PgkrViO2"
   },
+  "previews": {},
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
