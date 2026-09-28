@@ -2,7 +2,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata = {
-  title: "SRD Dashboard",
+  title: "South Regional Department Dashboard",
   description: "Atolls, islands and gensets at a glance",
 };
 
@@ -16,7 +16,7 @@ export default function RootLayout({ children }) {
               <img src="/stelco-icon.png" alt="" width="55" height="24" />
               <span className="wordmark">STELCO</span>
             </span>
-            <span>SRD Dashboard</span>
+            <span>South Regional Department Dashboard</span>
           </Link>
         </header>
         <main className="page">{children}</main>
