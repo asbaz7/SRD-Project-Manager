@@ -12,13 +12,16 @@ function db() {
 const ISLAND_FIELDS = "id,name,powerhouses(gensets(id,genset_number,model,rated_kw,operating_kw))";
 
 // Combine an island's gensets (Supabase) with its statuses and projects (Google Sheet).
-function summarize(island, sheet) {
+function summarize(island, atollCode, sheet) {
   const gensets = (island.powerhouses || []).flatMap((p) => p.gensets || []).map((g) => ({
     ...g,
     running: null, status_note: null, status_date: null,
-    ...sheet.status.get(gensetKey(island.name, g.genset_number)),
+    ...sheet.status.get(gensetKey(atollCode, island.name, g.genset_number)),
   }));
-  const projects = sheet.projects.get(islandKey(island.name)) || [];
+  const projects = [
+    ...(sheet.projects.get(islandKey(atollCode, island.name)) || []),
+    ...(sheet.projects.get(islandKey("", island.name)) || []),
+  ];
   return {
     id: island.id,
     name: island.name,
@@ -46,7 +49,7 @@ export function total(rows) {
 }
 
 function atollRow(atoll, sheet) {
-  const islands = (atoll.islands || []).map((i) => summarize(i, sheet)).sort((a, b) => a.name.localeCompare(b.name));
+  const islands = (atoll.islands || []).map((i) => summarize(i, atoll.code, sheet)).sort((a, b) => a.name.localeCompare(b.name));
   return { code: atoll.code, name: atoll.name, islands, islandCount: islands.length, ...total(islands) };
 }
 
@@ -75,7 +78,7 @@ export async function getIsland(id) {
   ]);
   if (error) throw new Error(error.message);
   if (!data) return null;
-  const island = summarize(data, sheet);
+  const island = summarize(data, data.atolls.code, sheet);
   island.atoll = data.atolls;
   island.sheetOk = sheet.ok;
   island.gensets.sort((a, b) => String(a.genset_number).localeCompare(String(b.genset_number), undefined, { numeric: true }));

@@ -33,8 +33,12 @@ async function readTab(name) {
   return rows.map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] || "").trim()])));
 }
 
-export const islandKey = (island) => island.trim().toLowerCase();
-export const gensetKey = (island, genset) => `${islandKey(island)}|${String(genset).trim()}`;
+// Islands are matched by atoll + name, since different atolls can have
+// islands with the same name. A Projects row without an atoll matches by
+// island name alone (the "|name" key).
+const norm = (text) => String(text || "").trim().toLowerCase();
+export const islandKey = (atoll, island) => `${norm(atoll)}|${norm(island)}`;
+export const gensetKey = (atoll, island, genset) => `${islandKey(atoll, island)}|${norm(genset)}`;
 
 const PROJECT_ORDER = { Ongoing: 0, "On hold": 1, Planned: 2, Completed: 3 };
 
@@ -48,7 +52,7 @@ export async function getSheetData() {
     for (const g of gensets) {
       if (!g.island || !g.genset) continue;
       const answer = (g.running || "").toLowerCase();
-      status.set(gensetKey(g.island, g.genset), {
+      status.set(gensetKey(g.atoll, g.island, g.genset), {
         running: answer.startsWith("y") ? true : answer.startsWith("n") ? false : null,
         status_note: g.note || null,
         status_date: g["status date"] || null,
@@ -58,9 +62,10 @@ export async function getSheetData() {
     const byIsland = new Map();
     for (const p of projects) {
       if (!p.island || !p.project) continue;
-      const list = byIsland.get(islandKey(p.island)) || [];
+      const key = islandKey(p.atoll, p.island);
+      const list = byIsland.get(key) || [];
       list.push({ name: p.project, status: p.status || "Ongoing", update: p["latest update"] || null, date: p["update date"] || null });
-      byIsland.set(islandKey(p.island), list);
+      byIsland.set(key, list);
     }
     for (const list of byIsland.values()) {
       list.sort((a, b) => (PROJECT_ORDER[a.status] ?? 9) - (PROJECT_ORDER[b.status] ?? 9) || a.name.localeCompare(b.name));
