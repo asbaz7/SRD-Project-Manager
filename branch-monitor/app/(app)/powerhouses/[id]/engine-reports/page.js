@@ -16,7 +16,7 @@ export default async function PowerhouseEngineReportsPage({ params }) {
 
   const [{ data: powerhouse }, { data: reports = [] }, { count: gensetCount = 0 }] = await Promise.all([
     supabase.from("powerhouses").select("id,name,islands(id,name,atolls(code,name))").eq("id", id).maybeSingle(),
-    supabase.from("engine_condition_reports").select("id,report_month,maximum_peak_kw,monthly_peak_kw,record_updated_date,report_status,engine_condition_entries(count)").eq("powerhouse_id", id).order("report_month", { ascending: false }),
+    supabase.from("engine_condition_reports").select("id,report_month,maximum_peak_kw,monthly_peak_kw,record_updated_date,report_status").eq("powerhouse_id", id).order("report_month", { ascending: false }),
     supabase.from("gensets").select("id", { count: "exact", head: true }).eq("powerhouse_id", id),
   ]);
   if (!powerhouse) notFound();
