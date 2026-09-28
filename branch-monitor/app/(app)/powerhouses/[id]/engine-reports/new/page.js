@@ -11,6 +11,7 @@ const STATUS_OPTIONS = [
   "NOT RUNNING; DISCONNECTED",
   "NOT RUNNING; MAJOR FAULT",
   "OUT OF SERVICE",
+  "OTHER / SEE FAULT DETAILS",
 ];
 
 function currentMonth() {
