@@ -28,7 +28,7 @@ export default async function DashboardPage() {
 
   const { data: gensets = [], error } = await supabase
     .from("gensets")
-    .select("id,genset_number,model,rated_kw,operating_kw,reported_condition,condition_status,issue_note,source_name,source_imported_on,powerhouses(id,name,islands(id,name,atolls(code,name)))");
+    .select("id,genset_number,model,rated_kw,operating_kw,reported_condition,condition_status,issue_note,powerhouses(id,name,islands(id,name,atolls(code,name)))");
 
   const rows = [...gensets].sort((a, b) => {
     const aa = a.powerhouses?.islands?.atolls?.code || "";
@@ -91,7 +91,6 @@ export default async function DashboardPage() {
             <strong>{g.powerhouses?.islands?.atolls?.code} · {g.powerhouses?.islands?.name} · Genset {g.genset_number}</strong>
             <span>{g.model} · {g.rated_kw ?? "—"} kW rated · {g.operating_kw ?? "—"} kW operating</span>
             <p><strong>{g.reported_condition || "Condition requires verification."}</strong>{g.issue_note ? ` — ${g.issue_note}` : ""}</p>
-            {g.source_name && <small className="muted">Source: {g.source_name}</small>}
           </div>
           <Badge tone={conditionTone(g.condition_status)}>{conditionLabel(g.condition_status)}</Badge>
         </div>)}
@@ -138,7 +137,6 @@ export default async function DashboardPage() {
                   </td>
                   <td>
                     {g.issue_note ? <strong>{g.issue_note}</strong> : <span className="muted">No reported issue</span>}
-                    {g.source_name && <><br/><small className="muted">{g.source_name}</small></>}
                   </td>
                 </tr>)}
               </tbody>
@@ -149,7 +147,7 @@ export default async function DashboardPage() {
     </div>
 
     <p className="muted" style={{ marginTop: "16px" }}>
-      Condition labels are taken from the supplied statistical-summary genset tables. “Normal” means the source reports the unit as Running or Running, OK; this screen is not live telemetry.
+      Condition labels reflect the recorded genset condition. “Normal” means the unit is recorded as Running or Running, OK; this screen is not live telemetry.
     </p>
   </>;
 }
