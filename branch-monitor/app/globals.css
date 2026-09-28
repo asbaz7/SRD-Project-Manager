@@ -9,6 +9,8 @@
   --link: #1f63b5;
   --bar: #2a78d6;
   --bar-track: #ecebe7;
+  --good: #006300;
+  --bad: #c13030;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -22,6 +24,8 @@
     --link: #7fb2f0;
     --bar: #3987e5;
     --bar-track: #262625;
+    --good: #0ca30c;
+    --bad: #e66767;
   }
 }
 :root[data-theme="dark"] {
@@ -35,6 +39,8 @@
   --link: #7fb2f0;
   --bar: #3987e5;
   --bar-track: #262625;
+  --good: #0ca30c;
+  --bad: #e66767;
 }
 
 * { box-sizing: border-box; }
@@ -62,7 +68,7 @@ h2 { font-size: 1rem; margin: 0 0 12px; color: var(--text-2); font-weight: 600; 
 .stat { padding: 14px 16px; }
 .stat span { display: block; color: var(--text-2); font-size: .85rem; }
 .stat strong { display: block; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
-.card { padding: 16px; overflow-x: auto; }
+.card { padding: 16px; overflow-x: auto; margin-bottom: 16px; }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -75,6 +81,17 @@ tbody tr:last-child td { border-bottom: 0; }
 .bar-track { flex: 1; height: 10px; background: var(--bar-track); border-radius: 0 4px 4px 0; }
 .bar { height: 100%; background: var(--bar); border-radius: 0 4px 4px 0; }
 .bar-cell span { min-width: 80px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+
+.wrap { white-space: normal; min-width: 140px; }
+.status { font-weight: 600; white-space: nowrap; }
+.status.ok { color: var(--good); }
+.status.down { color: var(--bad); }
+.status.none { color: var(--muted); font-weight: 400; }
+.banner { border: 1px solid; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; font-weight: 700; background: var(--surface); }
+.banner.ok { color: var(--good); border-color: var(--good); }
+.banner.down { color: var(--bad); border-color: var(--bad); }
+.stat.alert { border-color: var(--bad); }
+.stat.alert strong { color: var(--bad); }
 
 @media (max-width: 600px) {
   .card { padding: 12px; }
