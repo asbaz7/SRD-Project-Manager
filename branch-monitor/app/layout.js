@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "SRD Branch Monitor",
-  description: "Branch work and project monitoring for SRD",
+  title: "SRD Powerhouse Monitor",
+  description: "Electricity continuity and genset condition monitoring for SRD",
 };
 
 export default function RootLayout({ children }) {
