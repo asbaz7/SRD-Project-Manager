@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireApprovedUser } from "@/lib/auth";
-import { Badge, Card, PageHeader, Stat } from "@/components/UI";
+import { Badge, PageHeader, Stat } from "@/components/UI";
 
 function faultTone(critical, attention) {
   if (critical) return "priority-critical";
@@ -11,33 +11,18 @@ function faultTone(critical, attention) {
 export default async function DashboardPage() {
   const { supabase } = await requireApprovedUser();
 
-  const { data: atolls = [], error } = await supabase
-    .from("atolls")
-    .select("id,code,name,islands(id,name,powerhouses(id,name,gensets(id,condition_status)))")
-    .in("code", ["K", "ADh", "V", "M"])
-    .order("code");
+  const { data: summaries = [], error } = await supabase
+    .from("operations_atoll_summary")
+    .select("id,code,name,island_count,powerhouse_count,genset_count,attention_count,critical_count")
+    .in("code", ["ADh", "K", "M", "V"]);
 
-  const summaries = atolls.map((atoll) => {
-    const islands = atoll.islands || [];
-    const powerhouses = islands.flatMap((island) => island.powerhouses || []);
-    const gensets = powerhouses.flatMap((powerhouse) => powerhouse.gensets || []);
-    const attention = gensets.filter((g) => g.condition_status === "attention").length;
-    const critical = gensets.filter((g) => ["critical", "out_of_service"].includes(g.condition_status)).length;
-    return {
-      ...atoll,
-      islandCount: islands.length,
-      powerhouseCount: powerhouses.length,
-      gensetCount: gensets.length,
-      attention,
-      critical,
-      issues: attention + critical,
-    };
-  });
+  const atollOrder = ["ADh", "K", "M", "V"];
+  summaries.sort((a, b) => atollOrder.indexOf(a.code) - atollOrder.indexOf(b.code));
 
-  const totalPowerhouses = summaries.reduce((sum, x) => sum + x.powerhouseCount, 0);
-  const totalGensets = summaries.reduce((sum, x) => sum + x.gensetCount, 0);
-  const totalIssues = summaries.reduce((sum, x) => sum + x.issues, 0);
-  const totalCritical = summaries.reduce((sum, x) => sum + x.critical, 0);
+  const totalPowerhouses = summaries.reduce((sum, x) => sum + Number(x.powerhouse_count || 0), 0);
+  const totalGensets = summaries.reduce((sum, x) => sum + Number(x.genset_count || 0), 0);
+  const totalIssues = summaries.reduce((sum, x) => sum + Number(x.attention_count || 0) + Number(x.critical_count || 0), 0);
+  const totalCritical = summaries.reduce((sum, x) => sum + Number(x.critical_count || 0), 0);
 
   return <>
     <PageHeader
@@ -60,26 +45,29 @@ export default async function DashboardPage() {
     </div>}
 
     <div className="atoll-list">
-      {summaries.map((atoll) => <Link key={atoll.id} href={`/atolls/${encodeURIComponent(atoll.code)}`} className="atoll-nav-card">
-        <div className="atoll-nav-main">
-          <div className="atoll-nav-title">
-            <div className="eyebrow">Atoll</div>
-            <h2>{atoll.code} · {atoll.name}</h2>
+      {summaries.map((atoll) => {
+        const issues = Number(atoll.attention_count || 0) + Number(atoll.critical_count || 0);
+        return <Link key={atoll.id} href={`/atolls/${encodeURIComponent(atoll.code)}`} className="atoll-nav-card">
+          <div className="atoll-nav-main">
+            <div className="atoll-nav-title">
+              <div className="eyebrow">Atoll</div>
+              <h2>{atoll.code} · {atoll.name}</h2>
+            </div>
+            <Badge tone={faultTone(Number(atoll.critical_count || 0), Number(atoll.attention_count || 0))}>
+              {Number(atoll.critical_count || 0) ? "Critical" : Number(atoll.attention_count || 0) ? "Attention" : "Normal"}
+            </Badge>
           </div>
-          <Badge tone={faultTone(atoll.critical, atoll.attention)}>
-            {atoll.critical ? "Critical" : atoll.attention ? "Attention" : "Normal"}
-          </Badge>
-        </div>
-        <div className="atoll-nav-metrics">
-          <div><strong>{atoll.islandCount}</strong><span>Islands</span></div>
-          <div><strong>{atoll.powerhouseCount}</strong><span>Powerhouses</span></div>
-          <div><strong>{atoll.gensetCount}</strong><span>Gensets</span></div>
-        </div>
-        <div className="atoll-nav-footer">
-          <span>{atoll.issues ? `${atoll.issues} genset issue${atoll.issues === 1 ? "" : "s"}` : "No genset issues recorded"}</span>
-          <span className="atoll-nav-action">View islands <b>→</b></span>
-        </div>
-      </Link>)}
+          <div className="atoll-nav-metrics">
+            <div><strong>{atoll.island_count}</strong><span>Islands</span></div>
+            <div><strong>{atoll.powerhouse_count}</strong><span>Powerhouses</span></div>
+            <div><strong>{atoll.genset_count}</strong><span>Gensets</span></div>
+          </div>
+          <div className="atoll-nav-footer">
+            <span>{issues ? `${issues} genset issue${issues === 1 ? "" : "s"}` : "No genset issues recorded"}</span>
+            <span className="atoll-nav-action">View islands <b>→</b></span>
+          </div>
+        </Link>;
+      })}
     </div>
   </>;
 }
