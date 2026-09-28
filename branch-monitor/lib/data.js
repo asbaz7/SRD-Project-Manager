@@ -8,7 +8,7 @@ function db() {
   );
 }
 
-const ISLAND_FIELDS = "id,name,powerhouses(gensets(id,genset_number,model,rated_kw,operating_kw))";
+const ISLAND_FIELDS = "id,name,powerhouses(gensets(id,genset_number,model,rated_kw,operating_kw,condition_status,condition_note))";
 
 function summarize(island) {
   const gensets = (island.powerhouses || []).flatMap((p) => p.gensets || []);
@@ -19,6 +19,9 @@ function summarize(island) {
     gensetCount: gensets.length,
     ratedKw: gensets.reduce((sum, g) => sum + Number(g.rated_kw || 0), 0),
     operatingKw: gensets.reduce((sum, g) => sum + Number(g.operating_kw || 0), 0),
+    runningCount: gensets.filter((g) => (g.condition_status || "normal") === "normal").length,
+    attentionCount: gensets.filter((g) => g.condition_status === "attention").length,
+    criticalCount: gensets.filter((g) => ["critical", "out_of_service"].includes(g.condition_status)).length,
   };
 }
 
