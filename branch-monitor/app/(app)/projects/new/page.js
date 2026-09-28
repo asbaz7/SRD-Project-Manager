@@ -7,6 +7,15 @@ export default async function NewProjectPage({ searchParams }) {
   const { supabase } = await requireApprovedUser();
   const refs = await getReferenceData(supabase);
   const params = await searchParams;
+  const atollOrder = ["ADh", "K", "M", "V"];
+  const powerhouseGroups = atollOrder
+    .map((code) => ({
+      code,
+      items: refs.powerhouses
+        .filter((p) => p.islands?.atolls?.code === code)
+        .sort((a, b) => (a.islands?.name || "").localeCompare(b.islands?.name || "") || (a.name || "").localeCompare(b.name || "")),
+    }))
+    .filter((group) => group.items.length);
   return <>
     <PageHeader
       eyebrow="Projects & maintenance"
@@ -19,8 +28,13 @@ export default async function NewProjectPage({ searchParams }) {
         <div className="span-2 form-section-title"><span>Project identity</span><p>Core information shown at the top of the record sheet.</p></div>
         <label>Project code<input name="code" placeholder="e.g. SRPR001/2026" required /></label>
         <label>Project name<input name="title" required /></label>
-        <label>Location / site<input name="location_text" placeholder="e.g. ADh. Dhidhdhoo Branch" /></label>
-        <label>Branch<select name="powerhouse_id"><option value="">No linked branch / multiple</option>{refs.powerhouses.map((p) => <option value={p.id} key={p.id}>{p.islands?.atolls?.code} · {p.islands?.name} · {p.name}</option>)}</select></label>
+        <label>Location / site<input name="location_text" placeholder="e.g. ADh. Dhidhdhoo Powerhouse" /></label>
+        <label>Powerhouse<select name="powerhouse_id">
+          <option value="">No linked powerhouse / multiple</option>
+          {powerhouseGroups.map((group) => <optgroup key={group.code} label={`${group.code} Atoll`}>
+            {group.items.map((p) => <option value={p.id} key={p.id}>{p.islands?.name} · {p.name}</option>)}
+          </optgroup>)}
+        </select></label>
         <label className="span-2">Scope<textarea name="scope" rows={4} placeholder="Describe the complete project scope." /></label>
         <label className="span-2">Internal description / notes<textarea name="description" rows={3} /></label>
 
