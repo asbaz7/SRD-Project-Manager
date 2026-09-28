@@ -22,6 +22,6 @@ export async function requireApprovedUser() {
 
 export async function requireHod() {
   const ctx = await requireApprovedUser();
-  if (ctx.profile.role !== "hod") redirect("/dashboard");
+  if (!["developer", "hod"].includes(ctx.profile.role)) redirect("/dashboard");
   return ctx;
 }
