@@ -8,7 +8,7 @@ function db() {
   );
 }
 
-const ISLAND_FIELDS = "id,name,powerhouses(gensets(id,genset_number,model,rated_kw,operating_kw,condition_status,condition_note))";
+const ISLAND_FIELDS = "id,name,powerhouses(gensets(id,genset_number,model,rated_kw,operating_kw,running,status_note,status_date))";
 
 function summarize(island) {
   const gensets = (island.powerhouses || []).flatMap((p) => p.gensets || []);
@@ -17,19 +17,21 @@ function summarize(island) {
     name: island.name,
     gensets,
     gensetCount: gensets.length,
+    runningCount: gensets.filter((g) => g.running === true).length,
+    stoppedCount: gensets.filter((g) => g.running === false).length,
     ratedKw: gensets.reduce((sum, g) => sum + Number(g.rated_kw || 0), 0),
     operatingKw: gensets.reduce((sum, g) => sum + Number(g.operating_kw || 0), 0),
-    runningCount: gensets.filter((g) => (g.condition_status || "normal") === "normal").length,
-    attentionCount: gensets.filter((g) => g.condition_status === "attention").length,
-    criticalCount: gensets.filter((g) => ["critical", "out_of_service"].includes(g.condition_status)).length,
   };
 }
 
-function total(rows) {
+export function total(rows) {
+  const sum = (key) => rows.reduce((s, r) => s + r[key], 0);
   return {
-    gensetCount: rows.reduce((sum, r) => sum + r.gensetCount, 0),
-    ratedKw: rows.reduce((sum, r) => sum + r.ratedKw, 0),
-    operatingKw: rows.reduce((sum, r) => sum + r.operatingKw, 0),
+    gensetCount: sum("gensetCount"),
+    runningCount: sum("runningCount"),
+    stoppedCount: sum("stoppedCount"),
+    ratedKw: sum("ratedKw"),
+    operatingKw: sum("operatingKw"),
   };
 }
 
