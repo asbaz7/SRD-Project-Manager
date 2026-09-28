@@ -55,6 +55,41 @@ export async function logoutAction() {
   redirect("/login");
 }
 
+
+export async function updateGensetConditionAction(gensetId, formData) {
+  const { supabase, profile } = await requireApprovedUser();
+  if (!["hod", "unit_head"].includes(profile?.role)) {
+    throw new Error("Only Unit Heads can update genset conditions.");
+  }
+
+  const condition = value(formData, "condition");
+  const note = value(formData, "note");
+  const conditionMap = {
+    running: { reported_condition: "Running", condition_status: "normal" },
+    minor_fault: { reported_condition: "Running, Minor Fault", condition_status: "attention" },
+    major_fault: { reported_condition: "Running, Major Fault", condition_status: "critical" },
+    out_of_service: { reported_condition: "Out of Service", condition_status: "out_of_service" },
+  };
+  const selected = conditionMap[condition];
+  if (!selected) throw new Error("Choose a valid genset condition.");
+  if (condition !== "running" && !note) {
+    throw new Error("Add a note describing the genset issue.");
+  }
+
+  const { error } = await supabase
+    .from("gensets")
+    .update({
+      reported_condition: selected.reported_condition,
+      condition_status: selected.condition_status,
+      issue_note: condition === "running" ? null : note,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", gensetId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard");
+}
+
 export async function createProjectAction(formData) {
   const { supabase, user } = await requireApprovedUser();
   const payload = {
