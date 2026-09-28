@@ -12,7 +12,10 @@ export default function RootLayout({ children }) {
       <body>
         <header className="topbar">
           <Link href="/" className="brand">
-            <img src="/stelco-icon.png" alt="STELCO" width="55" height="24" />
+            <span className="logo">
+              <img src="/stelco-icon.png" alt="" width="55" height="24" />
+              <span className="wordmark">STELCO</span>
+            </span>
             <span>SRD Dashboard</span>
           </Link>
         </header>
