@@ -4,6 +4,7 @@ import { logoutAction } from "@/app/actions";
 const nav = [
   ["/dashboard", "Operations"],
   ["/projects", "Projects"],
+  ["/engine-reports", "Engine Reports"],
 ];
 
 export default function AppShell({ profile, children }) {
