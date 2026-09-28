@@ -1,2 +1,0 @@
-Production deployment trigger: 2026-09-28T15:00+05:00
-Purpose: deploy Cloudflare 1102 fixes: DB aggregation, no global realtime, cached auth.
