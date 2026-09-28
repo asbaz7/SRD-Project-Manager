@@ -3,6 +3,7 @@ import { logoutAction } from "@/app/actions";
 
 const nav = [
   ["/dashboard", "Operations"],
+  ["/projects", "Projects"],
 ];
 
 export default function AppShell({ profile, children }) {
@@ -17,7 +18,7 @@ export default function AppShell({ profile, children }) {
           {nav.map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}
         </nav>
         <div className="user-menu">
-          <div><strong>{profile.full_name}</strong><span>{profile.role === "developer" ? "Developer" : profile.role === "developer" ? "Developer" : profile.role === "hod" ? "HOD" : profile.role === "unit_head" ? "Unit Head" : profile.role === "viewer" ? "Viewer" : "Staff"}</span></div>
+          <div><strong>{profile.full_name}</strong><span>{profile.role === "developer" ? "Developer" : profile.role === "hod" ? "HOD" : profile.role === "unit_head" ? "Unit Head" : profile.role === "viewer" ? "Viewer" : "Staff"}</span></div>
           <form action={logoutAction}><button className="link-btn">Sign out</button></form>
         </div>
       </header>
