@@ -1,7 +1,8 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "./supabase-server";
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, profile: null };
@@ -11,7 +12,7 @@ export async function getCurrentUser() {
     .eq("id", user.id)
     .maybeSingle();
   return { supabase, user, profile };
-}
+});
 
 export async function requireApprovedUser() {
   const ctx = await getCurrentUser();
