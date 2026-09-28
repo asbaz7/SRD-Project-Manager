@@ -58,7 +58,7 @@ export async function logoutAction() {
 
 export async function updateGensetConditionAction(gensetId, formData) {
   const { supabase, profile } = await requireApprovedUser();
-  if (!["hod", "unit_head"].includes(profile?.role)) {
+  if (!["developer", "hod", "unit_head"].includes(profile?.role)) {
     throw new Error("Only Unit Heads can update genset conditions.");
   }
 
