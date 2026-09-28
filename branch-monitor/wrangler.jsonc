@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "srd-powerhouse-monitor",
+  "name": "srd-project-manager",
   "compatibility_date": "2026-09-28",
   "compatibility_flags": [
     "nodejs_compat"
@@ -10,6 +10,7 @@
     "NEXT_PUBLIC_SUPABASE_URL": "https://chcguyzzbnbrwrkfjdkw.supabase.co",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_EV9Xb1fYiu0XdXTuua-bow_PgkrViO2"
   },
+  "previews": {},
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
