@@ -1,4 +1,4 @@
-# SRD Genset Dashboard
+# SRD Dashboard
 
 A simple, read-only dashboard of atolls, islands and gensets for SRD management.
 There is no login; the data is read directly from Supabase.
