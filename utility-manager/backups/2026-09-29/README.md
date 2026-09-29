@@ -7,7 +7,6 @@ the originals were changed; these files are copies.
 | File | What it is | Source |
 |---|---|---|
 | `original-dashboard-code.zip` | The complete repository as it was on `main` at commit `a846ba5` | GitHub, `main` branch |
-| `srd-dashboard-data (Google Sheet).xlsx` | The shared sheet the dashboard reads: tabs *How to fill*, *Gensets*, *Projects*, *Islands* | Google Sheet `srd-dashboard-data` |
 | `genset-register (Supabase).csv` | 4 atolls, 34 islands, 140 gensets (model, rated and operating kW) | Supabase project *Powerhouse Manager*, read-only query |
 
 Not included: a full database dump (internal IDs, timestamps). Take one from
