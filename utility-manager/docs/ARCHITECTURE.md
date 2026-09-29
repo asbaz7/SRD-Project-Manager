@@ -213,7 +213,7 @@ a generic message to the user).
   | Overview | The morning phone calls: what's down, what's open, who hasn't reported |
   | Islands & assets | The genset register workbook |
   | Daily log | The per-island daily log sheet. Flags values far from the previous day |
-  | Asset status round | The "Gensets" status tab: every asset on an island in one form |
+  | Daily status check | The "Gensets" status tab: every asset on an island in one form |
   | Incidents | The outage and breakdown register |
   | Projects | The projects tracker, with a timeline of updates |
   | Reports | The monthly returns, exportable to CSV |
@@ -272,7 +272,7 @@ a generic message to the user).
 ## 10. Rollout plan (replacing the spreadsheets)
 
 1. **Pilot** (2–4 weeks). Deploy, run `seed` to load the genset register,
-   create accounts for one atoll, and run the daily log and status round
+   create accounts for one atoll, and run the daily log and daily status check
    alongside the Excel sheets.
 2. **Back-fill.** Import this year's daily logs through *Import from Excel*
    using the CSV template. Add water and sewerage facilities and assets per
