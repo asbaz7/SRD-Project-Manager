@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getAtolls, kw, total } from "@/lib/data";
+import { getAtolls, kw, litres, total } from "@/lib/data";
 import { CapacityBar, ProjectStatus, RunningSummary, SheetNotice, Stat } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ export default async function Dashboard() {
       <Stat label="Not running" value={all.stoppedCount} tone={all.stoppedCount ? "alert" : ""} />
       <Stat label="Active projects" value={all.activeProjectCount} />
       <Stat label="Installed capacity" value={kw(all.ratedKw)} />
+      <Stat label="Fuel storage" value={litres(all.fuelLitres)} />
     </div>
 
     {down.length > 0 && <section className="card">
@@ -51,11 +52,12 @@ export default async function Dashboard() {
     <section className="card">
       <h2>By atoll</h2>
       <table>
-        <thead><tr><th>Atoll</th><th>Running</th><th className="num">Active projects</th><th className="wide hide-sm">Installed capacity</th></tr></thead>
+        <thead><tr><th>Atoll</th><th>Running</th><th className="num">Active projects</th><th className="num hide-sm">Fuel storage</th><th className="wide hide-sm">Installed capacity</th></tr></thead>
         <tbody>{atolls.map((a) => <tr key={a.code}>
           <td><Link href={`/atolls/${encodeURIComponent(a.code)}`}><strong>{a.code}</strong> · {a.name}</Link></td>
           <td><RunningSummary running={a.runningCount} stopped={a.stoppedCount} total={a.gensetCount} /></td>
           <td className="num">{a.activeProjectCount}</td>
+          <td className="num hide-sm">{litres(a.fuelLitres)}</td>
           <td className="hide-sm"><CapacityBar value={a.ratedKw} max={max} /></td>
         </tr>)}</tbody>
       </table>

@@ -5,7 +5,7 @@ There is no login.
 
 - Atolls, islands and gensets (model, capacity) come from Supabase.
 - Genset running status and island projects come from a shared Google Sheet
-  (tabs `Gensets` and `Projects`), set by `NEXT_PUBLIC_SHEET_ID` in `branch-monitor/wrangler.jsonc`.
+  (tabs `Gensets`, `Projects` and optional `Islands` with fuel storage capacity), set by `NEXT_PUBLIC_SHEET_ID` in `branch-monitor/wrangler.jsonc`.
   The sheet must be shared as "Anyone with the link can view".
 
 The app lives in `branch-monitor/`:

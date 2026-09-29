@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getIsland, kw } from "@/lib/data";
+import { getIsland, kw, litres } from "@/lib/data";
 import { ProjectStatus, SheetNotice, Stat, Status } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,7 @@ export default async function IslandPage({ params }) {
       <Stat label="Not running" value={island.stoppedCount} tone={island.stoppedCount ? "alert" : ""} />
       <Stat label="Active projects" value={island.activeProjectCount} />
       <Stat label="Installed capacity" value={kw(island.ratedKw)} />
+      <Stat label="Fuel storage" value={litres(island.fuelLitres)} />
     </div>
 
     <section className="card">
