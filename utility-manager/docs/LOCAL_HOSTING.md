@@ -18,11 +18,20 @@ cd SRD-Project-Manager/utility-manager
 
 ---
 
-## Just want to look around privately?
+## Just want to look around, or show colleagues?
 
 Run `npm install`, then `npm run demo`, and open http://localhost:3000. It
 fills the app with sample data and creates test logins (listed on screen).
-Only your computer can open it, and it never touches real data.
+It never touches real data, and running it again resets the sample data.
+
+By default only your own computer can open it. To let colleagues on the
+office network see it, start it like this instead. It then prints the link
+to share.
+
+| System | Command |
+|---|---|
+| Mac or Linux | `HOST=0.0.0.0 npm run demo` |
+| Windows (PowerShell) | `$env:HOST="0.0.0.0"; npm run demo` |
 
 ---
 

@@ -6,6 +6,7 @@
 // Every run starts from a fresh demo database in server/data/demo. It never
 // touches real data (server/data/pglite) or any Postgres server.
 import { rm } from 'node:fs/promises';
+import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { hashPassword } from '../src/auth.js';
 import { createDb } from '../src/db.js';
@@ -197,9 +198,24 @@ process.env.PORT ||= '3000';
 process.env.LOG_LEVEL ||= 'warn';
 delete process.env.DATABASE_URL;
 
+// Tell the person running the demo who can open it, and the link to share.
+function where() {
+  const port = process.env.PORT;
+  const local = `  Open  http://localhost:${port}`;
+  if (['127.0.0.1', 'localhost', '::1'].includes(process.env.HOST)) return `${local}   (only this computer can see it)`;
+  const lan = Object.values(networkInterfaces()).flat()
+    .filter((a) => a && a.family === 'IPv4' && !a.internal)
+    .map((a) => `        http://${a.address}:${port}`);
+  return `${local}
+
+  Colleagues on the same network can open:
+${lan.join('\n') || '        (no network address found)'}
+  If it doesn't load for them, allow Node through this computer's firewall.`;
+}
+
 console.log(`
-  SRD Utility Manager — private demo
-  Open  http://localhost:${process.env.PORT}   (only this computer can see it)
+  SRD Utility Manager — demo
+${where()}
 
   Sign in with any of these (password for all: ${PASSWORD}):
 ${USERS.map(([email, , , , what]) => `    ${email.padEnd(22)} ${what}`).join('\n')}
