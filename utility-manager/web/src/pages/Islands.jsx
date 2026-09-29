@@ -19,7 +19,7 @@ export default function Islands() {
     <Async state={state}>{(islands) => (
       <Card>
         <table>
-          <thead><tr><th>Island</th><th>Services</th><th>Gensets</th><th className="num hide-sm">Installed</th><th className="num hide-sm">Fuel storage</th><th className="num">Open incidents</th><th className="num hide-sm">Active projects</th></tr></thead>
+          <thead><tr><th>Island</th><th>Services</th><th>Gensets</th><th className="num hide-sm">Installed</th><th className="num hide-sm">Fuel capacity</th><th className="num">Open incidents</th><th className="num hide-sm">Active projects</th></tr></thead>
           <tbody>{islands.map((i) => <tr key={i.id}>
             <td><Link to={`/islands/${i.id}`}><strong>{i.atoll_code}</strong> · {i.name}</Link></td>
             <td>{i.services.map((s) => <Service key={s} value={s} short />)}</td>

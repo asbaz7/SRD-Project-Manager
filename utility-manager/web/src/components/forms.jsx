@@ -28,7 +28,7 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
         <Field label="Name" wide><input required value={f.name} onChange={set('name')} placeholder="e.g. Maafushi RO Plant" /></Field>
         <Field label="Service"><Select value={f.service} onChange={set('service')} options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} /></Field>
         <Field label="Type"><Select value={f.kind} onChange={set('kind')} options={FACILITY_KINDS} /></Field>
-        {f.service === 'electricity' && <Field label="Fuel storage capacity (L)"><input type="number" min="0" step="any" value={f.fuel_capacity_l ?? ''} onChange={set('fuel_capacity_l')} /></Field>}
+        {f.service === 'electricity' && <Field label="Fuel capacity (L)"><input type="number" min="0" step="any" value={f.fuel_capacity_l ?? ''} onChange={set('fuel_capacity_l')} /></Field>}
         {f.service === 'water' && <Field label="Water storage capacity (m³)"><input type="number" min="0" step="any" value={f.water_capacity_m3 ?? ''} onChange={set('water_capacity_m3')} /></Field>}
         <Field label="Commissioned on"><input type="date" value={f.commissioned_on ?? ''} onChange={set('commissioned_on')} /></Field>
         <Field label="Notes" wide><textarea rows="2" value={f.notes ?? ''} onChange={set('notes')} /></Field>
