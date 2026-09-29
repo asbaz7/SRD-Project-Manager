@@ -43,10 +43,14 @@ export const gensetKey = (atoll, island, genset) => `${islandKey(atoll, island)}
 const PROJECT_ORDER = { Ongoing: 0, "On hold": 1, Planned: 2, Completed: 3 };
 
 export async function getSheetData() {
-  const empty = { ok: false, status: new Map(), projects: new Map() };
+  const empty = { ok: false, status: new Map(), projects: new Map(), fuel: new Map() };
   if (!SHEET_ID) return { ...empty, ok: true }; // no sheet connected yet: nothing to warn about
   try {
-    const [gensets, projects] = await Promise.all([readTab("Gensets"), readTab("Projects")]);
+    const [gensets, projects, islands] = await Promise.all([
+      readTab("Gensets"),
+      readTab("Projects"),
+      readTab("Islands").catch(() => []), // optional tab: fuel storage per island
+    ]);
 
     const status = new Map();
     for (const g of gensets) {
@@ -71,7 +75,15 @@ export async function getSheetData() {
       list.sort((a, b) => (PROJECT_ORDER[a.status] ?? 9) - (PROJECT_ORDER[b.status] ?? 9) || a.name.localeCompare(b.name));
     }
 
-    return { ok: true, status, projects: byIsland };
+    // "Fuel capacity (L)" column; any header starting with "fuel" is accepted.
+    const fuel = new Map();
+    for (const i of islands) {
+      const column = Object.keys(i).find((k) => k.startsWith("fuel"));
+      const litres = Number(String(i[column] || "").replace(/[^0-9.]/g, ""));
+      if (i.island && litres > 0) fuel.set(islandKey(i.atoll, i.island), litres);
+    }
+
+    return { ok: true, status, projects: byIsland, fuel };
   } catch (error) {
     console.error("Could not read the status sheet:", error.message);
     return empty;

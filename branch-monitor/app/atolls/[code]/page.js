@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAtoll, kw } from "@/lib/data";
+import { getAtoll, kw, litres } from "@/lib/data";
 import { CapacityBar, RunningSummary, SheetNotice, Stat } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -20,16 +20,18 @@ export default async function AtollPage({ params }) {
       <Stat label="Not running" value={atoll.stoppedCount} tone={atoll.stoppedCount ? "alert" : ""} />
       <Stat label="Active projects" value={atoll.activeProjectCount} />
       <Stat label="Installed capacity" value={kw(atoll.ratedKw)} />
+      <Stat label="Fuel storage" value={litres(atoll.fuelLitres)} />
     </div>
 
     <section className="card">
       <h2>Islands</h2>
       <table>
-        <thead><tr><th>Island</th><th>Running</th><th className="num">Active projects</th><th className="wide hide-sm">Installed capacity</th></tr></thead>
+        <thead><tr><th>Island</th><th>Running</th><th className="num">Active projects</th><th className="num hide-sm">Fuel storage</th><th className="wide hide-sm">Installed capacity</th></tr></thead>
         <tbody>{atoll.islands.map((i) => <tr key={i.id}>
           <td><Link href={`/islands/${i.id}`}>{i.name}</Link></td>
           <td><RunningSummary running={i.runningCount} stopped={i.stoppedCount} total={i.gensetCount} /></td>
           <td className="num">{i.activeProjectCount}</td>
+          <td className="num hide-sm">{litres(i.fuelLitres)}</td>
           <td className="hide-sm"><CapacityBar value={i.ratedKw} max={max} /></td>
         </tr>)}</tbody>
       </table>

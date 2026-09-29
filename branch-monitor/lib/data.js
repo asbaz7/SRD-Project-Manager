@@ -31,6 +31,7 @@ function summarize(island, atollCode, sheet) {
     runningCount: gensets.filter((g) => g.running === true).length,
     stoppedCount: gensets.filter((g) => g.running === false).length,
     activeProjectCount: projects.filter((p) => p.status !== "Completed").length,
+    fuelLitres: sheet.fuel.get(islandKey(atollCode, island.name)) || 0,
     ratedKw: gensets.reduce((sum, g) => sum + Number(g.rated_kw || 0), 0),
     operatingKw: gensets.reduce((sum, g) => sum + Number(g.operating_kw || 0), 0),
   };
@@ -43,6 +44,7 @@ export function total(rows) {
     runningCount: sum("runningCount"),
     stoppedCount: sum("stoppedCount"),
     activeProjectCount: sum("activeProjectCount"),
+    fuelLitres: sum("fuelLitres"),
     ratedKw: sum("ratedKw"),
     operatingKw: sum("operatingKw"),
   };
@@ -83,6 +85,10 @@ export async function getIsland(id) {
   island.sheetOk = sheet.ok;
   island.gensets.sort((a, b) => String(a.genset_number).localeCompare(String(b.genset_number), undefined, { numeric: true }));
   return island;
+}
+
+export function litres(value) {
+  return value ? `${Math.round(Number(value)).toLocaleString("en-US")} L` : "—";
 }
 
 export function kw(value) {
