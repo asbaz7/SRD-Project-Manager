@@ -121,6 +121,7 @@ describe('asset register', () => {
     assert.equal(assets.total, 140);
     assert.equal(maafushi.genset_count, 8);
     assert.equal(maafushi.installed_kw, 9680);
+    assert.equal(maafushi.fuel_capacity_l, 147302, 'fuel capacity from the old sheet');
   });
 
   test('island detail lists facilities with their assets', async () => {
@@ -209,6 +210,18 @@ describe('daily log', () => {
       facility_id: maafushiPowerhouse.id, date: yesterday(), values: { water_produced_m3: 10 } } });
     assert.equal(bad.status, 400);
     assert.match(bad.body.error, /does not apply/);
+  });
+
+  test('island shows its latest fuel stock next to storage capacity', async () => {
+    await call('PUT', '/readings/sheet', { token: admin, body: {
+      facility_id: maafushiPowerhouse.id, date: yesterday(), values: { fuel_stock_l: 73651 } } });
+    const island = (await call('GET', `/islands/${maafushi.id}`, { token: admin })).body;
+    assert.equal(island.fuel_capacity_l, 147302);
+    assert.equal(island.fuel_stock_l, 73651);
+    assert.equal(island.fuel_stock_date, yesterday());
+    const dash = (await call('GET', '/dashboard', { token: admin })).body;
+    assert.equal(dash.fuel_storage.capacity_l, 147302);
+    assert.equal(dash.fuel_storage.not_set, 33);
   });
 
   test('future dates are refused; null clears a value', async () => {

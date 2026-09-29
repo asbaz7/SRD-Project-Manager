@@ -112,6 +112,11 @@ async function build() {
         from facilities f cross join ${days}
         cross join (values ('sewage_pumped_m3'), ('sewer_energy_kwh'), ('pump_runtime_h')) m(metric)
        where f.service = 'sewerage'`, [ids.operator]);
+    await t.query(`
+      insert into readings (facility_id, reading_date, metric, value, entered_by)
+      select f.id, d::date, 'fuel_stock_l', round(f.fuel_capacity_l * (0.35 + random() * 0.55)), $1
+        from facilities f cross join ${days}
+       where f.service = 'electricity' and f.fuel_capacity_l is not null`, [ids.operator]);
     // A few islands haven't sent yesterday's log yet (shows on the Overview).
     await t.query(`
       delete from readings where reading_date = ${TODAY} - 1 and facility_id in

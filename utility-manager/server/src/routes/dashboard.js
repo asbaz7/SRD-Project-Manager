@@ -10,7 +10,7 @@ export default async function dashboardRoutes(app) {
     const atoll = q.atoll_id ?? null;
     const tz = config.timezone;
 
-    const [services, incidents, projects, down, openIncidents, missing, yesterday, day] = await Promise.all([
+    const [services, incidents, projects, down, openIncidents, missing, yesterday, day, fuel] = await Promise.all([
       // Facility and asset counts per service.
       db.query(`
         select f.service::text as service,
@@ -79,6 +79,12 @@ export default async function dashboardRoutes(app) {
            and ($1::uuid is null or i.atoll_id = $1)
          group by r.metric`, [atoll, tz]),
       db.query('select (now() at time zone $1)::date - 1 as d', [tz]),
+      db.query(`
+        select coalesce(sum(f.fuel_capacity_l), 0) as capacity_l,
+               count(*) filter (where f.fuel_capacity_l is null) as not_set
+          from facilities f join islands i on i.id = f.island_id and i.active
+         where f.active and f.service = 'electricity' and f.kind = 'powerhouse'
+           and ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
     ]);
 
     const byService = Object.fromEntries(['electricity', 'water', 'sewerage'].map((s) => [s, {
@@ -96,6 +102,7 @@ export default async function dashboardRoutes(app) {
         list: openIncidents.rows,
       },
       projects: projects.rows[0],
+      fuel_storage: fuel.rows[0],
       assets_down: down.rows,
       missing_logs: missing.rows,
       yesterday: {

@@ -22,8 +22,17 @@ const ISLAND_SUMMARY = `
          count(s.id) filter (where s.status in ('down', 'maintenance')) as down_count,
          coalesce(sum(s.rated_capacity) filter (where s.kind = 'genset'), 0) as installed_kw,
          (select count(*) from incidents x where x.island_id = i.id and x.status = 'open') as open_incidents,
-         (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold')) as active_projects
+         (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold')) as active_projects,
+         (select sum(fc.fuel_capacity_l) from facilities fc
+           where fc.island_id = i.id and fc.active and fc.service = 'electricity') as fuel_capacity_l,
+         fs.value as fuel_stock_l, fs.reading_date as fuel_stock_date
     from islands i
+    left join lateral (
+      select sum(r.value) as value, r.reading_date
+        from readings r join facilities fr on fr.id = r.facility_id
+       where fr.island_id = i.id and fr.active and r.metric = 'fuel_stock_l'
+       group by r.reading_date order by r.reading_date desc limit 1
+    ) fs on true
     join atolls a on a.id = i.atoll_id
     left join facilities f on f.island_id = i.id
     left join assets s on s.facility_id = f.id and s.active and f.active`;
@@ -69,13 +78,13 @@ export default async function locationRoutes(app) {
     if (q.atoll_id) { values.push(q.atoll_id); where.push(`i.atoll_id = $${values.length}`); }
     if (q.q) { values.push(`%${q.q}%`); where.push(`i.name ilike $${values.length}`); }
     const { rows } = await db.query(
-      `${ISLAND_SUMMARY} where ${where.join(' and ')} group by i.id, a.id order by a.code, i.name`, values);
+      `${ISLAND_SUMMARY} where ${where.join(' and ')} group by i.id, a.id, fs.value, fs.reading_date order by a.code, i.name`, values);
     return rows;
   });
 
   app.get('/islands/:id', async (req) => {
     const { id: islandId } = parse(idParam, req.params);
-    const island = one((await db.query(`${ISLAND_SUMMARY} where i.id = $1 group by i.id, a.id`, [islandId])).rows, 'Island');
+    const island = one((await db.query(`${ISLAND_SUMMARY} where i.id = $1 group by i.id, a.id, fs.value, fs.reading_date`, [islandId])).rows, 'Island');
     const [{ rows: facilities }, { rows: assets }] = await Promise.all([
       db.query(`select f.*, (select max(reading_date) from readings r where r.facility_id = f.id) as last_reading_date
                   from facilities f where f.island_id = $1 order by f.active desc, f.service, f.name`, [islandId]),

@@ -81,7 +81,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .grid-2 > .card { margin-bottom: 0; }
 .grid-2 { margin-bottom: 16px; }
 
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 18px; }
 .stat, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 .stat { padding: 12px 16px; color: var(--text); }
 .stat.link:hover { border-color: var(--accent); text-decoration: none; }

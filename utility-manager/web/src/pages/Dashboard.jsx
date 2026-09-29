@@ -24,6 +24,8 @@ export default function Dashboard() {
           sub={['critical', 'high'].filter((s) => d.incidents.by_severity[s]).map((s) => `${d.incidents.by_severity[s]} ${s}`).join(' · ')} to="/incidents?status=open" />
         <Stat label="Active projects" value={d.projects.active} sub={d.projects.overdue ? `${d.projects.overdue} overdue` : ''}
           tone={d.projects.overdue ? 'warn' : ''} to="/projects?status=active" />
+        <Stat label="Fuel storage" value={withUnit(d.fuel_storage.capacity_l, 'L')}
+          sub={d.fuel_storage.not_set ? `${d.fuel_storage.not_set} powerhouse${d.fuel_storage.not_set === 1 ? '' : 's'} not set` : ''} to="/islands" />
       </div>
 
       <h2 className="section-title">Yesterday · {date(d.date)}</h2>

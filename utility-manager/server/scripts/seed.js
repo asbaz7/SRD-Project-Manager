@@ -37,6 +37,19 @@ export async function seedRegister(db) {
         on conflict (facility_id, kind, tag) do nothing`, [r.atoll, r.island, r.tag, r.model, r.rated, r.operating]);
     }
   });
+  // Fuel storage capacity per island, from the old shared sheet's "Islands"
+  // tab. Only fills powerhouses where it isn't set yet.
+  const fuel = (await readFile(new URL('../seed/fuel_capacity.tsv', import.meta.url), 'utf8'))
+    .trim().split('\n').slice(1).map((line) => line.split('\t'));
+  await db.tx(null, async (t) => {
+    for (const [atoll, island, litres] of fuel) {
+      await t.query(`
+        update facilities f set fuel_capacity_l = $3
+          from islands i join atolls a on a.id = i.atoll_id
+         where f.island_id = i.id and a.code = $1 and i.name = $2
+           and f.kind = 'powerhouse' and f.fuel_capacity_l is null`, [atoll, island, Number(litres)]);
+    }
+  });
   return rows.length;
 }
 

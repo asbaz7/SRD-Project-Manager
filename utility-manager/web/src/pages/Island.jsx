@@ -27,6 +27,10 @@ export default function Island() {
         <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} />
         <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
         <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
+        <Stat label="Fuel storage" value={island.fuel_capacity_l ? withUnit(island.fuel_capacity_l, 'L') : 'Not set'}
+          sub={island.fuel_stock_l != null
+            ? `Stock ${num(island.fuel_stock_l)} L${island.fuel_capacity_l ? ` (${num((100 * island.fuel_stock_l) / island.fuel_capacity_l)}%)` : ''} · ${date(island.fuel_stock_date)}`
+            : island.fuel_capacity_l ? 'No stock reading yet' : manage ? 'Set it with Edit on the powerhouse' : ''} />
         <Stat label="Open incidents" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/incidents?island_id=${island.id}&status=open`} />
         <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
@@ -42,7 +46,7 @@ export default function Island() {
           </>}>
           <p className="muted small">
             Last daily log: {f.last_reading_date ? date(f.last_reading_date) : 'none yet'}
-            {f.fuel_capacity_l && ` · Fuel storage ${num(f.fuel_capacity_l)} L`}
+            {f.service === 'electricity' && (f.fuel_capacity_l ? ` · Fuel storage ${num(f.fuel_capacity_l)} L` : ' · Fuel storage not set')}
             {f.water_capacity_m3 && ` · Water storage ${num(f.water_capacity_m3)} m³`}
           </p>
           {f.assets.length === 0 ? <Empty>No assets recorded.</Empty> :
