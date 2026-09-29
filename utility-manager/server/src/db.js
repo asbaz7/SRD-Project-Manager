@@ -83,6 +83,10 @@ async function createPgliteDb(dir) {
   } catch {
     throw new Error('DATABASE_URL is not set and PGlite is not installed. Set DATABASE_URL or run `npm install` with dev dependencies.');
   }
+  if (dir !== ':memory:') {
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(dir, { recursive: true }); // PGlite only creates the last folder
+  }
   const pglite = new PGlite({ dataDir: dir === ':memory:' ? undefined : dir, parsers });
   await pglite.waitReady;
 

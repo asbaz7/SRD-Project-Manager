@@ -26,6 +26,26 @@ This app is separate from the existing read-only dashboard in
 | Import | Load past Excel logs (as CSV). Every row is checked before anything is saved |
 | Users & audit | Roles (viewer / operator / manager / admin) scoped to islands or atolls, and a full change history |
 
+## Try it privately (one command)
+
+```bash
+cd utility-manager
+npm install
+npm run demo
+```
+
+Open http://localhost:3000; only your own computer can see it. It starts
+with sample data: 60 days of logs, gensets down, incidents and projects.
+It also creates test logins for each role (password `demo-password-1`):
+
+- `admin@demo.local`
+- `manager@demo.local` (K atoll)
+- `operator@demo.local` (Maafushi)
+- `viewer@demo.local`
+
+Running `npm run demo` again resets the demo data. Real data is never
+touched.
+
 ## Run it locally (no Postgres needed)
 
 ```bash

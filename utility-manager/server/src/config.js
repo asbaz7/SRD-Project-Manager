@@ -1,4 +1,6 @@
 // All runtime configuration comes from environment variables.
+import { fileURLToPath } from 'node:url';
+
 const env = process.env;
 
 function int(name, fallback) {
@@ -28,7 +30,7 @@ export function loadConfig(overrides = {}) {
     // Only these origins may send state-changing requests with a session cookie.
     allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
     timezone: env.APP_TIMEZONE || 'Indian/Maldives',
-    webDist: env.WEB_DIST || new URL('../../web/dist', import.meta.url).pathname,
+    webDist: env.WEB_DIST || fileURLToPath(new URL('../../web/dist', import.meta.url)),
     trustProxy: env.TRUST_PROXY === 'true',
     logLevel: env.LOG_LEVEL || (production ? 'info' : 'debug'),
     ...overrides,

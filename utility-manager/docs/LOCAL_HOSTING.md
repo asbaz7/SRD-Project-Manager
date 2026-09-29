@@ -18,6 +18,14 @@ cd SRD-Project-Manager/utility-manager
 
 ---
 
+## Just want to look around privately?
+
+Run `npm install`, then `npm run demo`, and open http://localhost:3000. It
+fills the app with sample data and creates test logins (listed on screen).
+Only your computer can open it, and it never touches real data.
+
+---
+
 ## Option A: Quick trial (about 5 minutes)
 
 1. Install **Node.js 22 LTS** (22.9 or newer) from https://nodejs.org.

@@ -2,6 +2,7 @@
 // seed/srd_register.tsv. Safe to run more than once: existing rows are kept.
 //   npm run seed
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
@@ -39,7 +40,7 @@ export async function seedRegister(db) {
   return rows.length;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const db = await createDb(loadConfig());
   await migrate(db, {});
   const n = await seedRegister(db);

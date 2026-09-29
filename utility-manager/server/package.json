@@ -10,7 +10,8 @@
     "migrate": "node --env-file-if-exists=../.env scripts/migrate.js",
     "seed": "node --env-file-if-exists=../.env scripts/seed.js",
     "create-admin": "node --env-file-if-exists=../.env scripts/create-admin.js",
-    "test": "node --test --test-concurrency=1 test/*.test.js"
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "demo": "node scripts/demo.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

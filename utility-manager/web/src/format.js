@@ -70,5 +70,6 @@ export function since(value) {
   const mins = Math.round((Date.now() - new Date(value).getTime()) / 60000);
   if (mins < 60) return `${mins} min ago`;
   if (mins < 1440) return `${Math.round(mins / 60)} h ago`;
-  return `${Math.round(mins / 1440)} days ago`;
+  const days = Math.round(mins / 1440);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }

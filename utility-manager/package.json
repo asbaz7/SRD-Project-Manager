@@ -3,13 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "description": "Electricity, water and sewerage operations system for the South Regional Department",
-  "workspaces": ["server", "web"],
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
+    "demo": "npm run build -w web && node server/scripts/demo.js",
     "dev": "npm run dev -w server & npm run dev -w web",
     "build": "npm run build -w web",
     "start": "npm start -w server",
     "migrate": "npm run migrate -w server",
     "test": "npm test -w server"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }
