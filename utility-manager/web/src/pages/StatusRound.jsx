@@ -19,7 +19,7 @@ export default function StatusRound() {
   const island = useApi(islandId ? `/islands/${islandId}` : null);
 
   return <>
-    <PageHead title="Asset status round" />
+    <PageHead title="Daily status check" />
     <div className="filters">
       <Select value={islandId} onChange={(v) => setFilter('island_id', v)} placeholder="Choose island…" aria-label="Island"
         options={mine.map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} />

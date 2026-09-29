@@ -7,7 +7,7 @@ const NAV = [
   { to: '/', label: 'Overview', end: true },
   { to: '/islands', label: 'Islands & assets' },
   { to: '/log', label: 'Daily log', role: 'operator' },
-  { to: '/status', label: 'Asset status round', role: 'operator' },
+  { to: '/status', label: 'Daily status check', role: 'operator' },
   { to: '/incidents', label: 'Incidents' },
   { to: '/projects', label: 'Projects' },
   { to: '/reports', label: 'Reports' },

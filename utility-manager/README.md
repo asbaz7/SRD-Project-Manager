@@ -20,7 +20,7 @@ This app is separate from the existing read-only dashboard in
 | Overview | What's down, open incidents, active projects, yesterday's generation / fuel / water, and which facilities haven't sent their daily log |
 | Islands & assets | Register of powerhouses, RO plants, sewage plants and their gensets, RO units and pumps, with status history |
 | Daily log | One form per facility per day. Flags typos by comparing with the previous day |
-| Asset status round | Update every asset on an island in one go |
+| Daily status check | Update every asset on an island in one go |
 | Incidents | Outages, breakdowns and maintenance, with duration, customers affected and resolution |
 | Projects | Status, progress, budget, contractor and a timeline of updates |
 | Reports | Monthly report per facility with KPIs (kWh/L, auxiliary %, kWh/m³), exportable to CSV |
