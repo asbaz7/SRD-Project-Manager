@@ -16,7 +16,7 @@ export default async function authRoutes(app) {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: config.production,
+    secure: config.cookieSecure,
     expires,
   });
 

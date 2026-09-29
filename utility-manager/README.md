@@ -9,6 +9,7 @@ This app is separate from the existing read-only dashboard in
 `../branch-monitor` and does not touch its database.
 
 - **Architecture, data model, API and UI design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Step-by-step hosting on your own computer or office server:** [docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md)
 - **Stack:** Node.js 22 · Fastify · PostgreSQL · React · Vite
 
 ## What it does
@@ -44,12 +45,13 @@ and `npm run dev -w web`, then open http://localhost:5173.
 
 ```bash
 cd utility-manager
-POSTGRES_PASSWORD=choose-one docker compose up -d --build
+echo "POSTGRES_PASSWORD=choose-a-long-password" > .env
+docker compose up -d --build
 docker compose exec app node server/scripts/seed.js
 docker compose exec app node server/scripts/create-admin.js you@example.mv "Your Name"
 ```
 
-In production, put the app behind HTTPS: session cookies are `Secure`.
+Over plain `http://` on an office network this works as is. Once it is behind HTTPS, set `COOKIE_SECURE=true`.
 All settings are listed in [.env.example](.env.example).
 
 ## Tests

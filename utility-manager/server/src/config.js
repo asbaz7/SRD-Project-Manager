@@ -22,6 +22,9 @@ export function loadConfig(overrides = {}) {
     databasePoolSize: int('DATABASE_POOL_SIZE', 10),
     pgliteDir: env.PGLITE_DIR || './data/pglite',
     sessionTtlHours: int('SESSION_TTL_HOURS', 12),
+    // HTTPS-only session cookie. On by default in production; set
+    // COOKIE_SECURE=false only when serving plain HTTP on a trusted office network.
+    cookieSecure: env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : production,
     // Only these origins may send state-changing requests with a session cookie.
     allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
     timezone: env.APP_TIMEZONE || 'Indian/Maldives',

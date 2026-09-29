@@ -11,6 +11,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U srd"]
       interval: 5s
@@ -22,8 +23,12 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://srd:${POSTGRES_PASSWORD:-change-me}@db:5432/srd
-      TRUST_PROXY: "true"
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Plain http:// on the office network needs this false. Set true once
+      # the app is behind HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "3000:3000"
+    restart: unless-stopped
 volumes:
   pgdata:
