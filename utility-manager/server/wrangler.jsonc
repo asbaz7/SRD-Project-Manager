@@ -1,0 +1,33 @@
+// Cloudflare Workers deployment of SRD Utility Manager.
+// A separate Worker from the old dashboard (srd-project-manager), so both can
+// run side by side until the switch-over.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "srd-utility-manager",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    // API calls go to the Worker; everything else is the web app.
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "LOG_LEVEL": "info",
+    "APP_TIMEZONE": "Indian/Maldives"
+  },
+  // Database connection. Create it once with:
+  //   npx wrangler hyperdrive create srd-utility-db --connection-string="postgres://…"
+  // then paste its id below. (Alternatively remove this block and set a
+  // DATABASE_URL secret with `npx wrangler secret put DATABASE_URL`.)
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      // Used by `npm run dev:cloudflare` only: a local Postgres for testing.
+      "localConnectionString": "postgres://postgres:postgres@localhost:5432/srd"
+    }
+  ],
+  "observability": { "enabled": true }
+}

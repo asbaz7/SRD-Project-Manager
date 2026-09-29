@@ -10,7 +10,8 @@ This app is separate from the existing read-only dashboard in
 
 - **Architecture, data model, API and UI design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **Step-by-step hosting on your own computer or office server:** [docs/LOCAL_HOSTING.md](docs/LOCAL_HOSTING.md)
-- **Stack:** Node.js 22 · Fastify · PostgreSQL · React · Vite
+- **Deploying to Cloudflare (replacing the current site):** [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)
+- **Stack:** Node.js 22 or Cloudflare Workers · Hono · PostgreSQL · React · Vite
 
 ## What it does
 

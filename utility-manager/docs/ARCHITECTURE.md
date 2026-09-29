@@ -29,7 +29,7 @@ between them.
                │
   ┌────────────▼──────────────┐   ┌───────────────────────────┐
   │ App container (×N)        │   │ App container             │  stateless: add more for load
-  │  Fastify API  /api/v1     │   │  ...                      │
+  │  Hono API     /api/v1     │   │  ...                      │
   │  React SPA (static)       │   │                           │
   └────────────┬──────────────┘   └─────────────┬─────────────┘
                └──────────────┬─────────────────┘
@@ -40,7 +40,8 @@ between them.
                 └───────────────────────────┘
 ```
 
-* **API**: Node.js 22 with Fastify 5. Zod validates every input. Queries are
+* **API**: Hono, which runs unchanged on Node.js 22 and on Cloudflare Workers
+  (`src/index.js` and `src/worker.js` are the two entry points). Zod validates every input. Queries are
   plain parameterised SQL through `pg`, with no ORM, so the SQL you read is
   the SQL that runs.
 * **Web**: a React 19 single-page app built with Vite and served by the same
@@ -57,7 +58,7 @@ between them.
   queues, caches or microservices to operate.
 * **Stateless app, stateful DB.** Scaling means running more containers.
   Postgres is the only thing to back up.
-* **Dependencies are few and mainstream:** fastify, pg, zod, react and
+* **Dependencies are few and mainstream:** hono, pg, zod, react and
   react-router. Any Node developer can take it over.
 
 ## 3. File structure
@@ -75,8 +76,9 @@ utility-manager/
 │   ├── seed/srd_register.tsv  current SRD genset register (4 atolls, 34 islands, 140 gensets)
 │   ├── scripts/               migrate, seed, create-admin CLIs
 │   ├── src/
-│   │   ├── index.js           process entry: config → db → migrate → listen
-│   │   ├── app.js             Fastify setup, security headers, auth hook, routes
+│   │   ├── app.js             API: security headers, auth, rate limits, routes
+│   │   ├── index.js           Node.js entry: API + web app on one port
+│   │   ├── worker.js          Cloudflare Workers entry (web app served by Cloudflare)
 │   │   ├── config.js          env → config
 │   │   ├── db.js              pg / PGlite adapter: query, exec, tx(userId, fn)
 │   │   ├── migrate.js         migration runner (advisory-locked)
@@ -235,7 +237,7 @@ a generic message to the user).
   deactivation.
 * CSRF: cookie-authenticated writes from a foreign `Origin` are rejected, on
   top of SameSite.
-* Helmet sets security headers, including a strict CSP with no inline
+* Security headers are set, including a strict CSP with no inline
   scripts and `frame-ancestors 'none'`.
 * All SQL is parameterised. Every input is validated with Zod.
 * CSV export guards against Excel formula injection.
@@ -258,7 +260,11 @@ a generic message to the user).
   recovery. The application holds no other state.
 * **Monitoring.** `/api/v1/health` for uptime checks. Logs are structured
   JSON, one line per request.
-* **Hosting options.** Any container host (Fly.io, Render, AWS ECS, Azure
+* **Cloudflare Workers (chosen for production).** The web app is served by
+  Cloudflare and `/api/*` runs in a Worker (`src/worker.js`). The database is
+  a Supabase Postgres, reached through Hyperdrive. Steps are in
+  [CLOUDFLARE.md](CLOUDFLARE.md).
+* **Other hosting options.** Any container host (Fly.io, Render, AWS ECS, Azure
   Container Apps, an on-prem VM with Docker) plus any Postgres 15+. A **new**
   Supabase project works as the database: set `DATABASE_URL` to its
   connection string and `DATABASE_SSL=true`.

@@ -36,7 +36,7 @@ export function errorHandler(err, req, reply) {
     return reply.code(pg[0]).send({ error: message });
   }
   if (err.statusCode && err.statusCode < 500) {
-    // Fastify's own errors (bad JSON, payload too large, rate limit ...)
+    // Other client errors that carry a status code
     return reply.code(err.statusCode).send({ error: err.message });
   }
   req.log.error(err);

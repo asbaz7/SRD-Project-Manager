@@ -9,71 +9,10 @@
 //                            set so audit triggers record who made the change
 //   db.close()
 
-const NUMERIC = 1700, INT8 = 20, DATE = 1082;
-
-// Numbers as numbers; dates as plain 'YYYY-MM-DD' strings (no timezone shifts).
-const parsers = {
-  [NUMERIC]: (v) => (v === null ? null : Number.parseFloat(v)),
-  [INT8]: (v) => (v === null ? null : Number(v)),
-  [DATE]: (v) => v,
-};
+import { createPgDb, parsers } from './db-pg.js';
 
 export async function createDb(config) {
   return config.databaseUrl ? createPgDb(config) : createPgliteDb(config.pgliteDir);
-}
-
-async function createPgDb(config) {
-  const { default: pg } = await import('pg');
-  for (const [oid, fn] of Object.entries(parsers)) pg.types.setTypeParser(Number(oid), fn);
-  const pool = new pg.Pool({
-    connectionString: config.databaseUrl,
-    max: config.databasePoolSize,
-    ssl: config.databaseSsl ? { rejectUnauthorized: false } : undefined,
-    idleTimeoutMillis: 30_000,
-    statement_timeout: 30_000,
-  });
-  pool.on('error', (err) => console.error('postgres pool error', err));
-
-  const wrap = (client) => ({
-    query: async (sql, params) => {
-      const r = await client.query(sql, params);
-      return { rows: r.rows, rowCount: r.rowCount };
-    },
-    exec: (sql) => client.query(sql), // simple protocol: multiple statements allowed
-  });
-
-  return {
-    kind: 'postgres',
-    query: wrap(pool).query,
-    exec: (sql) => pool.query(sql),
-    async tx(userId, fn) {
-      const client = await pool.connect();
-      try {
-        await client.query('begin');
-        if (userId) await client.query("select set_config('app.user_id', $1, true)", [userId]);
-        const result = await fn(wrap(client));
-        await client.query('commit');
-        return result;
-      } catch (err) {
-        await client.query('rollback').catch(() => {});
-        throw err;
-      } finally {
-        client.release();
-      }
-    },
-    // Serialise migrations across app instances.
-    async withLock(fn) {
-      const client = await pool.connect();
-      try {
-        await client.query('select pg_advisory_lock(72817)');
-        return await fn();
-      } finally {
-        await client.query('select pg_advisory_unlock(72817)').catch(() => {});
-        client.release();
-      }
-    },
-    close: () => pool.end(),
-  };
 }
 
 async function createPgliteDb(dir) {

@@ -11,6 +11,16 @@ function int(name, fallback) {
   return n;
 }
 
+// The built web app, next to the server folder. Not applicable on Cloudflare
+// Workers (static files are served by Cloudflare), where this returns ''.
+function defaultWebDist() {
+  try {
+    return fileURLToPath(new URL('../../web/dist', import.meta.url));
+  } catch {
+    return '';
+  }
+}
+
 export function loadConfig(overrides = {}) {
   const production = env.NODE_ENV === 'production';
   const config = {
@@ -30,7 +40,7 @@ export function loadConfig(overrides = {}) {
     // Only these origins may send state-changing requests with a session cookie.
     allowedOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
     timezone: env.APP_TIMEZONE || 'Indian/Maldives',
-    webDist: env.WEB_DIST || fileURLToPath(new URL('../../web/dist', import.meta.url)),
+    webDist: env.WEB_DIST ?? defaultWebDist(),
     trustProxy: env.TRUST_PROXY === 'true',
     logLevel: env.LOG_LEVEL || (production ? 'info' : 'debug'),
     ...overrides,

@@ -13,7 +13,8 @@
     "build": "npm run build -w web",
     "start": "npm start -w server",
     "migrate": "npm run migrate -w server",
-    "test": "npm test -w server"
+    "test": "npm test -w server",
+    "deploy:cloudflare": "npm run build -w web && npm run deploy:cloudflare -w server"
   },
   "engines": {
     "node": ">=22"
