@@ -67,7 +67,7 @@ npx wrangler login              # opens the browser once
 npx wrangler hyperdrive create srd-utility-db --connection-string="<the same connection string>"
 ```
 
-It prints an `id`. Open `server/wrangler.jsonc` and replace
+It prints an `id`. (Already done for srd-utility-db.) Open `server/wrangler.jsonc` and replace
 `REPLACE_WITH_HYPERDRIVE_ID` with it. You can also send me the id and I'll
 commit it for you.
 

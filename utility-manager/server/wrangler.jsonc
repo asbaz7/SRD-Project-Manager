@@ -17,14 +17,13 @@
     "LOG_LEVEL": "info",
     "APP_TIMEZONE": "Indian/Maldives"
   },
-  // Database connection. Create it once with:
-  //   npx wrangler hyperdrive create srd-utility-db --connection-string="postgres://…"
-  // then paste its id below. (Alternatively remove this block and set a
-  // DATABASE_URL secret with `npx wrangler secret put DATABASE_URL`.)
+  // Database connection: Hyperdrive config "srd-utility-db", pointing at the
+  // srd-utility-manager Supabase project (created with
+  // `npx wrangler hyperdrive create srd-utility-db --connection-string=…`).
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "id": "66f58338402f4355aa04b25b0df4c38c",
       // Used by `npm run dev:cloudflare` only: a local Postgres for testing.
       "localConnectionString": "postgres://postgres:postgres@localhost:5432/srd"
     }
