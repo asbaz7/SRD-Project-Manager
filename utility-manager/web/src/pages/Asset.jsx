@@ -42,7 +42,7 @@ export default function Asset() {
             {a.notes && <><dt>Notes</dt><dd className="pre">{a.notes}</dd></>}
           </dl>
         </Card>
-        {writable && can('operator') && <Card title="Report status">
+        {writable && can('manager') && <Card title="Report status">
           <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
             <ErrorBox error={error} />
             <Field label="Status"><Select required value={status.status} onChange={(v) => setStatus({ ...status, status: v })} placeholder="Choose…"

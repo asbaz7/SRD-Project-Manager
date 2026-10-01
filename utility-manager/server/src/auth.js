@@ -101,13 +101,13 @@ export async function purgeExpiredSessions(db) {
 }
 
 // ---------------------------------------------------------------------------
-// Authorisation
+// Authorisation (management staff only)
 //   viewer   – read everything
-//   operator – + daily log, asset status, incidents, project updates (in scope)
-//   manager  – + facilities, assets, projects, island details (in scope), audit
-//   admin    – everything, users, atolls, metrics; not limited by scope
+//   manager  – + incidents, asset status, facilities, assets, projects and
+//              project updates, island details (all within assigned islands); audit
+//   admin    – everything, users, atolls; not limited by scope
 // ---------------------------------------------------------------------------
-const RANK = { viewer: 0, operator: 1, manager: 2, admin: 3 };
+const RANK = { viewer: 0, manager: 1, admin: 2 };
 
 export function hasRole(user, minimum) {
   return !!user && RANK[user.role] >= RANK[minimum];

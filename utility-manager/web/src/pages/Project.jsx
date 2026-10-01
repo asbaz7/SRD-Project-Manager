@@ -45,7 +45,7 @@ function ProjectView({ project: p, reload }) {
         </dl>
         {p.description && <p className="pre">{p.description}</p>}
       </Card>
-      {can('operator') && writable && <Card title="Post an update">
+      {can('manager') && writable && <Card title="Post an update">
         <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <ErrorBox error={error} />
           <Field label="What happened"><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} /></Field>

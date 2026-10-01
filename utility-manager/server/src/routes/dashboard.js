@@ -3,14 +3,13 @@ import { id, parse } from '../http.js';
 
 // Everything the overview page needs in one call. Optional atoll filter.
 export default async function dashboardRoutes(app) {
-  const { db, config } = app;
+  const { db } = app;
 
   app.get('/dashboard', async (req) => {
     const q = parse(z.object({ atoll_id: id.optional() }), req.query);
     const atoll = q.atoll_id ?? null;
-    const tz = config.timezone;
 
-    const [services, incidents, projects, down, openIncidents, missing, yesterday, day, fuel] = await Promise.all([
+    const [services, incidents, projects, down, openIncidents, activeProjects, fuel] = await Promise.all([
       // Facility and asset counts per service.
       db.query(`
         select f.service::text as service,
@@ -56,29 +55,17 @@ export default async function dashboardRoutes(app) {
          where x.status = 'open' and ($1::uuid is null or i.atoll_id = $1)
          order by array_position(array['critical','high','medium','low']::severity_level[], x.severity), x.started_at
          limit 50`, [atoll]),
-      // Facilities with no daily log for yesterday: who to chase.
+      // Active projects, overdue first, then by target date.
       db.query(`
-        select f.id, f.name, f.service, i.id as island_id, i.name as island_name, a.code as atoll_code,
-               (select max(reading_date) from readings r where r.facility_id = f.id) as last_reading_date
-          from facilities f
-          join islands i on i.id = f.island_id and i.active
-          join atolls a on a.id = i.atoll_id
-         where f.active and f.kind in ('powerhouse', 'solar_plant', 'water_plant', 'sewerage_plant', 'pump_station')
-           and ($1::uuid is null or i.atoll_id = $1)
-           and not exists (select 1 from readings r where r.facility_id = f.id
-                            and r.reading_date = (now() at time zone $2)::date - 1)
-         order by a.code, i.name, f.service`, [atoll, tz]),
-      // Yesterday's totals for the headline figures.
-      db.query(`
-        select r.metric, sum(r.value) as value
-          from readings r
-          join facilities f on f.id = r.facility_id
-          join islands i on i.id = f.island_id
-         where r.reading_date = (now() at time zone $2)::date - 1
-           and r.metric in ('gross_generation_kwh', 'fuel_consumed_l', 'peak_load_kw', 'water_produced_m3', 'sewage_pumped_m3')
-           and ($1::uuid is null or i.atoll_id = $1)
-         group by r.metric`, [atoll, tz]),
-      db.query('select (now() at time zone $1)::date - 1 as d', [tz]),
+        select p.id, 'PRJ-' || lpad(p.id::text, 4, '0') as ref, p.title, p.service, p.status, p.progress_pct,
+               p.target_date, (p.target_date < current_date) as overdue,
+               i.id as island_id, i.name as island_name, a.code as atoll_code
+          from projects p
+          left join islands i on i.id = p.island_id
+          left join atolls a on a.id = i.atoll_id
+         where p.status in ('planned', 'ongoing', 'on_hold') and ($1::uuid is null or i.atoll_id = $1)
+         order by (p.target_date < current_date) desc nulls last, p.target_date nulls last, p.id
+         limit 20`, [atoll]),
       db.query(`
         select coalesce(sum(f.fuel_capacity_l), 0) as capacity_l,
                count(*) filter (where f.fuel_capacity_l is null) as not_set
@@ -92,23 +79,16 @@ export default async function dashboardRoutes(app) {
     }]));
     for (const row of services.rows) Object.assign(byService[row.service], row);
 
-    const totals = Object.fromEntries(yesterday.rows.map((r) => [r.metric, r.value]));
     return {
-      date: day.rows[0].d,
       services: byService,
       incidents: {
         open: incidents.rows.reduce((n, r) => n + r.n, 0),
         by_severity: Object.fromEntries(incidents.rows.map((r) => [r.severity, r.n])),
         list: openIncidents.rows,
       },
-      projects: projects.rows[0],
+      projects: { ...projects.rows[0], list: activeProjects.rows },
       fuel_storage: fuel.rows[0],
       assets_down: down.rows,
-      missing_logs: missing.rows,
-      yesterday: {
-        ...totals,
-        specific_fuel_kwh_per_l: totals.fuel_consumed_l ? totals.gross_generation_kwh / totals.fuel_consumed_l : null,
-      },
     };
   });
 }

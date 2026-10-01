@@ -62,7 +62,6 @@ const ASSET_LIST = `
 export default async function assetRoutes(app) {
   const { db } = app;
   const manager = { preHandler: requireRole('manager') };
-  const operator = { preHandler: requireRole('operator') };
 
   // --- Facilities -----------------------------------------------------------
   app.get('/facilities', async (req) => {
@@ -79,8 +78,7 @@ export default async function assetRoutes(app) {
   app.get('/facilities/:id', async (req) => {
     const { id: facilityId } = parse(idParam, req.params);
     const facility = one((await db.query(`
-      select f.*, i.name as island_name, i.atoll_id, a.code as atoll_code,
-             (select max(reading_date) from readings r where r.facility_id = f.id) as last_reading_date
+      select f.*, i.name as island_name, i.atoll_id, a.code as atoll_code
         from facilities f join islands i on i.id = f.island_id join atolls a on a.id = i.atoll_id
        where f.id = $1`, [facilityId])).rows, 'Facility');
     facility.assets = (await db.query(
@@ -179,7 +177,7 @@ export default async function assetRoutes(app) {
   });
 
   // Status for one or many assets at once (e.g. the morning genset round).
-  app.post('/assets/status', operator, async (req) => {
+  app.post('/assets/status', manager, async (req) => {
     const body = parse(statusBatch, req.body);
     const reportedAt = body.reported_at ?? new Date().toISOString();
     for (const assetId of new Set(body.items.map((i) => i.asset_id))) {

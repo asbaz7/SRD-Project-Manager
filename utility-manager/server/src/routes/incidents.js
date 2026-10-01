@@ -71,7 +71,7 @@ async function checkLinks(db, islandId, { facility_id, asset_id }) {
 
 export default async function incidentRoutes(app) {
   const { db } = app;
-  const operator = { preHandler: requireRole('operator') };
+  const manager = { preHandler: requireRole('manager') };
 
   app.get('/incidents', async (req, reply) => {
     const q = parse(listQuery, req.query);
@@ -104,7 +104,7 @@ export default async function incidentRoutes(app) {
     return row;
   });
 
-  app.post('/incidents', operator, async (req, reply) => {
+  app.post('/incidents', manager, async (req, reply) => {
     const body = parse(createBody, req.body);
     await assertIslandWrite(db, req.user, { islandId: body.island_id });
     await checkLinks(db, body.island_id, body);
@@ -120,7 +120,7 @@ export default async function incidentRoutes(app) {
     return one((await db.query(`${SELECT} where x.id = $1`, [rows[0].id])).rows);
   });
 
-  app.patch('/incidents/:id', operator, async (req) => {
+  app.patch('/incidents/:id', manager, async (req) => {
     const { id: incidentId } = parse(serialParam, req.params);
     const body = parse(patchBody, req.body);
     const current = one((await db.query('select * from incidents where id = $1', [incidentId])).rows, 'Incident');

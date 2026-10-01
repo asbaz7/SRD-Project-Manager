@@ -1,9 +1,17 @@
 # SRD Utility Manager — System Architecture
 
 The system of record for the South Regional Department's electricity, water
-and sewerage operations. It replaces the Excel daily logs, genset status
-sheets, outage registers and project trackers, and everything that is copied
-between them.
+and sewerage services, used by **management staff**. Managers report incidents
+as soon as they know of them, keep asset status current and manage projects
+for their assigned islands. It replaces the genset status sheets, outage
+registers and project trackers, and everything that is copied between them.
+
+> **Scope change (Oct 2026).** The first version also had a per-facility daily
+> operations log (with Excel import and a monthly report) and an *operator*
+> role for powerhouse staff. Both were removed to keep the system to
+> management use. Migration `003_management_only.sql` retires operator
+> accounts. The `metrics` and `readings` tables are kept, unused, so nothing
+> entered earlier is lost.
 
 ## 1. Goals and constraints
 
@@ -14,7 +22,7 @@ between them.
 | Hundreds of users | Stateless app servers, sessions in Postgres, indexed queries, pagination on every list |
 | Accountability | Every change is written to an audit trail (who, when, before → after) by database triggers |
 | People can only change their own islands | Role + island/atoll scope, enforced on the server for every write |
-| Excel still works | Every list exports to CSV, and past logs import from CSV with row-level validation |
+| Excel still works | Asset, incident and project lists export to CSV |
 | Few moving parts | One Node.js service, one PostgreSQL database, one container image |
 
 ## 2. Architecture
@@ -72,7 +80,8 @@ utility-manager/
 ├── server/
 │   ├── migrations/            ordered SQL files, applied once each at start-up
 │   │   ├── 001_core.sql       tables, enums, triggers, audit
-│   │   └── 002_metrics.sql    daily-log measurement catalogue
+│   │   ├── 002_metrics.sql    daily-log measurements (no longer used)
+│   │   └── 003_management_only.sql  retires operator accounts
 │   ├── seed/srd_register.tsv  current SRD genset register (4 atolls, 34 islands, 140 gensets)
 │   ├── scripts/               migrate, seed, create-admin CLIs
 │   ├── src/
@@ -84,7 +93,7 @@ utility-manager/
 │   │   ├── migrate.js         migration runner (advisory-locked)
 │   │   ├── auth.js            passwords, sessions, roles, island scope checks
 │   │   ├── http.js            validation, paging, filters, PATCH helpers
-│   │   ├── csv.js             CSV export (Excel-safe) and import parsing
+│   │   ├── csv.js             CSV export (Excel-safe)
 │   │   ├── errors.js          HTTP errors, Postgres error mapping
 │   │   └── routes/            one module per resource
 │   └── test/api.test.js       end-to-end API tests (in-memory Postgres)
@@ -106,7 +115,7 @@ utility-manager/
 ```
 atolls 1─* islands 1─* facilities 1─* assets 1─* asset_status_log
                   │            │            │
-                  │            └─* readings *─1 metrics
+                  │            └─* readings *─1 metrics   (kept, no longer used)
                   ├─* incidents (optionally → facility, asset)
                   └─* projects 1─* project_updates
 
@@ -121,8 +130,8 @@ audit_log   ← triggers on every business table
 | `facilities` | Powerhouse, solar plant, RO plant, storage, sewage treatment plant, pump station | `service` is one of electricity / water / sewerage. Storage capacities are columns |
 | `assets` | Gensets, RO units, pumps, transformers, … | `unique(facility_id, kind, tag)`. The current `status` is copied here for fast dashboards |
 | `asset_status_log` | Every status report | A trigger copies the latest report onto `assets.status`, so history is never lost |
-| `metrics` | The measurements in the daily log | New measurements are new **rows**, not columns. Each has a unit and an aggregation rule (sum, max, avg or last) |
-| `readings` | Daily log values | PK `(facility_id, reading_date, metric)` means one value per day. A trigger rejects a metric from another service |
+| `metrics` | *(no longer used)* The measurements in the former daily log | New measurements are new **rows**, not columns. Each has a unit and an aggregation rule (sum, max, avg or last) |
+| `readings` | *(no longer used)* Former daily log values | PK `(facility_id, reading_date, metric)` means one value per day. A trigger rejects a metric from another service |
 | `incidents` | Outages, breakdowns, maintenance, quality and safety events | Duration comes from start and resolve times. Ref `INC-000123` |
 | `projects`, `project_updates` | Capital and maintenance projects, with a timeline | An update moves progress and status forward through a trigger. Ref `PRJ-0042` |
 | `users`, `user_scopes`, `sessions` | Access | Passwords hashed with scrypt. Sessions are stored as SHA-256 hashes |
@@ -130,9 +139,6 @@ audit_log   ← triggers on every business table
 
 Design choices:
 
-* **Metrics as rows (a narrow table).** Excel logs grow a column whenever
-  someone wants a new measurement. Here an admin adds a row to `metrics` and
-  every screen, the import and the monthly report pick it up.
 * **Denormalised current status.** Dashboards read `assets.status`, which is
   indexed, and never scan the history table.
 * **Database-enforced integrity.** Foreign keys, checks, unique keys and
@@ -142,10 +148,9 @@ Design choices:
 
 | Role | Can view | Can change (within assigned islands) |
 |---|---|---|
-| viewer | everything | nothing |
-| operator | everything | daily log, asset status, incidents, project updates |
-| manager | everything + audit trail | the operator's records, plus facilities, assets and projects |
-| admin | everything | everything, including users, atolls, islands and metrics. Scope does not apply |
+| manager | everything + audit trail | incidents, asset status, projects and project updates, facilities and assets |
+| admin | everything | everything, including users, atolls and islands. Scope does not apply |
+| viewer (optional) | everything | nothing |
 
 A **scope** row assigns a user to one island, a whole atoll, or the whole
 region. `assertIslandWrite()` finds the island behind any island, facility or
@@ -177,20 +182,13 @@ Endpoints marked CSV also accept `?format=csv`.
 | GET | `/assets?…&status&kind&q` (CSV) | any | Asset register |
 | GET | `/assets/:id` | any | Asset with status history and incidents |
 | POST / PATCH | `/assets`, `/assets/:id` | manager | Register or edit an asset |
-| POST | `/assets/status` | operator | Status for one or many assets (the morning round) |
-| GET | `/metrics?service` | any | Measurement catalogue |
-| GET | `/readings/sheet?facility_id&date` | any | Daily log form data, with the previous day's values |
-| PUT | `/readings/sheet` | operator | Save a facility's daily log (upsert; `null` clears a value) |
-| GET | `/readings?from&to&…` (CSV) | any | Raw readings export |
-| POST | `/readings/import` | operator | Load a CSV. Every row is validated before anything is written; `dry_run` only checks |
+| POST | `/assets/status` | manager | Status for one or many assets (the daily status check) |
 | GET | `/incidents?status&service&…` (CSV) | any | Incident register |
-| GET / POST / PATCH | `/incidents/:id` | operator | Report, update, resolve, close or reopen an incident |
+| GET / POST / PATCH | `/incidents/:id` | manager | Report, update, resolve, close or reopen an incident |
 | GET | `/projects?status=active&…` (CSV) | any | Projects |
 | GET / POST / PATCH | `/projects/:id` | manager | Project with its update timeline |
-| POST | `/projects/:id/updates` | operator | Progress update |
-| GET | `/dashboard?atoll_id` | any | Overview: status by service, assets down, open incidents, missing logs, yesterday's totals |
-| GET | `/reports/monthly?month&service&atoll_id` (CSV) | any | Monthly report per facility, with KPIs (kWh/L, aux %, kWh/m³ …) |
-| GET | `/reports/trend?metric&from&to&…` | any | Daily series of one measurement, for charts |
+| POST | `/projects/:id/updates` | manager | Progress update |
+| GET | `/dashboard?atoll_id` | any | Overview: status by service, assets down, open incidents, active projects, fuel capacity |
 | GET | `/audit?entity&entity_id&user_id` | manager | Audit trail |
 | GET | `/health` | public | Liveness and database check |
 
@@ -210,14 +208,11 @@ a generic message to the user).
 
   | Screen | Replaces |
   |---|---|
-  | Overview | The morning phone calls: what's down, what's open, who hasn't reported |
+  | Overview | The morning phone calls: what's down, what's open, which projects are late |
   | Islands & assets | The genset register workbook |
-  | Daily log | The per-island daily log sheet. Flags values far from the previous day |
   | Daily status check | The "Gensets" status tab: every asset on an island in one form |
   | Incidents | The outage and breakdown register |
   | Projects | The projects tracker, with a timeline of updates |
-  | Reports | The monthly returns, exportable to CSV |
-  | Import from Excel | Loading past logs |
   | Users, Audit trail | Administration |
 * **Design**: plain CSS with design tokens and automatic light/dark mode.
   Status is always shown as an icon plus a word, never colour alone. The
@@ -250,9 +245,8 @@ a generic message to the user).
   this easily. For more capacity, run more containers behind the load
   balancer and raise `DATABASE_POOL_SIZE`, or put PgBouncer or Supabase's
   pooler in front.
-* **Data volume.** 34 islands × 3 services × ~10 metrics × 365 days is about
-  370k readings a year. That is small for Postgres, and the indexes cover
-  every report query.
+* **Data volume.** Statuses, incidents and projects for 34 islands are a few
+  thousand rows a year, which is small for Postgres.
 * **Migrations** run automatically at start-up, one transaction per file,
   under an advisory lock, so a rolling deploy is safe. To change the schema,
   add a new numbered `.sql` file. Never edit an applied one.
@@ -272,21 +266,17 @@ a generic message to the user).
 ## 10. Rollout plan (replacing the spreadsheets)
 
 1. **Pilot** (2–4 weeks). Deploy, run `seed` to load the genset register,
-   create accounts for one atoll, and run the daily log and daily status check
-   alongside the Excel sheets.
-2. **Back-fill.** Import this year's daily logs through *Import from Excel*
-   using the CSV template. Add water and sewerage facilities and assets per
-   island.
-3. **Cut over, atoll by atoll.** Once the monthly report matches the Excel
-   return, stop the sheet for that atoll.
-4. **Retire the read-only dashboard**, or point it at this API, once every
-   atoll is live.
+   create manager accounts for one atoll, and use the daily status check,
+   incidents and projects alongside the existing sheets.
+2. **Fill in the register.** Add fuel capacities, and water and sewerage
+   facilities and assets, per island.
+3. **Cut over, atoll by atoll.** Stop the status sheet and outage register for
+   an atoll once its managers use the system.
 
 ## 11. Roadmap (deliberately not in the minimal version)
 
 * Attachments (photos, engine reports) in S3-compatible object storage
-* Email or SMS alerts for critical incidents and missing daily logs
-* Charts on island pages (the `/reports/trend` endpoint is already there)
-* Offline-capable daily log (PWA) for islands with poor connectivity
+* Email or SMS alerts for critical incidents
+* Offline-capable incident reporting (PWA) for islands with poor connectivity
 * SSO with the corporate identity provider (OIDC)
 * Preventive maintenance schedules based on running hours

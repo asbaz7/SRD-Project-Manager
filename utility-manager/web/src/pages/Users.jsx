@@ -11,9 +11,9 @@ export default function Users() {
     <PageHead title="Users" actions={<button className="btn primary" onClick={() => setEditing({})}>Add user</button>} />
     <Card>
       <p className="muted small">
-        Everyone signed in can view all records. <strong>Operators</strong> enter daily logs, asset status, incidents and project updates;
-        <strong> managers</strong> also maintain facilities, assets and projects; both only for the islands they are assigned.
-        <strong> Administrators</strong> manage everything, including users.
+        <strong>Managers</strong> report incidents, update asset status and manage projects, facilities and assets
+        for the islands they are assigned. <strong>Administrators</strong> manage everything, including users.
+        <strong> Viewers</strong> can see everything but change nothing.
       </p>
       <Async state={state}>{(users) => (
         <table>
@@ -37,7 +37,7 @@ function UserForm({ user, onClose, onSaved }) {
   const islands = useApi('/islands');
   const [f, setF] = useState({
     email: user?.email || '', full_name: user?.full_name || '', designation: user?.designation || '', phone: user?.phone || '',
-    role: user?.role || 'operator', active: user?.active ?? true, password: '',
+    role: user?.role || 'manager', active: user?.active ?? true, password: '',
   });
   const initialScopes = user?.scopes || [];
   const [region, setRegion] = useState(initialScopes.some((s) => !s.atoll_id && !s.island_id));
@@ -66,7 +66,7 @@ function UserForm({ user, onClose, onSaved }) {
         <Field label={user ? 'Reset password (optional)' : 'Temporary password'} hint="At least 10 characters with letters and numbers. They must change it at first sign-in.">
           <input type="text" autoComplete="off" required={!user} value={f.password} onChange={set('password')} /></Field>
         {user && <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => set('active')(e.target.checked)} /> Account active</label>}
-        {f.role !== 'admin' && f.role !== 'viewer' && <fieldset className="wide scopes">
+        {f.role === 'manager' && <fieldset className="wide scopes">
           <legend>May change records for</legend>
           <label className="check"><input type="checkbox" checked={region} onChange={(e) => setRegion(e.target.checked)} /> <strong>The whole region</strong></label>
           {!region && <>

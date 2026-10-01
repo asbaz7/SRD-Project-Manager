@@ -1,9 +1,10 @@
 # SRD Utility Manager
 
-Operations system for the South Regional Department's **electricity, water
-and sewerage** services. It replaces the Excel daily logs, genset status
-sheets, outage registers and project trackers with a single, audited, multi-user
-system.
+Management system for the South Regional Department's **electricity, water
+and sewerage** services, used by management staff. Managers report incidents
+on their islands, keep asset status up to date and manage projects. It
+replaces the genset status sheets, outage registers and project trackers with
+a single, audited, multi-user system.
 
 This app is separate from the existing read-only dashboard in
 `../branch-monitor` and does not touch its database.
@@ -17,15 +18,13 @@ This app is separate from the existing read-only dashboard in
 
 | | |
 |---|---|
-| Overview | What's down, open incidents, active projects, yesterday's generation / fuel / water, and which facilities haven't sent their daily log |
+| Overview | What's down, open incidents, active projects (overdue first) and fuel capacity |
 | Islands & assets | Register of powerhouses, RO plants, sewage plants and their gensets, RO units and pumps, with status history |
-| Daily log | One form per facility per day. Flags typos by comparing with the previous day |
 | Daily status check | Update every asset on an island in one go |
 | Incidents | Outages, breakdowns and maintenance, with duration, customers affected and resolution |
 | Projects | Status, progress, budget, contractor and a timeline of updates |
-| Reports | Monthly report per facility with KPIs (kWh/L, auxiliary %, kWh/m³), exportable to CSV |
-| Import | Load past Excel logs (as CSV). Every row is checked before anything is saved |
-| Users & audit | Roles (viewer / operator / manager / admin) scoped to islands or atolls, and a full change history |
+| Export | Asset, incident and project lists download as CSV for Excel |
+| Users & audit | Managers assigned to islands or atolls, administrators, optional read-only viewers, and a full change history |
 
 ## Try it privately (one command)
 
@@ -36,12 +35,12 @@ npm run demo
 ```
 
 Open http://localhost:3000; only your own computer can see it. It starts
-with sample data: 60 days of logs, gensets down, incidents and projects.
+with sample data: gensets running and down, incidents and projects.
 It also creates test logins for each role (password `demo-password-1`):
 
 - `admin@demo.local`
 - `manager@demo.local` (K atoll)
-- `operator@demo.local` (Maafushi)
+- `maafushi@demo.local` (manager for Maafushi only)
 - `viewer@demo.local`
 
 Running `npm run demo` again resets the demo data. Real data is never
@@ -82,5 +81,5 @@ npm test
 ```
 
 These end-to-end API tests run against an in-memory Postgres. They cover
-authentication, roles and island scope, the daily log, CSV import, reports,
-incidents, projects and the audit trail.
+authentication, roles and island scope, asset status, incidents, projects,
+CSV export and the audit trail.

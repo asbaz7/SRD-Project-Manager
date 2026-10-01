@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { api, setUnauthorizedHandler } from './api.js';
 
 const AuthContext = createContext(null);
-const RANK = { viewer: 0, operator: 1, manager: 2, admin: 3 };
+const RANK = { viewer: 0, manager: 1, admin: 2 };
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined); // undefined = loading, null = signed out

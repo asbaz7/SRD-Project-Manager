@@ -17,11 +17,9 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import locationRoutes from './routes/locations.js';
 import assetRoutes from './routes/assets.js';
-import readingRoutes from './routes/readings.js';
 import incidentRoutes from './routes/incidents.js';
 import projectRoutes from './routes/projects.js';
 import dashboardRoutes from './routes/dashboard.js';
-import reportRoutes from './routes/reports.js';
 import auditRoutes from './routes/audit.js';
 
 const PREFIX = '/api/v1';
@@ -190,8 +188,8 @@ export async function buildApp({ db, config, logger = true }) {
     await db.query('select 1');
     return { ok: true };
   });
-  for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, readingRoutes,
-    incidentRoutes, projectRoutes, dashboardRoutes, reportRoutes, auditRoutes]) {
+  for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes,
+    incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes]) {
     await routes(api);
   }
   // Unknown API paths: still require sign-in, then 404.

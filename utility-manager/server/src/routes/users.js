@@ -3,7 +3,7 @@ import { hashPassword, passwordProblem, requireRole } from '../auth.js';
 import { badRequest } from '../errors.js';
 import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
 
-const role = z.enum(['admin', 'manager', 'operator', 'viewer']);
+const role = z.enum(['admin', 'manager', 'viewer']);
 // A scope is one island, one atoll, or { region: true }.
 const scope = z.union([
   z.object({ island_id: id }),

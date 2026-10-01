@@ -152,35 +152,54 @@ describe('asset register', () => {
 });
 
 describe('roles and island scope', () => {
-  let operator, viewer, manager;
+  let islandManager, viewer, manager;
 
   before(async () => {
     await call('POST', '/users', { token: admin, body: {
-      email: 'op@srd.mv', full_name: 'Maafushi Operator', role: 'operator', password: 'Temporary123', scopes: [{ island_id: maafushi.id }] } });
+      email: 'maafushi.mgr@srd.mv', full_name: 'Maafushi Manager', role: 'manager', password: 'Temporary123', scopes: [{ island_id: maafushi.id }] } });
     await call('POST', '/users', { token: admin, body: {
       email: 'viewer@srd.mv', full_name: 'Viewer', role: 'viewer', password: 'Temporary123' } });
     await call('POST', '/users', { token: admin, body: {
       email: 'mgr@srd.mv', full_name: 'K Manager', role: 'manager', password: 'Temporary123', scopes: [{ atoll_id: maafushi.atoll_id }] } });
-    operator = await firstLogin('op@srd.mv', 'Temporary123');
+    islandManager = await firstLogin('maafushi.mgr@srd.mv', 'Temporary123');
     viewer = await firstLogin('viewer@srd.mv', 'Temporary123');
     manager = await firstLogin('mgr@srd.mv', 'Temporary123');
   });
 
-  test('operator writes the daily log for their island only', async () => {
-    const ok = await call('PUT', '/readings/sheet', { token: operator, body: {
-      facility_id: maafushiPowerhouse.id, date: yesterday(), values: { gross_generation_kwh: 120000, fuel_consumed_l: 30000, peak_load_kw: 6200 } } });
-    assert.equal(ok.status, 200, JSON.stringify(ok.body));
-    const other = await call('PUT', '/readings/sheet', { token: operator, body: {
-      facility_id: dhigurahPowerhouse.id, date: yesterday(), values: { gross_generation_kwh: 1 } } });
-    assert.equal(other.status, 403);
+  test('there are no operator accounts any more', async () => {
+    const res = await call('POST', '/users', { token: admin, body: {
+      email: 'op@srd.mv', full_name: 'Operator', role: 'operator', password: 'Temporary123' } });
+    assert.equal(res.status, 400);
+    await assert.rejects(db.query(
+      "insert into users (email, full_name, role, password_hash) values ('x@srd.mv', 'X', 'operator', 'x')"));
   });
 
-  test('viewers cannot write; operators cannot manage assets', async () => {
+  test('a manager reports incidents and asset status for their islands only', async () => {
+    const ok = await call('POST', '/incidents', { token: islandManager, body: {
+      service: 'electricity', island_id: maafushi.id, category: 'breakdown', title: 'Genset 2 tripped', started_at: '2026-09-30T08:00:00+05:00' } });
+    assert.equal(ok.status, 201, JSON.stringify(ok.body));
+    const other = await call('POST', '/incidents', { token: islandManager, body: {
+      service: 'electricity', island_id: dhigurah.id, category: 'breakdown', title: 'x', started_at: '2026-09-30T08:00:00+05:00' } });
+    assert.equal(other.status, 403);
+
+    const [maafushiGenset] = (await call('GET', `/islands/${maafushi.id}`, { token: islandManager })).body.facilities[0].assets;
+    const [dhigurahGenset] = (await call('GET', `/islands/${dhigurah.id}`, { token: islandManager })).body.facilities[0].assets;
+    const status = await call('POST', '/assets/status', { token: islandManager, body: { items: [{ asset_id: maafushiGenset.id, status: 'running' }] } });
+    assert.equal(status.status, 200);
+    const foreign = await call('POST', '/assets/status', { token: islandManager, body: { items: [{ asset_id: dhigurahGenset.id, status: 'down' }] } });
+    assert.equal(foreign.status, 403);
+    // Reset, so the dashboard counts in later tests start clean.
+    await db.query("update assets set status = 'unknown', status_at = null where id = $1", [maafushiGenset.id]);
+  });
+
+  test('viewers can look but not change anything', async () => {
+    assert.equal((await call('GET', '/islands', { token: viewer })).status, 200);
     const v = await call('POST', '/assets/status', { token: viewer, body: { items: [{ asset_id: maafushiPowerhouse.id, status: 'down' }] } });
     assert.equal(v.status, 403);
-    const o = await call('POST', '/facilities', { token: operator, body: { island_id: maafushi.id, service: 'water', kind: 'other', name: 'X' } });
-    assert.equal(o.status, 403);
-    assert.equal((await call('GET', '/users', { token: operator })).status, 403);
+    const i = await call('POST', '/incidents', { token: viewer, body: {
+      service: 'electricity', island_id: maafushi.id, category: 'outage', title: 'x', started_at: '2026-09-30T08:00:00+05:00' } });
+    assert.equal(i.status, 403);
+    assert.equal((await call('GET', '/users', { token: viewer })).status, 403);
   });
 
   test('atoll manager can manage facilities in their atoll only', async () => {
@@ -198,75 +217,21 @@ describe('roles and island scope', () => {
   });
 });
 
-describe('daily log', () => {
-  test('sheet shows entered values and rejects wrong-service metrics', async () => {
-    const sheet = await call('GET', `/readings/sheet?facility_id=${maafushiPowerhouse.id}&date=${yesterday()}`, { token: admin });
-    assert.equal(sheet.status, 200);
-    const gen = sheet.body.metrics.find((m) => m.code === 'gross_generation_kwh');
-    assert.equal(gen.value, 120000);
-    assert.ok(sheet.body.metrics.every((m) => !m.code.startsWith('water_')));
-
-    const bad = await call('PUT', '/readings/sheet', { token: admin, body: {
-      facility_id: maafushiPowerhouse.id, date: yesterday(), values: { water_produced_m3: 10 } } });
-    assert.equal(bad.status, 400);
-    assert.match(bad.body.error, /does not apply/);
+describe('scope of the system', () => {
+  test('the daily log, import and monthly report are gone', async () => {
+    for (const url of [`/readings/sheet?facility_id=${maafushiPowerhouse.id}&date=${yesterday()}`, '/metrics',
+      '/reports/monthly?month=2026-01&service=electricity']) {
+      assert.equal((await call('GET', url, { token: admin })).status, 404, url);
+    }
+    assert.equal((await call('POST', '/readings/import', { token: admin, body: { csv: 'a' } })).status, 404);
   });
 
-  test('island shows its latest fuel stock next to storage capacity', async () => {
-    await call('PUT', '/readings/sheet', { token: admin, body: {
-      facility_id: maafushiPowerhouse.id, date: yesterday(), values: { fuel_stock_l: 73651 } } });
+  test('fuel capacity shows per island and in total', async () => {
     const island = (await call('GET', `/islands/${maafushi.id}`, { token: admin })).body;
     assert.equal(island.fuel_capacity_l, 147302);
-    assert.equal(island.fuel_stock_l, 73651);
-    assert.equal(island.fuel_stock_date, yesterday());
     const dash = (await call('GET', '/dashboard', { token: admin })).body;
     assert.equal(dash.fuel_storage.capacity_l, 147302);
     assert.equal(dash.fuel_storage.not_set, 33);
-  });
-
-  test('future dates are refused; null clears a value', async () => {
-    const future = await call('PUT', '/readings/sheet', { token: admin, body: {
-      facility_id: maafushiPowerhouse.id, date: '2999-01-01', values: { peak_load_kw: 1 } } });
-    assert.equal(future.status, 400);
-    await call('PUT', '/readings/sheet', { token: admin, body: { facility_id: maafushiPowerhouse.id, date: yesterday(), values: { peak_load_kw: null } } });
-    const sheet = await call('GET', `/readings/sheet?facility_id=${maafushiPowerhouse.id}&date=${yesterday()}`, { token: admin });
-    assert.equal(sheet.body.metrics.find((m) => m.code === 'peak_load_kw').value, null);
-  });
-
-  test('CSV import validates every row before writing anything', async () => {
-    const csv = [
-      'atoll,island,facility,date,metric,value',
-      'K,Maafushi,Maafushi Powerhouse,2026-01-01,gross_generation_kwh,"100,000"',
-      'K,Maafushi,Maafushi Powerhouse,2026-01-01,fuel_consumed_l,25000',
-      'K,Nowhere,Nowhere Powerhouse,2026-01-01,fuel_consumed_l,1',
-      'K,Maafushi,Maafushi Powerhouse,2026-01-02,fuel_consumed_l,abc',
-    ].join('\n');
-    const bad = await call('POST', '/readings/import', { token: admin, body: { csv } });
-    assert.equal(bad.body.ok, false);
-    assert.deepEqual(bad.body.errors.map((e) => e.line), [4, 5]);
-    const count = await call('GET', `/readings?facility_id=${maafushiPowerhouse.id}&from=2026-01-01&to=2026-01-31`, { token: admin });
-    assert.equal(count.body.length, 0);
-
-    const good = await call('POST', '/readings/import', { token: admin, body: { csv: csv.split('\n').slice(0, 3).join('\n') } });
-    assert.equal(good.body.imported, 2, JSON.stringify(good.body));
-  });
-
-  test('monthly report aggregates and computes KPIs', async () => {
-    const res = await call('GET', '/reports/monthly?month=2026-01&service=electricity', { token: admin });
-    assert.equal(res.status, 200);
-    const row = res.body.rows.find((r) => r.facility_id === maafushiPowerhouse.id);
-    assert.equal(row.values.gross_generation_kwh, 100000);
-    assert.equal(row.kpis.sfc_kwh_per_l, 4);
-    assert.equal(row.days_reported, 1);
-    const csv = await call('GET', '/reports/monthly?month=2026-01&service=electricity&format=csv', { token: admin });
-    assert.match(csv.raw.body, /Specific fuel consumption/);
-  });
-
-  test('trend returns one point per day', async () => {
-    const res = await call('GET', `/reports/trend?metric=gross_generation_kwh&from=2026-01-01&to=2026-01-03&island_id=${maafushi.id}`, { token: admin });
-    assert.deepEqual(res.body, [
-      { date: '2026-01-01', value: 100000 }, { date: '2026-01-02', value: null }, { date: '2026-01-03', value: null },
-    ]);
   });
 });
 
@@ -286,10 +251,7 @@ describe('operations', () => {
     assert.equal(dash.services.electricity.down, 1);
     assert.equal(dash.services.electricity.running, 1);
     assert.ok(dash.assets_down.some((a) => a.id === g2.id));
-    assert.equal(dash.yesterday.gross_generation_kwh, 120000);
-    assert.equal(dash.yesterday.specific_fuel_kwh_per_l, 4);
-    assert.ok(dash.missing_logs.some((f) => f.id === dhigurahPowerhouse.id));
-    assert.ok(!dash.missing_logs.some((f) => f.id === maafushiPowerhouse.id));
+    assert.equal(dash.yesterday, undefined, 'no daily-log figures any more');
   });
 
   test('incident lifecycle', async () => {
@@ -328,6 +290,8 @@ describe('operations', () => {
     assert.equal(patched.body.progress_pct, 40, 'PATCH does not reset unspecified fields');
     const active = (await call('GET', '/projects?status=active', { token: admin })).body;
     assert.equal(active.total, 1);
+    const dash = (await call('GET', '/dashboard', { token: admin })).body;
+    assert.deepEqual(dash.projects.list.map((x) => x.title), ['Genset 9 installation']);
   });
 
   test('audit log records who changed what', async () => {

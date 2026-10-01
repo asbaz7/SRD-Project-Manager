@@ -15,12 +15,11 @@ import { seedRegister } from './seed.js';
 
 const DIR = fileURLToPath(new URL('../data/demo', import.meta.url));
 const PASSWORD = 'demo-password-1';
-const TODAY = "(now() at time zone 'Indian/Maldives')::date";
 
 const USERS = [
   ['admin@demo.local', 'Aishath Admin', 'admin', null, 'Administrator — can do everything'],
   ['manager@demo.local', 'Mohamed Manager', 'manager', { atoll: 'K' }, 'Manager for Kaafu (K) atoll'],
-  ['operator@demo.local', 'Ibrahim Operator', 'operator', { island: 'Maafushi' }, 'Operator at Maafushi only'],
+  ['maafushi@demo.local', 'Ibrahim Manager', 'manager', { island: 'Maafushi' }, 'Manager for Maafushi only'],
   ['viewer@demo.local', 'Fathimath Viewer', 'viewer', null, 'Can only view'],
 ];
 
@@ -40,13 +39,14 @@ async function build() {
     const { rows } = await db.query(
       `insert into users (email, full_name, role, password_hash, must_change_password, designation)
        values ($1, $2, $3, $4, false, $5) returning id`,
-      [email, name, role, hash, { admin: 'Head of Department', manager: 'Senior Engineer', operator: 'Powerhouse Operator', viewer: 'Planning Officer' }[role]]);
-    ids[role] = rows[0].id;
-    if (scope?.atoll) await db.query('insert into user_scopes (user_id, atoll_id) select $1, id from atolls where code = $2', [ids[role], scope.atoll]);
-    if (scope?.island) await db.query('insert into user_scopes (user_id, island_id) select $1, id from islands where name = $2', [ids[role], scope.island]);
+      [email, name, role, hash, { admin: 'Head of Department', manager: 'Senior Engineer', viewer: 'Planning Officer' }[role]]);
+    ids[email] = rows[0].id;
+    if (scope?.atoll) await db.query('insert into user_scopes (user_id, atoll_id) select $1, id from atolls where code = $2', [ids[email], scope.atoll]);
+    if (scope?.island) await db.query('insert into user_scopes (user_id, island_id) select $1, id from islands where name = $2', [ids[email], scope.island]);
   }
 
-  await db.tx(ids.operator, async (t) => {
+  const manager = ids['manager@demo.local'];
+  await db.tx(manager, async (t) => {
     // Water and sewerage facilities on a few islands, so all three services show.
     for (const island of WATER_ISLANDS) {
       await t.query(`insert into facilities (island_id, service, kind, name, water_capacity_m3)
@@ -68,67 +68,12 @@ async function build() {
     }
     await t.query("update facilities set fuel_capacity_l = 50000 + floor(random() * 10) * 10000 where service = 'electricity'");
 
-    // 60 days of daily logs.
-    const days = `generate_series(${TODAY} - 60, ${TODAY} - 1, interval '1 day') d`;
-    await t.query(`
-      insert into readings (facility_id, reading_date, metric, value, entered_by)
-      select f.id, d::date, 'gross_generation_kwh', round(cap.kw * 24 * (0.26 + random() * 0.08)), $1
-        from facilities f
-        join (select facility_id, sum(rated_capacity) as kw from assets group by facility_id) cap on cap.facility_id = f.id
-        cross join ${days}
-       where f.service = 'electricity'`, [ids.operator]);
-    await t.query(`
-      insert into readings (facility_id, reading_date, metric, value, entered_by)
-      select r.facility_id, r.reading_date, m.metric,
-             case m.metric
-               when 'fuel_consumed_l' then round(r.value / (3.4 + random() * 0.7))
-               when 'peak_load_kw' then round(r.value / 24 * (1.45 + random() * 0.2))
-               when 'aux_consumption_kwh' then round(r.value * (0.02 + random() * 0.015))
-             end, r.entered_by
-        from readings r
-        cross join (values ('fuel_consumed_l'), ('peak_load_kw'), ('aux_consumption_kwh')) m(metric)
-       where r.metric = 'gross_generation_kwh'`);
-    await t.query(`
-      insert into readings (facility_id, reading_date, metric, value, entered_by)
-      select f.id, d::date, m.metric,
-             case m.metric
-               when 'water_produced_m3' then round(150 + random() * 40)
-               when 'water_supplied_m3' then round(135 + random() * 30)
-               when 'water_energy_kwh' then round(600 + random() * 150)
-               when 'water_tds_ppm' then round(280 + random() * 120)
-               when 'water_storage_m3' then round(180 + random() * 150)
-             end, $1
-        from facilities f cross join ${days}
-        cross join (values ('water_produced_m3'), ('water_supplied_m3'), ('water_energy_kwh'), ('water_tds_ppm'), ('water_storage_m3')) m(metric)
-       where f.service = 'water'`, [ids.operator]);
-    await t.query(`
-      insert into readings (facility_id, reading_date, metric, value, entered_by)
-      select f.id, d::date, m.metric,
-             case m.metric
-               when 'sewage_pumped_m3' then round(110 + random() * 50)
-               when 'sewer_energy_kwh' then round(45 + random() * 20)
-               when 'pump_runtime_h' then round(14 + random() * 8)
-             end, $1
-        from facilities f cross join ${days}
-        cross join (values ('sewage_pumped_m3'), ('sewer_energy_kwh'), ('pump_runtime_h')) m(metric)
-       where f.service = 'sewerage'`, [ids.operator]);
-    await t.query(`
-      insert into readings (facility_id, reading_date, metric, value, entered_by)
-      select f.id, d::date, 'fuel_stock_l', round(f.fuel_capacity_l * (0.35 + random() * 0.55)), $1
-        from facilities f cross join ${days}
-       where f.service = 'electricity' and f.fuel_capacity_l is not null`, [ids.operator]);
-    // A few islands haven't sent yesterday's log yet (shows on the Overview).
-    await t.query(`
-      delete from readings where reading_date = ${TODAY} - 1 and facility_id in
-        (select f.id from facilities f join islands i on i.id = f.island_id
-          where i.name in ('Gulhi', 'Rakeedhoo', 'Veyvah', 'Fenfushi') and f.service = 'electricity')`);
-
     // Asset status from this morning's round.
     await t.query(`
       insert into asset_status_log (asset_id, status, reported_at, reported_by)
       select id, case when random() < 0.55 then 'running'::asset_status else 'standby'::asset_status end,
              now() - interval '3 hours', $1
-        from assets`, [ids.operator]);
+        from assets`, [manager]);
     const down = [
       ['Gulhi', 'genset', '3', 'down', 'Turbocharger failure — replacement ordered from Malé'],
       ['Maafushi', 'genset', '4', 'maintenance', '12,000-hour overhaul in progress'],
@@ -141,7 +86,7 @@ async function build() {
         insert into asset_status_log (asset_id, status, note, reported_at, reported_by)
         select a.id, $4, $5, now() - interval '2 hours', $6
           from assets a join facilities f on f.id = a.facility_id join islands i on i.id = f.island_id
-         where i.name = $1 and a.kind = $2 and a.tag = $3`, [island, kind, tag, status, note, ids.operator]);
+         where i.name = $1 and a.kind = $2 and a.tag = $3`, [island, kind, tag, status, note, manager]);
     }
 
     // Incidents
@@ -162,11 +107,11 @@ async function build() {
                case when $7::interval is null then null else 'Fixed and back in service.' end, $9,
                case when $7::interval is null then null else $9::uuid end
           from islands i where i.name = $1`,
-      [island, service, category, severity, title, description, duration, customers, ids.operator]);
+      [island, service, category, severity, title, description, duration, customers, manager]);
     }
   });
 
-  await db.tx(ids.manager, async (t) => {
+  await db.tx(manager, async (t) => {
     const projects = [
       ['Maafushi', 'electricity', 'Powerhouse extension and 2 MW genset', 'ongoing', 45, 12500000, 'Island Engineering Pvt Ltd', -120, 90],
       ['Guraidhoo', 'water', 'New 200 m³/day RO plant', 'ongoing', 70, 4200000, 'AquaTech Maldives', -150, 20],
@@ -181,12 +126,12 @@ async function build() {
         select $2::service_type, id, $3, $4::project_state, $5, $6, $7, current_date + $8::int, current_date + $9::int,
                case when $4::project_state = 'completed' then current_date - 65 end, $10::uuid, $10::uuid
           from islands where name = $1 returning id`,
-      [island, service, title, status, pct, budget, contractor, start, target, ids.manager]);
+      [island, service, title, status, pct, budget, contractor, start, target, manager]);
       if (pct > 0) {
         await t.query(`insert into project_updates (project_id, body, progress_pct, created_by, created_at)
                        values ($1, 'Contract signed and site handed over.', $2, $3, now() - interval '60 days'),
                               ($1, 'Work progressing to plan. Materials delivered.', $4, $3, now() - interval '12 days')`,
-        [rows[0].id, Math.round(pct / 3), ids.manager, pct]);
+        [rows[0].id, Math.round(pct / 3), manager, pct]);
       }
     }
   });
@@ -225,8 +170,8 @@ ${where()}
   Sign in with any of these (password for all: ${PASSWORD}):
 ${USERS.map(([email, , , , what]) => `    ${email.padEnd(22)} ${what}`).join('\n')}
 
-  Sample data: 60 days of daily logs, water and sewerage plants on a few
-  islands, assets down, open incidents and projects. Running the demo again
+  Sample data: gensets running and down, water and sewerage plants on a few
+  islands, open and resolved incidents, and projects. Running the demo again
   resets everything. Press Ctrl+C to stop.
 `);
 await import('../src/index.js');

@@ -4,8 +4,8 @@ import { dateTime } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
 const ENTITIES = {
-  readings: 'Daily log', assets: 'Assets', facilities: 'Facilities', incidents: 'Incidents', projects: 'Projects',
-  project_updates: 'Project updates', islands: 'Islands', atolls: 'Atolls', users: 'Users', user_scopes: 'User assignments', metrics: 'Metrics',
+  assets: 'Assets', facilities: 'Facilities', incidents: 'Incidents', projects: 'Projects',
+  project_updates: 'Project updates', islands: 'Islands', atolls: 'Atolls', users: 'Users', user_scopes: 'User assignments',
 };
 
 function Changes({ action, changes }) {

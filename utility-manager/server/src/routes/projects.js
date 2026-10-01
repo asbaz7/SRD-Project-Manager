@@ -122,8 +122,8 @@ export default async function projectRoutes(app) {
     return row;
   });
 
-  // Progress notes from the field. Operators on the island may post them.
-  app.post('/projects/:id/updates', { preHandler: requireRole('operator') }, async (req, reply) => {
+  // Progress notes, posted by managers of the project's island.
+  app.post('/projects/:id/updates', { preHandler: requireRole('manager') }, async (req, reply) => {
     const { id: projectId } = parse(serialParam, req.params);
     const b = parse(updateBody, req.body);
     const current = one((await db.query('select island_id from projects where id = $1', [projectId])).rows, 'Project');

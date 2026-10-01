@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
-import { AssetStatus, Async, Card, Empty, PageHead, Select, Service, Severity, Stat } from '../components/ui.jsx';
+import { useAuth } from '../auth.jsx';
+import { AssetStatus, Async, Card, Empty, PageHead, Progress, ProjectState, Select, Service, Severity, Stat } from '../components/ui.jsx';
 import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, date, num, since, withUnit } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 import { qs } from '../api.js';
 
 export default function Dashboard() {
+  const { can } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
   const state = useApi(`/dashboard${qs({ atoll_id: filters.atoll_id })}`);
@@ -28,17 +30,8 @@ export default function Dashboard() {
           sub={d.fuel_storage.not_set ? `${d.fuel_storage.not_set} powerhouse${d.fuel_storage.not_set === 1 ? '' : 's'} not set` : ''} to="/islands" />
       </div>
 
-      <h2 className="section-title">Yesterday · {date(d.date)}</h2>
-      <div className="stats">
-        <Stat label="Energy generated" value={withUnit(d.yesterday.gross_generation_kwh, 'kWh')} />
-        <Stat label="Fuel consumed" value={withUnit(d.yesterday.fuel_consumed_l, 'L')}
-          sub={d.yesterday.specific_fuel_kwh_per_l && `${num(d.yesterday.specific_fuel_kwh_per_l, 2)} kWh/L`} />
-        <Stat label="Water produced" value={withUnit(d.yesterday.water_produced_m3, 'm³')} />
-        <Stat label="Sewage pumped" value={withUnit(d.yesterday.sewage_pumped_m3, 'm³')} />
-      </div>
-
       <div className="grid-2">
-        <Card title={`Open incidents (${d.incidents.open})`} actions={<Link to="/incidents/new" className="btn small">Report incident</Link>}>
+        <Card title={`Open incidents (${d.incidents.open})`} actions={can('manager') && <Link to="/incidents/new" className="btn small">Report incident</Link>}>
           {d.incidents.list.length === 0 ? <Empty>No open incidents.</Empty> :
             <table><tbody>{d.incidents.list.map((x) => <tr key={x.id}>
               <td><Severity value={x.severity} /></td>
@@ -47,12 +40,13 @@ export default function Dashboard() {
             </tr>)}</tbody></table>}
         </Card>
 
-        <Card title={`Daily logs missing for ${date(d.date)} (${d.missing_logs.length})`}>
-          {d.missing_logs.length === 0 ? <Empty>All facilities have reported. 🎉</Empty> :
-            <div className="scroll-y"><table><tbody>{d.missing_logs.map((f) => <tr key={f.id}>
-              <td><Service value={f.service} short /></td>
-              <td><Link to={`/log?facility_id=${f.id}&date=${d.date}`}>{f.atoll_code} · {f.island_name}</Link> <span className="muted small">{f.name}</span></td>
-              <td className="muted small nowrap">{f.last_reading_date ? `last ${date(f.last_reading_date)}` : 'never'}</td>
+        <Card title={`Active projects (${d.projects.active})`} actions={<Link to="/projects?status=active" className="btn small ghost">All projects</Link>}>
+          {d.projects.list.length === 0 ? <Empty>No active projects.</Empty> :
+            <div className="scroll-y"><table><tbody>{d.projects.list.map((p) => <tr key={p.id}>
+              <td className="wrap"><Link to={`/projects/${p.id}`}>{p.title}</Link><br />
+                <small className="muted"><Service value={p.service} short /> {p.island_name ? `${p.atoll_code} · ${p.island_name}` : 'Regional'} · <ProjectState value={p.status} /></small></td>
+              <td className="nowrap"><Progress value={p.progress_pct} />
+                {p.target_date && <><br /><small className={p.overdue ? 'bad' : 'muted'}>{p.overdue ? '⚠ due ' : 'due '}{date(p.target_date)}</small></>}</td>
             </tr>)}</tbody></table></div>}
         </Card>
       </div>

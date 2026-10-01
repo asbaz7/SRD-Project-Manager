@@ -6,12 +6,9 @@ import { ROLES } from '../format.js';
 const NAV = [
   { to: '/', label: 'Overview', end: true },
   { to: '/islands', label: 'Islands & assets' },
-  { to: '/log', label: 'Daily log', role: 'operator' },
-  { to: '/status', label: 'Daily status check', role: 'operator' },
+  { to: '/status', label: 'Daily status check', role: 'manager' },
   { to: '/incidents', label: 'Incidents' },
   { to: '/projects', label: 'Projects' },
-  { to: '/reports', label: 'Reports' },
-  { to: '/import', label: 'Import from Excel', role: 'operator' },
   { section: 'Administration', role: 'manager' },
   { to: '/admin/users', label: 'Users', role: 'admin' },
   { to: '/admin/audit', label: 'Audit trail', role: 'manager' },

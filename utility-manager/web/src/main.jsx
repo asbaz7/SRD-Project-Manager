@@ -9,14 +9,11 @@ import Dashboard from './pages/Dashboard.jsx';
 import Islands from './pages/Islands.jsx';
 import Island from './pages/Island.jsx';
 import Asset from './pages/Asset.jsx';
-import DailyLog from './pages/DailyLog.jsx';
 import StatusRound from './pages/StatusRound.jsx';
 import Incidents from './pages/Incidents.jsx';
 import Incident from './pages/Incident.jsx';
 import Projects from './pages/Projects.jsx';
 import Project from './pages/Project.jsx';
-import Reports from './pages/Reports.jsx';
-import Import from './pages/Import.jsx';
 import Users from './pages/Users.jsx';
 import Audit from './pages/Audit.jsx';
 import './styles.css';
@@ -37,7 +34,6 @@ createRoot(document.getElementById('root')).render(
             <Route path="islands" element={<Islands />} />
             <Route path="islands/:id" element={<Island />} />
             <Route path="assets/:id" element={<Asset />} />
-            <Route path="log" element={<DailyLog />} />
             <Route path="status" element={<StatusRound />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="incidents/new" element={<Incident />} />
@@ -45,8 +41,6 @@ createRoot(document.getElementById('root')).render(
             <Route path="projects" element={<Projects />} />
             <Route path="projects/new" element={<Project />} />
             <Route path="projects/:id" element={<Project />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="import" element={<Import />} />
             <Route path="admin/users" element={<Users />} />
             <Route path="admin/audit" element={<Audit />} />
             <Route path="*" element={<NotFound />} />

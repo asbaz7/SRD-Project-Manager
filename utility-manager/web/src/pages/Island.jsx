@@ -28,9 +28,7 @@ export default function Island() {
         <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
         <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
         <Stat label="Fuel capacity" value={island.fuel_capacity_l ? withUnit(island.fuel_capacity_l, 'L') : 'Not set'}
-          sub={island.fuel_stock_l != null
-            ? `Stock ${num(island.fuel_stock_l)} L${island.fuel_capacity_l ? ` (${num((100 * island.fuel_stock_l) / island.fuel_capacity_l)}%)` : ''} · ${date(island.fuel_stock_date)}`
-            : island.fuel_capacity_l ? 'No stock reading yet' : manage ? 'Set it with Edit on the powerhouse' : ''} />
+          sub={!island.fuel_capacity_l && manage ? 'Set it with Edit on the powerhouse' : ''} />
         <Stat label="Open incidents" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/incidents?island_id=${island.id}&status=open`} />
         <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
@@ -40,15 +38,13 @@ export default function Island() {
         <Card key={f.id} className={f.active ? '' : 'inactive'}
           title={<><Service value={f.service} short /> {f.name} <span className="muted small">· {FACILITY_KINDS[f.kind]}{!f.active && ' · not in use'}</span></>}
           actions={<>
-            <Link className="btn small" to={`/log?facility_id=${f.id}`}>Daily log</Link>
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'asset', facilityId: f.id })}>Add asset</button>}
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'facility', facility: f })}>Edit</button>}
           </>}>
-          <p className="muted small">
-            Last daily log: {f.last_reading_date ? date(f.last_reading_date) : 'none yet'}
-            {f.service === 'electricity' && (f.fuel_capacity_l ? ` · Fuel capacity ${num(f.fuel_capacity_l)} L` : ' · Fuel capacity not set')}
-            {f.water_capacity_m3 && ` · Water storage ${num(f.water_capacity_m3)} m³`}
-          </p>
+          {(f.service === 'electricity' || f.water_capacity_m3) && <p className="muted small">
+            {f.service === 'electricity' && (f.fuel_capacity_l ? `Fuel capacity ${num(f.fuel_capacity_l)} L` : 'Fuel capacity not set')}
+            {f.water_capacity_m3 && `Water storage ${num(f.water_capacity_m3)} m³`}
+          </p>}
           {f.assets.length === 0 ? <Empty>No assets recorded.</Empty> :
             <table>
               <thead><tr><th>Asset</th><th>Status</th><th className="hide-sm">Make / model</th><th className="num">Rated</th><th className="num hide-sm">Operating</th><th className="num hide-sm">Run hours</th></tr></thead>

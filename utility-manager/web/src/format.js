@@ -29,7 +29,7 @@ export const INCIDENT_CATEGORIES = {
 export const SEVERITIES = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
 export const PROJECT_STATES = { planned: 'Planned', ongoing: 'Ongoing', on_hold: 'On hold', completed: 'Completed', cancelled: 'Cancelled' };
 export const ROLES = {
-  admin: 'Administrator', manager: 'Manager', operator: 'Operator', viewer: 'Viewer',
+  admin: 'Administrator', manager: 'Manager', viewer: 'Viewer (read-only)',
 };
 
 export function num(value, digits = 0) {

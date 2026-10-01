@@ -18,7 +18,7 @@ export default function Incidents() {
   return <>
     <PageHead title="Incidents" actions={<>
       <a className="btn ghost" href={csvUrl('/incidents', { ...params, offset: undefined })}>Export CSV</a>
-      {can('operator') && <Link className="btn primary" to={`/incidents/new${qs({ island_id: filters.island_id })}`}>Report incident</Link>}
+      {can('manager') && <Link className="btn primary" to={`/incidents/new${qs({ island_id: filters.island_id })}`}>Report incident</Link>}
     </>} />
     <div className="filters">
       <Select value={filters.status} onChange={(v) => setFilter('status', v)} placeholder="Any status" options={{ open: 'Open', resolved: 'Resolved', closed: 'Closed' }} aria-label="Status" />
