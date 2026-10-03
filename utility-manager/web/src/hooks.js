@@ -23,10 +23,14 @@ export function useApi(path) {
 export function useFilters(defaults = {}) {
   const [params, setParams] = useSearchParams();
   const filters = { ...defaults, ...Object.fromEntries(params) };
+  // setFilter('status', 'open') or setFilter({ condition: 'faults', flag: '' })
   const setFilter = (key, value) => {
+    const changes = typeof key === 'object' ? key : { [key]: value };
     const next = new URLSearchParams(params);
-    if (value === '' || value === undefined || value === null) next.delete(key); else next.set(key, value);
-    if (key !== 'offset') next.delete('offset');
+    for (const [k, v] of Object.entries(changes)) {
+      if (v === '' || v === undefined || v === null) next.delete(k); else next.set(k, v);
+    }
+    if (!('offset' in changes)) next.delete('offset');
     setParams(next, { replace: true });
   };
   return [filters, setFilter];

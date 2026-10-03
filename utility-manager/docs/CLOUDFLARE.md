@@ -106,6 +106,9 @@ Once you're happy with the test version:
 
 ## Deploying a new version later
 
+Most new versions include database changes, so always run `migrate` first.
+Version 004 (engine condition) adds the engine tables and the Alif Alif atoll.
+
 Run `git pull`, then `npm run migrate -w server`, then
 `npm run deploy:cloudflare`. Migrations only add changes, so it is safe to
 run them before the new code goes live.

@@ -28,6 +28,29 @@ export const INCIDENT_CATEGORIES = {
 };
 export const SEVERITIES = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
 export const PROJECT_STATES = { planned: 'Planned', ongoing: 'Ongoing', on_hold: 'On hold', completed: 'Completed', cancelled: 'Cancelled' };
+export const CONDITIONS = {
+  ok: { label: 'OK', icon: '●', tone: 'ok' },
+  minor_fault: { label: 'Minor fault', icon: '▲', tone: 'warn' },
+  major_fault: { label: 'Major fault', icon: '■', tone: 'bad' },
+  not_running: { label: 'Not running', icon: '✕', tone: 'bad' },
+};
+export const WORK_KINDS = {
+  overhaul: 'Overhaul', top_overhaul: 'Top overhaul', alternator_service: 'Alternator service', repair: 'Repair',
+  service: 'Service', inspection: 'Inspection', installation: 'Installation', other: 'Other',
+};
+export const WORK_STATES = {
+  planned: 'Planned', in_progress: 'In progress', awaiting_parts: 'Awaiting parts', on_hold: 'On hold',
+  completed: 'Completed', cancelled: 'Cancelled',
+};
+export const EVENT_KINDS = {
+  overhaul: 'Overhaul', top_overhaul: 'Top overhaul', alternator_service: 'Alternator service',
+  valve_clearance: 'Valve clearance', battery_change: 'Battery change', repair: 'Repair', service: 'Service',
+  inspection: 'Inspection', other: 'Other',
+};
+// 'YYYY-MM-01' -> 'Aug 2026'
+export const month = (value) => (value ? new Date(`${value.slice(0, 7)}-15T00:00:00Z`)
+  .toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—');
+
 export const ROLES = {
   admin: 'Administrator', manager: 'Manager', viewer: 'Viewer (read-only)',
 };

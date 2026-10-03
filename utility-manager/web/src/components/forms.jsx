@@ -50,6 +50,11 @@ export function AssetForm({ facilityId, asset, onClose, onSaved }) {
       rated_capacity: numOrNull(a.rated_capacity), operating_capacity: numOrNull(a.operating_capacity),
       capacity_unit: a.capacity_unit || null, commissioned_on: strOrNull(a.commissioned_on || ''),
       running_hours: numOrNull(a.running_hours), notes: a.notes || null,
+      ...(a.kind === 'genset' ? {
+        fixed_asset_code: a.fixed_asset_code || null, alt_make: a.alt_make || null, alt_serial: a.alt_serial || null,
+        alt_kw: numOrNull(a.alt_kw), next_overhaul_hours: numOrNull(a.next_overhaul_hours),
+        next_overhaul_on: strOrNull(a.next_overhaul_on || ''), next_alt_service_on: strOrNull(a.next_alt_service_on || ''),
+      } : {}),
     };
     if (asset) await api(`/assets/${asset.id}`, { method: 'PATCH', body: { ...body, active: a.active } });
     else await api('/assets', { method: 'POST', body: { ...body, facility_id: facilityId } });
@@ -66,8 +71,18 @@ export function AssetForm({ facilityId, asset, onClose, onSaved }) {
         <Field label="Rated capacity"><input type="number" min="0" step="any" value={a.rated_capacity ?? ''} onChange={set('rated_capacity')} /></Field>
         <Field label="Operating (derated) capacity"><input type="number" min="0" step="any" value={a.operating_capacity ?? ''} onChange={set('operating_capacity')} /></Field>
         <Field label="Capacity unit"><input value={a.capacity_unit ?? ''} onChange={set('capacity_unit')} /></Field>
-        <Field label="Running hours"><input type="number" min="0" step="any" value={a.running_hours ?? ''} onChange={set('running_hours')} /></Field>
-        <Field label="Commissioned on"><input type="date" value={a.commissioned_on ?? ''} onChange={set('commissioned_on')} /></Field>
+        {a.kind !== 'genset' && <Field label="Running hours"><input type="number" min="0" step="any" value={a.running_hours ?? ''} onChange={set('running_hours')} /></Field>}
+        <Field label={a.kind === 'genset' ? 'Installed on' : 'Commissioned on'}><input type="date" value={a.commissioned_on ?? ''} onChange={set('commissioned_on')} /></Field>
+        {a.kind === 'genset' && <>
+          <Field label="Fixed asset code"><input value={a.fixed_asset_code ?? ''} onChange={set('fixed_asset_code')} /></Field>
+          <Field label="Alternator make"><input value={a.alt_make ?? ''} onChange={set('alt_make')} placeholder="e.g. STAMFORD" /></Field>
+          <Field label="Alternator serial"><input value={a.alt_serial ?? ''} onChange={set('alt_serial')} /></Field>
+          <Field label="Alternator capacity (kW)"><input type="number" min="0" step="any" value={a.alt_kw ?? ''} onChange={set('alt_kw')} /></Field>
+          <p className="wide muted small">Schedule (from the overhaul and alternator service schedules):</p>
+          <Field label="Next overhaul at (running hours)"><input type="number" min="0" step="any" value={a.next_overhaul_hours ?? ''} onChange={set('next_overhaul_hours')} /></Field>
+          <Field label="Next overhaul by (date)"><input type="date" value={a.next_overhaul_on ?? ''} onChange={set('next_overhaul_on')} /></Field>
+          <Field label="Next alternator service"><input type="date" value={a.next_alt_service_on ?? ''} onChange={set('next_alt_service_on')} /></Field>
+        </>}
         <Field label="Notes" wide><textarea rows="2" value={a.notes ?? ''} onChange={set('notes')} /></Field>
         {asset && <label className="check"><input type="checkbox" checked={a.active} onChange={(e) => set('active')(e.target.checked)} /> In use</label>}
         <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>

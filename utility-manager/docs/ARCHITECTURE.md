@@ -144,6 +144,71 @@ Design choices:
 * **Database-enforced integrity.** Foreign keys, checks, unique keys and
   triggers apply to every writer, including future scripts and integrations.
 
+## 4a. Engine condition (added Oct 2026)
+
+The system's main job is now **engine condition**: what state every genset
+is in, when it was last overhauled and its alternator last serviced, what
+maintenance has been done, and what work is going on.
+
+**Monthly condition reports.** Every powerhouse fills in the standard
+ENGINE CONDITION REPORT Excel template every month: one column per genset,
+one row per field, usually one sheet per month. Managers upload these files
+unchanged (`/reports`):
+
+1. `server/src/xlsx.js` reads the workbook (a small pure-JS reader that runs
+   on Node and Workers). `server/src/conditionReport.js` interprets the
+   template. It accepts the formats the islands actually use: dates such as
+   `21.02.2021`, `13/07/2019` and real dates; hours such as `13886:22`,
+   `4189 Hours.`, `35721 HRM` and `[h]:mm` cells; and status text such as
+   `RUNNING; MINOR FAULT`. It works out which month each sheet covers, and
+   corrects "hours since" figures that are really hours *at* the service.
+2. `server/src/reportImport.js` matches the file to its island, tolerating
+   spelling differences (`KUMBURUDHOO` → Kunburudhoo, `K. VILLINGILLI` →
+   Villingili). It shows a preview, then on import:
+   - keeps only the **latest** condition per genset (`engine_conditions`)
+     and per powerhouse (`powerhouse_reports`). Files are not stored, and an
+     older report never overwrites a newer one;
+   - adds every dated event found in **any** month of the file (overhaul,
+     alternator service, valve clearance, battery change) to
+     `maintenance_events`, which is kept for good and de-duplicated;
+   - records total running hours per month (`hours_log`) for trends;
+   - fills the genset register (make/model, serials, alternator, installed
+     date) and adds gensets the register lacks;
+   - sets the asset's running status from the report when the report is
+     newer than the last recorded status.
+3. A powerhouse's report is **missing** once the 10th of the following month
+   has passed (`expectedMonth()`).
+
+**Schedules.** Next overhaul (running hours and/or date) and next alternator
+service are fields on each genset (`next_overhaul_hours`, `next_overhaul_on`,
+`next_alt_service_on`). They are entered by hand, or later imported from the
+overhaul and alternator service schedule sheets. Until then, "due" comes from
+the report's own *needs overhauling* and *dynamo needs service* answers.
+
+**Work.** `work_orders` with `work_updates` track ongoing work on a genset,
+facility or island (planned → in progress → awaiting parts → completed).
+A database trigger adds completed work on an engine to its maintenance
+history.
+
+| Table | Purpose |
+|---|---|
+| `engine_conditions` | Latest report figures per genset: condition, fault, hours, last overhaul and services, flags |
+| `powerhouse_reports` | Latest report month, peak loads and uploader per powerhouse |
+| `maintenance_events` | Permanent maintenance history: `unique(asset, kind, date)`, source report / work / manual |
+| `hours_log` | Total running hours per genset per month |
+| `work_orders`, `work_updates` | Ongoing work and its timeline. Ref `WO-0042` |
+
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| GET | `/engines?condition&flag&atoll_id&q&sort` (CSV) | any | Fleet view with summary counts |
+| GET | `/condition-reports` | any | Every powerhouse's latest report, and whether it is missing |
+| POST | `/condition-reports/preview` | manager | Read an uploaded `.xlsx` (base64), match its island and show the changes. Saves nothing |
+| POST | `/condition-reports/import` | manager | Apply it for the confirmed island |
+| POST | `/assets/:id/maintenance` | manager | Add a maintenance record by hand |
+| DELETE | `/maintenance/:id` | manager (own manual records) / admin | Remove a record |
+| GET / POST / PATCH | `/work`, `/work/:id` | read: any · write: manager | Work orders |
+| POST | `/work/:id/updates` | manager | Progress update, optionally changing the status |
+
 ## 5. Access control
 
 | Role | Can view | Can change (within assigned islands) |

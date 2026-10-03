@@ -16,6 +16,10 @@ import Projects from './pages/Projects.jsx';
 import Project from './pages/Project.jsx';
 import Users from './pages/Users.jsx';
 import Audit from './pages/Audit.jsx';
+import Engines from './pages/Engines.jsx';
+import ConditionReports from './pages/ConditionReports.jsx';
+import Work from './pages/Work.jsx';
+import WorkItem from './pages/WorkItem.jsx';
 import './styles.css';
 
 function NotFound() {
@@ -31,6 +35,11 @@ createRoot(document.getElementById('root')).render(
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Dashboard />} />
             <Route path="account" element={<Account />} />
+            <Route path="engines" element={<Engines />} />
+            <Route path="reports" element={<ConditionReports />} />
+            <Route path="work" element={<Work />} />
+            <Route path="work/new" element={<WorkItem />} />
+            <Route path="work/:id" element={<WorkItem />} />
             <Route path="islands" element={<Islands />} />
             <Route path="islands/:id" element={<Island />} />
             <Route path="assets/:id" element={<Asset />} />

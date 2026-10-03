@@ -18,7 +18,10 @@ This app is separate from the existing read-only dashboard in
 
 | | |
 |---|---|
-| Overview | What's down, open incidents, active projects (overdue first) and fuel capacity |
+| Overview | Engine condition, overhauls due, missing condition reports, work in progress, open incidents |
+| Engines | Every genset: condition from the latest report, hours since overhaul, last overhaul and alternator service, faults, flags and ongoing work. One-click filters |
+| Condition reports | Drop in the monthly ENGINE CONDITION REPORT Excel files as they are. The system reads them, keeps the latest condition, and adds every overhaul, alternator service, valve clearance and battery change date to each engine's maintenance history. Shows which powerhouses are missing this month's report (after the 10th) |
+| Work | Ongoing work on a genset or island, with status and updates. Completed work on an engine goes into its maintenance history |
 | Islands & assets | Register of powerhouses, RO plants, sewage plants and their gensets, RO units and pumps, with status history |
 | Daily status check | Update every asset on an island in one go |
 | Incidents | Outages, breakdowns and maintenance, with duration, customers affected and resolution |

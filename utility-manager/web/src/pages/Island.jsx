@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
-import { AssetStatus, Async, Card, Empty, PageHead, Service, Stat } from '../components/ui.jsx';
-import { ASSET_KINDS, FACILITY_KINDS, date, num, withUnit } from '../format.js';
+import { AssetStatus, Async, Card, Condition, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
+import { ASSET_KINDS, FACILITY_KINDS, WORK_KINDS, date, month, num, withUnit } from '../format.js';
 import { useApi } from '../hooks.js';
 
 export default function Island() {
@@ -21,6 +21,7 @@ export default function Island() {
         actions={<>
           {island.can_edit && <Link className="btn" to={`/status?island_id=${island.id}`}>Daily status check</Link>}
           {island.can_edit && <Link className="btn" to={`/incidents/new?island_id=${island.id}`}>Report incident</Link>}
+          {island.can_edit && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
           {manage && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
         </>} />
       <div className="stats">
@@ -33,6 +34,15 @@ export default function Island() {
         <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
 
+      {island.open_work.length > 0 && <Card title={`Ongoing work (${island.open_work.length})`}>
+        <table><tbody>{island.open_work.map((w) => <tr key={w.id}>
+          <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
+            <small className="muted">{w.ref} · {WORK_KINDS[w.kind]}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.target_on && ` · target ${date(w.target_on)}`}</small>
+            {w.last_update && <div className="small">{w.last_update}</div>}</td>
+          <td><WorkState value={w.status} /></td>
+        </tr>)}</tbody></table>
+      </Card>}
+
       {island.facilities.length === 0 && <Empty>No facilities recorded for this island yet.</Empty>}
       {island.facilities.map((f) => (
         <Card key={f.id} className={f.active ? '' : 'inactive'}
@@ -44,19 +54,28 @@ export default function Island() {
           {(f.service === 'electricity' || f.water_capacity_m3) && <p className="muted small">
             {f.service === 'electricity' && (f.fuel_capacity_l ? `Fuel capacity ${num(f.fuel_capacity_l)} L` : 'Fuel capacity not set')}
             {f.water_capacity_m3 && `Water storage ${num(f.water_capacity_m3)} m³`}
+            {f.kind === 'powerhouse' && (() => {
+              const r = island.reports.find((x) => x.facility_id === f.id);
+              return <> · Condition report: {r ? <strong>{month(r.report_month)}</strong> : 'none yet'}
+                {r?.peak_load_month && ` · peak ${r.peak_load_month}`} · <Link to="/reports">upload</Link></>;
+            })()}
           </p>}
           {f.assets.length === 0 ? <Empty>No assets recorded.</Empty> :
             <table>
-              <thead><tr><th>Asset</th><th>Status</th><th className="hide-sm">Make / model</th><th className="num">Rated</th><th className="num hide-sm">Operating</th><th className="num hide-sm">Run hours</th></tr></thead>
+              <thead><tr><th>Asset</th><th>Status</th>{f.kind === 'powerhouse' && <><th>Condition</th><th className="num hide-sm">Since overhaul</th><th className="hide-sm">Last overhaul</th></>}<th className="num">Rated</th><th className="num hide-sm">Operating</th></tr></thead>
               <tbody>{f.assets.map((a) => <tr key={a.id} className={a.active ? '' : 'inactive'}>
-                <td><Link to={`/assets/${a.id}`}><strong>{ASSET_KINDS[a.kind]} {a.tag}</strong></Link></td>
+                <td className="wrap"><Link to={`/assets/${a.id}`}><strong>{ASSET_KINDS[a.kind]} {a.tag}</strong></Link><br /><small className="muted">{a.make_model || '—'}</small>
+                  <div><Flags e={a} /></div></td>
                 <td className="wrap"><AssetStatus status={a.status} />
                   {a.status_note && <><br /><small className="muted">{a.status_note}</small></>}
                   {a.status_at && <><br /><small className="muted">{date(a.status_at)}{a.status_by_name && ` · ${a.status_by_name}`}</small></>}</td>
-                <td className="hide-sm">{a.make_model || '—'}</td>
+                {f.kind === 'powerhouse' && <>
+                  <td className="wrap"><Condition value={a.condition} text={a.report_status} />{a.fault && <><br /><small className="muted">{a.fault}</small></>}</td>
+                  <td className="num hide-sm">{a.hours_since_overhaul != null ? `${num(a.hours_since_overhaul)} h` : '—'}</td>
+                  <td className="hide-sm small nowrap">{date(a.last_overhaul_on)}</td>
+                </>}
                 <td className="num">{withUnit(a.rated_capacity, a.capacity_unit || '')}</td>
                 <td className="num hide-sm">{withUnit(a.operating_capacity, a.capacity_unit || '')}</td>
-                <td className="num hide-sm">{num(a.running_hours)}</td>
               </tr>)}</tbody>
             </table>}
         </Card>

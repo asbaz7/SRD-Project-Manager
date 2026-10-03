@@ -5,6 +5,9 @@ import { ROLES } from '../format.js';
 
 const NAV = [
   { to: '/', label: 'Overview', end: true },
+  { to: '/engines', label: 'Engines' },
+  { to: '/reports', label: 'Condition reports' },
+  { to: '/work', label: 'Work' },
   { to: '/islands', label: 'Islands & assets' },
   { to: '/status', label: 'Daily status check', role: 'manager' },
   { to: '/incidents', label: 'Incidents' },

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
+import { expectedMonth } from '../reportImport.js';
+import { ENGINE_SELECT, describeEngine, mvToday } from './engines.js';
 import { sendCsv } from '../csv.js';
 import {
   Where, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
@@ -35,9 +37,17 @@ const assetBody = z.object({
   running_hours: optNumber,
   notes: optText(),
   active: z.boolean().optional(),
+  fixed_asset_code: optText(50),
+  alt_make: optText(100),
+  alt_serial: optText(100),
+  alt_kw: optNumber,
+  next_overhaul_hours: optNumber,
+  next_overhaul_on: z.iso.date().nullish(),
+  next_alt_service_on: z.iso.date().nullish(),
 });
 const ASSET_COLS = ['kind', 'tag', 'make_model', 'serial_no', 'rated_capacity', 'operating_capacity',
-  'capacity_unit', 'commissioned_on', 'running_hours', 'notes', 'active'];
+  'capacity_unit', 'commissioned_on', 'running_hours', 'notes', 'active', 'fixed_asset_code', 'alt_make',
+  'alt_serial', 'alt_kw', 'next_overhaul_hours', 'next_overhaul_on', 'next_alt_service_on'];
 
 const statusItem = z.object({
   asset_id: id,
@@ -153,6 +163,40 @@ export default async function assetRoutes(app) {
     asset.incidents = (await db.query(`
       select id, title, category, severity, status, started_at, resolved_at
         from incidents where asset_id = $1 order by started_at desc limit 50`, [assetId])).rows;
+    const [condition, maintenance, work, hours, engine] = await Promise.all([
+      db.query(`select c.*, u.full_name as uploaded_by_name from engine_conditions c
+                  left join users u on u.id = c.uploaded_by where c.asset_id = $1`, [assetId]),
+      db.query(`select e.*, u.full_name as created_by_name, 'WO-' || lpad(e.work_id::text, 4, '0') as work_ref
+                  from maintenance_events e left join users u on u.id = e.created_by
+                 where e.asset_id = $1 order by e.done_on desc, e.id desc`, [assetId]),
+      db.query(`select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.kind, w.title, w.status, w.started_on, w.target_on,
+                       w.completed_on, w.assigned_to,
+                       (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update
+                  from work_orders w where w.asset_id = $1
+                 order by (w.status not in ('completed', 'cancelled')) desc, coalesce(w.completed_on, w.started_on) desc nulls first
+                 limit 30`, [assetId]),
+      db.query('select month, total_hours from hours_log where asset_id = $1 order by month desc limit 13', [assetId]),
+      asset.kind === 'genset' ? db.query(`${ENGINE_SELECT} where s.id = $1`, [assetId]) : { rows: [] },
+    ]);
+    asset.condition = condition.rows[0] || null;
+    asset.maintenance = maintenance.rows;
+    asset.work = work.rows;
+    asset.hours_log = hours.rows.reverse();
+    if (engine.rows[0]) {
+      const today = await mvToday(db, app.config.timezone);
+      const e = describeEngine(engine.rows[0], today, expectedMonth(today));
+      asset.engine = (({ last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul, overhaul_due,
+        alt_service_due, report_stale }) => ({ last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul,
+        overhaul_due, alt_service_due, report_stale }))(e);
+      // Average running hours per month over the last year, to project the next overhaul.
+      const log = asset.hours_log;
+      if (log.length >= 2) {
+        const first = log[0], last = log.at(-1);
+        const months = (new Date(last.month) - new Date(first.month)) / (30.44 * 86400000);
+        const rate = months > 0 ? (last.total_hours - first.total_hours) / months : null;
+        asset.engine.hours_per_month = rate && rate > 0 && rate < 744 ? Math.round(rate) : null;
+      }
+    }
     return asset;
   });
 

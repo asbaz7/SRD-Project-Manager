@@ -80,12 +80,35 @@ export default async function locationRoutes(app) {
     const island = one((await db.query(`${ISLAND_SUMMARY} where i.id = $1 group by i.id, a.id`, [islandId])).rows, 'Island');
     const [{ rows: facilities }, { rows: assets }] = await Promise.all([
       db.query(`select f.* from facilities f where f.island_id = $1 order by f.active desc, f.service, f.name`, [islandId]),
-      db.query(`select s.*, u.full_name as status_by_name
+      db.query(`select s.*, u.full_name as status_by_name,
+                       c.report_month, c.condition, c.status_text as report_status, c.fault, c.total_hours,
+                       c.hours_since_overhaul, c.needs_overhaul, c.alt_needs_service,
+                       greatest(c.last_overhaul_on, (select max(done_on) from maintenance_events e
+                                where e.asset_id = s.id and e.kind in ('overhaul', 'top_overhaul'))) as last_overhaul_on,
+                       greatest(c.last_alt_service_on, (select max(done_on) from maintenance_events e
+                                where e.asset_id = s.id and e.kind = 'alternator_service')) as last_alt_service_on,
+                       (select json_agg(json_build_object('id', w.id, 'title', w.title, 'status', w.status))
+                          from work_orders w where w.asset_id = s.id and w.status not in ('completed', 'cancelled')) as open_work
                   from assets s join facilities f on f.id = s.facility_id
                   left join users u on u.id = s.status_by
+                  left join engine_conditions c on c.asset_id = s.id
                  where f.island_id = $1
                  order by s.kind, length(s.tag), s.tag`, [islandId]),
     ]);
+    const [{ rows: reports }, { rows: work }] = await Promise.all([
+      db.query(`select r.*, u.full_name as uploaded_by_name from powerhouse_reports r
+                  join facilities f on f.id = r.facility_id left join users u on u.id = r.uploaded_by
+                 where f.island_id = $1`, [islandId]),
+      db.query(`select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.kind, w.title, w.status, w.target_on, w.started_on,
+                       s.tag as asset_tag, s.kind as asset_kind,
+                       (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update
+                  from work_orders w left join assets s on s.id = w.asset_id
+                 where w.island_id = $1 and w.status not in ('completed', 'cancelled')
+                 order by w.created_at desc`, [islandId]),
+    ]);
+    for (const s of assets) if (typeof s.open_work === 'string') s.open_work = JSON.parse(s.open_work);
+    island.reports = reports;
+    island.open_work = work;
     for (const f of facilities) f.assets = assets.filter((s) => s.facility_id === f.id);
     island.facilities = facilities;
     island.can_edit = hasRole(req.user, 'manager') && canWriteIsland(req.user, island);

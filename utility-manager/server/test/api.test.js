@@ -116,7 +116,7 @@ describe('authentication', () => {
 
 describe('asset register', () => {
   test('seeded register matches the SRD data', async () => {
-    assert.equal(islands.length, 34);
+    assert.equal(islands.length, 42, "34 SRD islands + 8 Alif Alif");
     const assets = (await call('GET', '/assets?kind=genset&limit=500', { token: admin })).body;
     assert.equal(assets.total, 140);
     assert.equal(maafushi.genset_count, 8);
@@ -231,7 +231,7 @@ describe('scope of the system', () => {
     assert.equal(island.fuel_capacity_l, 147302);
     const dash = (await call('GET', '/dashboard', { token: admin })).body;
     assert.equal(dash.fuel_storage.capacity_l, 147302);
-    assert.equal(dash.fuel_storage.not_set, 33);
+    assert.equal(dash.fuel_storage.not_set, 41);
   });
 });
 

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ASSET_STATUS, PROJECT_STATES, SERVICES, SEVERITIES } from '../format.js';
+import { ASSET_STATUS, CONDITIONS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES } from '../format.js';
 
 export function Stat({ label, value, sub, tone = '', to }) {
   const body = <><span>{label}</span><strong>{value}</strong>{sub && <small>{sub}</small>}</>;
@@ -10,6 +10,26 @@ export function Stat({ label, value, sub, tone = '', to }) {
 export function AssetStatus({ status }) {
   const s = ASSET_STATUS[status] || ASSET_STATUS.unknown;
   return <span className={`status ${s.tone}`}>{s.icon} {s.label}</span>;
+}
+
+export function Condition({ value, text }) {
+  const c = CONDITIONS[value];
+  if (!c) return <span className="status none">– No report</span>;
+  return <span className={`status ${c.tone}`} title={text || c.label}>{c.icon} {c.label}</span>;
+}
+
+export function WorkState({ value }) {
+  return <span className={`pill work-${value}`}>{WORK_STATES[value] || value}</span>;
+}
+
+// Small labelled flags shown next to an engine.
+export function Flags({ e }) {
+  const flags = [];
+  if (e.overhaul_due || e.needs_overhaul) flags.push(['bad', 'Overhaul due']);
+  if (e.alt_service_due || e.alt_needs_service) flags.push(['warn', 'Alternator service']);
+  for (const w of e.open_work || []) flags.push(['info', `🔧 ${w.title}`]);
+  if (!flags.length) return null;
+  return <span className="flags">{flags.map(([tone, t], i) => <span key={i} className={`flag ${tone}`}>{t}</span>)}</span>;
 }
 
 export function Severity({ value }) {
