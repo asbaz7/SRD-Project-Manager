@@ -8,6 +8,7 @@ import { AssetStatus, Async, Card, Condition, ConditionMeter, Empty, PageHead, P
 import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, month, num, power, since } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 import ConditionReports from './ConditionReports.jsx';
+import { ShareWhatsApp, serviceMessage } from '../components/share.jsx';
 import Engines from './Engines.jsx';
 
 const TABS = {
@@ -86,7 +87,7 @@ function ServiceOverview({ svc }) {
           </Card>
         </div>}
 
-        <Card title={`Needs attention${d.attention.length ? ` (${d.attention.length})` : ''}`}>
+        <Card title={`Needs attention${d.attention.length ? ` (${d.attention.length})` : ''}`} actions={<ShareWhatsApp text={serviceMessage(svc, d)} path={`/${svc}`} label="Share summary" className="btn small" />}>
           {d.attention.length === 0 ? <p className="all-clear"><Icon name="check" /> Everything with a status is in service.</p> :
             <ul className="attention-list scroll-y">{d.attention.map((a) => {
               const serious = a.condition === 'not_running' || a.status === 'down';

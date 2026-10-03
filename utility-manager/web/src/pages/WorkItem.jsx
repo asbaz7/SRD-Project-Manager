@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Select, WorkState } from '../components/ui.jsx';
+import { ShareWhatsApp, workMessage } from '../components/share.jsx';
 import { ASSET_KINDS, SERVICES, WORK_KINDS, WORK_STATES, date, dateTime } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
@@ -28,7 +29,7 @@ function WorkView({ work: w, reload }) {
   if (editing) return <WorkForm work={w} onDone={() => { setEditing(false); reload(); }} />;
   return <>
     <PageHead title={w.title} crumbs={[{ to: '/work', label: 'Work' }, { label: w.ref }]}
-      actions={writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>} />
+      actions={<><ShareWhatsApp text={workMessage(w)} path={`/work/${w.id}`} />{writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>}</>} />
     <div className="grid-2">
       <Card title="Details">
         <dl className="facts">

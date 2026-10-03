@@ -6,6 +6,7 @@ import { Icon } from '../components/icons.jsx';
 import { Async, Card, ConditionMeter, Empty, PageHead, Progress, ProjectState, Select, Service, Severity, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, month, power, since } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
+import { ShareWhatsApp, overviewMessage } from '../components/share.jsx';
 
 const greeting = () => {
   const h = Number(new Date().toLocaleString('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Indian/Maldives' }));
@@ -47,7 +48,7 @@ export default function Dashboard() {
       const items = attentionItems(d);
       const el = d.services.electricity;
       return <>
-        <Card title={`Needs attention${items.length ? ` (${items.length})` : ''}`}>
+        <Card title={`Needs attention${items.length ? ` (${items.length})` : ''}`} actions={<ShareWhatsApp text={overviewMessage(d, items)} path="/" label="Share summary" className="btn small" />}>
           {items.length === 0 ? <p className="all-clear"><Icon name="check" /> Nothing needs attention right now.</p> :
             <ul className="attention-list">{items.slice(0, 8).map((it, i) => (
               <li key={i}><Link to={it.to}>

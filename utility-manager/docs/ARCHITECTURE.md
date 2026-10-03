@@ -364,6 +364,20 @@ a generic message to the user).
 ## 11. Roadmap (deliberately not in the minimal version)
 
 * Attachments (photos, engine reports) in S3-compatible object storage
+* **WhatsApp** (requested). Step 1 is done: "Share to WhatsApp" buttons on
+  incidents, work, projects, assets, the overview and each section open
+  WhatsApp with a ready-written message and a link. The person picks the
+  group, and no WhatsApp account is connected (`components/share.jsx`).
+  Next, using the official WhatsApp Business Platform (Cloud API):
+  - automatic alerts to individual managers (critical incident, engine not
+    running, report missing after the 10th);
+  - **reporting by WhatsApp**: managers message the system's number
+    (e.g. "Maafushi G3 down, radiator leak"). A webhook on the Worker
+    matches the sender to their user account, logs the status change,
+    incident or work update for their islands, and replies to confirm.
+  This needs a dedicated phone number, a verified Meta Business account and
+  approved message templates. Ordinary group chats can't be read or posted
+  to by the official API, and unofficial group bots break WhatsApp's terms.
 * Email or SMS alerts for critical incidents
 * Offline-capable incident reporting (PWA) for islands with poor connectivity
 * SSO with the corporate identity provider (OIDC)
