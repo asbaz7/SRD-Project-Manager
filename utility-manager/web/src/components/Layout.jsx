@@ -9,7 +9,6 @@ const NAV = [
   { to: '/reports', label: 'Condition reports' },
   { to: '/work', label: 'Work' },
   { to: '/islands', label: 'Islands & assets' },
-  { to: '/status', label: 'Daily status check', role: 'manager' },
   { to: '/incidents', label: 'Incidents' },
   { to: '/projects', label: 'Projects' },
   { section: 'Administration', role: 'manager' },

@@ -9,7 +9,6 @@ import Dashboard from './pages/Dashboard.jsx';
 import Islands from './pages/Islands.jsx';
 import Island from './pages/Island.jsx';
 import Asset from './pages/Asset.jsx';
-import StatusRound from './pages/StatusRound.jsx';
 import Incidents from './pages/Incidents.jsx';
 import Incident from './pages/Incident.jsx';
 import Projects from './pages/Projects.jsx';
@@ -43,7 +42,6 @@ createRoot(document.getElementById('root')).render(
             <Route path="islands" element={<Islands />} />
             <Route path="islands/:id" element={<Island />} />
             <Route path="assets/:id" element={<Asset />} />
-            <Route path="status" element={<StatusRound />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="incidents/new" element={<Incident />} />
             <Route path="incidents/:id" element={<Incident />} />

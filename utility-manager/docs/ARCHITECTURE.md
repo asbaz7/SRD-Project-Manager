@@ -6,7 +6,12 @@ as soon as they know of them, keep asset status current and manage projects
 for their assigned islands. It replaces the genset status sheets, outage
 registers and project trackers, and everything that is copied between them.
 
-> **Scope change (Oct 2026).** The first version also had a per-facility daily
+> **Scope change (Oct 2026).** The daily status check (a form to set every
+> asset's status each day) was removed: engine status now comes from the
+> monthly condition reports, and is changed by hand on the asset when
+> something happens in between.
+>
+> **Earlier scope change (Oct 2026).** The first version also had a per-facility daily
 > operations log (with Excel import and a monthly report) and an *operator*
 > role for powerhouse staff. Both were removed to keep the system to
 > management use. Migration `003_management_only.sql` retires operator
@@ -247,7 +252,7 @@ Endpoints marked CSV also accept `?format=csv`.
 | GET | `/assets?…&status&kind&q` (CSV) | any | Asset register |
 | GET | `/assets/:id` | any | Asset with status history and incidents |
 | POST / PATCH | `/assets`, `/assets/:id` | manager | Register or edit an asset |
-| POST | `/assets/status` | manager | Status for one or many assets (the daily status check) |
+| POST | `/assets/status` | manager | Change an asset's status by hand (e.g. when an incident takes a genset down) |
 | GET | `/incidents?status&service&…` (CSV) | any | Incident register |
 | GET / POST / PATCH | `/incidents/:id` | manager | Report, update, resolve, close or reopen an incident |
 | GET | `/projects?status=active&…` (CSV) | any | Projects |
@@ -275,7 +280,6 @@ a generic message to the user).
   |---|---|
   | Overview | The morning phone calls: what's down, what's open, which projects are late |
   | Islands & assets | The genset register workbook |
-  | Daily status check | The "Gensets" status tab: every asset on an island in one form |
   | Incidents | The outage and breakdown register |
   | Projects | The projects tracker, with a timeline of updates |
   | Users, Audit trail | Administration |
@@ -331,7 +335,7 @@ a generic message to the user).
 ## 10. Rollout plan (replacing the spreadsheets)
 
 1. **Pilot** (2–4 weeks). Deploy, run `seed` to load the genset register,
-   create manager accounts for one atoll, and use the daily status check,
+   create manager accounts for one atoll, and use condition reports, work,
    incidents and projects alongside the existing sheets.
 2. **Fill in the register.** Add fuel capacities, and water and sewerage
    facilities and assets, per island.

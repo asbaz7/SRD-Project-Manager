@@ -19,7 +19,6 @@ export default function Island() {
       <PageHead title={island.name}
         crumbs={[{ to: '/islands', label: 'Islands' }, { to: `/islands?atoll_id=${island.atoll_id}`, label: `${island.atoll_code} · ${island.atoll_name}` }, { label: island.name }]}
         actions={<>
-          {island.can_edit && <Link className="btn" to={`/status?island_id=${island.id}`}>Daily status check</Link>}
           {island.can_edit && <Link className="btn" to={`/incidents/new?island_id=${island.id}`}>Report incident</Link>}
           {island.can_edit && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
           {manage && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}

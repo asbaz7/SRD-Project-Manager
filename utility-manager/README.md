@@ -23,7 +23,6 @@ This app is separate from the existing read-only dashboard in
 | Condition reports | Drop in the monthly ENGINE CONDITION REPORT Excel files as they are. The system reads them, keeps the latest condition, and adds every overhaul, alternator service, valve clearance and battery change date to each engine's maintenance history. Shows which powerhouses are missing this month's report (after the 10th) |
 | Work | Ongoing work on a genset or island, with status and updates. Completed work on an engine goes into its maintenance history |
 | Islands & assets | Register of powerhouses, RO plants, sewage plants and their gensets, RO units and pumps, with status history |
-| Daily status check | Update every asset on an island in one go |
 | Incidents | Outages, breakdowns and maintenance, with duration, customers affected and resolution |
 | Projects | Status, progress, budget, contractor and a timeline of updates |
 | Export | Asset, incident and project lists download as CSV for Excel |
