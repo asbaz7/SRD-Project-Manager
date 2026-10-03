@@ -149,6 +149,25 @@ Design choices:
 * **Database-enforced integrity.** Foreign keys, checks, unique keys and
   triggers apply to every writer, including future scripts and integrations.
 
+## UI (redesigned Oct 2026)
+
+Glass ("glassmorphism") design: frosted panels over a soft coloured backdrop,
+with separate light and dark palettes, and a solid fallback when the browser
+can't blur or the user asks for reduced transparency. Navigation:
+
+- **Desktop:** a sidebar with Overview, Electricity, Water, Sewerage, then
+  Work, Incidents, Projects, Islands, then Administration.
+- **Phones:** a bottom tab bar (Overview · Electricity · Water · Sewerage ·
+  More).
+
+Each service section (`pages/Service.jsx`) uses the same tabs (Overview,
+assets or engines, plants), fed by `GET /services/:service`. Status colours
+are fixed (good / warning / serious / critical) and always shown with an
+icon and a label. Each service has its own identity colour.
+
+Work orders carry a `service` (migration 005): taken from the asset or
+facility, or chosen for island-wide work.
+
 ## 4a. Engine condition (added Oct 2026)
 
 The system's main job is now **engine condition**: what state every genset

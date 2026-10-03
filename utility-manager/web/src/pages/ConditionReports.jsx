@@ -16,7 +16,7 @@ const readBase64 = (file) => new Promise((resolve, reject) => {
   r.readAsDataURL(file);
 });
 
-export default function ConditionReports() {
+export default function ConditionReports({ embedded }) {
   const { can } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
@@ -67,7 +67,7 @@ export default function ConditionReports() {
   const ready = items.filter((i) => i.preview?.ok && !i.done && !i.busy);
 
   return <>
-    <PageHead title="Condition reports" />
+    {!embedded && <PageHead title="Condition reports" icon="report" tone="electricity" />}
     {can('manager') && <Card title="Upload reports">
       <div className={`dropzone ${over ? 'over' : ''}`} role="button" tabIndex={0}
         onClick={() => input.current.click()} onKeyDown={(e) => e.key === 'Enter' && input.current.click()}
@@ -93,14 +93,15 @@ export default function ConditionReports() {
       <label className="check"><input type="checkbox" checked={filters.missing === '1'} onChange={(e) => setFilter('missing', e.target.checked ? '1' : '')} /> Only missing</label>
     </div>
     <Async state={tracker}>{(t) => {
-      const rows = filters.missing === '1' ? t.powerhouses.filter((p) => p.state !== 'up_to_date') : t.powerhouses;
+      const rows = filters.missing === '1' ? t.powerhouses.filter((p) => p.state === 'missing' || p.state === 'never') : t.powerhouses;
       return <Card title={`Reports for ${month(t.expected_month)} · ${t.missing ? `${t.missing} missing` : 'all received'}`}>
-        <p className="muted small">Each powerhouse sends its report for the previous month by the {t.due_day}th. Only the latest report is kept; dates found in it are added to each engine's maintenance history.</p>
+        <p className="muted small">Each powerhouse sends its report for the previous month by the {t.due_day}th. Only the latest report is kept; dates found in it are added to each engine's maintenance history. Powerhouses whose latest report is from before {t.tracked_from?.slice(0, 4)} are not chased.</p>
         <table>
           <thead><tr><th>Powerhouse</th><th>Latest report</th><th className="hide-sm">Uploaded</th><th className="num hide-sm">Gensets</th><th /></tr></thead>
-          <tbody>{rows.map((p) => <tr key={p.facility_id} className={p.state === 'up_to_date' ? '' : 'attention'}>
+          <tbody>{rows.map((p) => <tr key={p.facility_id} className={p.state === 'missing' || p.state === 'never' ? 'attention' : ''}>
             <td><Link to={`/islands/${p.island_id}`}><strong>{p.atoll_code} · {p.island_name}</strong></Link></td>
-            <td><span className={`state ${p.state}`}>{p.state === 'up_to_date' ? '✓ ' : p.state === 'never' ? '✕ None yet' : '✕ '}{p.report_month ? month(p.report_month) : ''}</span>
+            <td><span className={`state ${p.state}`}>{p.state === 'up_to_date' ? '✓ ' : p.state === 'never' ? '✕ None yet' : p.state === 'untracked' ? '– ' : '✕ '}{p.report_month ? month(p.report_month) : ''}</span>
+              {p.state === 'untracked' && <><br /><small className="muted">old report, not chased</small></>}
               {p.state === 'missing' && <><br /><small className="muted">{month(t.expected_month)} missing</small></>}</td>
             <td className="hide-sm small">{p.uploaded_at ? <>{dateTime(p.uploaded_at)}<br /><span className="muted">{p.uploaded_by_name}</span></> : <span className="muted">—</span>}</td>
             <td className="num hide-sm">{p.genset_count}</td>

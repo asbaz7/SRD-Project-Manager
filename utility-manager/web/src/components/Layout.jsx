@@ -2,48 +2,89 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { ROLES } from '../format.js';
+import { Icon } from './icons.jsx';
 
-const NAV = [
-  { to: '/', label: 'Overview', end: true },
-  { to: '/engines', label: 'Engines' },
-  { to: '/reports', label: 'Condition reports' },
-  { to: '/work', label: 'Work' },
-  { to: '/islands', label: 'Islands & assets' },
-  { to: '/incidents', label: 'Incidents' },
-  { to: '/projects', label: 'Projects' },
-  { section: 'Administration', role: 'manager' },
-  { to: '/admin/users', label: 'Users', role: 'admin' },
-  { to: '/admin/audit', label: 'Audit trail', role: 'manager' },
+// The three service sections come first: that is where people go.
+const MAIN = [
+  { to: '/', label: 'Overview', icon: 'home', end: true },
+  { to: '/electricity', label: 'Electricity', icon: 'electricity', svc: 'electricity' },
+  { to: '/water', label: 'Water', icon: 'water', svc: 'water' },
+  { to: '/sewerage', label: 'Sewerage', icon: 'sewerage', svc: 'sewerage' },
 ];
+const MORE = [
+  { to: '/work', label: 'Work', icon: 'work' },
+  { to: '/incidents', label: 'Incidents', icon: 'incident' },
+  { to: '/projects', label: 'Projects', icon: 'project' },
+  { to: '/islands', label: 'Islands', icon: 'island' },
+];
+const ADMIN = [
+  { to: '/admin/users', label: 'Users', icon: 'users', role: 'admin' },
+  { to: '/admin/audit', label: 'Audit trail', icon: 'audit', role: 'manager' },
+];
+
+const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+
+function Brand() {
+  return (
+    <NavLink to="/" className="brand">
+      <span className="logo"><img src="/stelco-icon.png" alt="" width="42" height="18" /><span className="wordmark">STELCO</span></span>
+      <span className="brand-name">SRD Utility Manager<small>South Regional Department</small></span>
+    </NavLink>
+  );
+}
+
+const Link = ({ item, onClick }) => (
+  <NavLink to={item.to} end={item.end} onClick={onClick} className={`nav-link ${item.svc ? `svc-${item.svc}` : ''}`}>
+    <Icon name={item.icon} /> {item.label}
+  </NavLink>
+);
 
 export default function Layout() {
   const { user, logout, can } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [sheet, setSheet] = useState(false);
   const location = useLocation();
-  // Close the mobile menu after navigating.
   const [lastPath, setLastPath] = useState(location.pathname);
-  if (lastPath !== location.pathname) { setLastPath(location.pathname); setOpen(false); }
+  if (lastPath !== location.pathname) { setLastPath(location.pathname); setSheet(false); }
+  const admin = ADMIN.filter((n) => can(n.role));
 
   return (
     <div className="shell">
-      <header className="topbar">
-        <button className="menu-btn" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Menu">☰</button>
-        <NavLink to="/" className="brand">
-          <span className="logo"><img src="/stelco-icon.png" alt="" width="46" height="20" /><span className="wordmark">STELCO</span></span>
-          <span>SRD Utility Manager</span>
-        </NavLink>
-        <div className="who">
-          <NavLink to="/account" className="who-name">{user.fullName}</NavLink>
-          <small className="muted">{ROLES[user.role]}</small>
-          <button className="btn ghost small" onClick={logout}>Sign out</button>
+      <nav className="sidebar" aria-label="Main">
+        <Brand />
+        {MAIN.map((n) => <Link key={n.to} item={n} />)}
+        <div className="nav-section">Activity</div>
+        {MORE.map((n) => <Link key={n.to} item={n} />)}
+        {admin.length > 0 && <><div className="nav-section">Administration</div>{admin.map((n) => <Link key={n.to} item={n} />)}</>}
+        <div className="nav-foot">
+          <NavLink to="/account" className="who">
+            <span className="avatar" aria-hidden="true">{initials(user.fullName)}</span>
+            <span><span className="who-name">{user.fullName}</span><small>{ROLES[user.role]}</small></span>
+          </NavLink>
+          <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
-      </header>
-      <nav className={`sidebar ${open ? 'open' : ''}`} aria-label="Main">
-        {NAV.filter((n) => !n.role || can(n.role)).map((n) => n.section
-          ? <div key={n.section} className="nav-section">{n.section}</div>
-          : <NavLink key={n.to} to={n.to} end={n.end} className="nav-link">{n.label}</NavLink>)}
       </nav>
+
+      {/* Phones: a slim top bar and a bottom tab bar. */}
+      <header className="topbar">
+        <Brand />
+        <NavLink to="/account" className="who-mini avatar" aria-label="My account">{initials(user.fullName)}</NavLink>
+      </header>
       <main className="page"><Outlet /></main>
+      <nav className="bottom-bar" aria-label="Main">
+        {MAIN.map((n) => (
+          <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>
+            <Icon name={n.icon} size={22} />{n.label}
+          </NavLink>
+        ))}
+        <button onClick={() => setSheet(!sheet)} aria-expanded={sheet}><Icon name="more" size={22} />More</button>
+      </nav>
+      {sheet && <>
+        <div className="sheet-backdrop" onClick={() => setSheet(false)} />
+        <div className="sheet" role="menu">
+          {[...MORE, ...admin].map((n) => <Link key={n.to} item={n} />)}
+          <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
+        </div>
+      </>}
     </div>
   );
 }

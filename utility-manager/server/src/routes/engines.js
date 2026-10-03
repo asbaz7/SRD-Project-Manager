@@ -3,7 +3,7 @@ import { assertIslandWrite, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { forbidden } from '../errors.js';
 import { Where, date, id, idParam, one, optText, parse, serialParam } from '../http.js';
-import { expectedMonth } from '../reportImport.js';
+import { REPORTS_TRACKED_FROM, expectedMonth } from '../reportImport.js';
 
 export const EVENT_KINDS = ['overhaul', 'top_overhaul', 'alternator_service', 'valve_clearance', 'battery_change',
   'repair', 'service', 'inspection', 'other'];
@@ -43,7 +43,7 @@ export function describeEngine(e, today, expected) {
   e.overhaul_due = !!(e.needs_overhaul || (e.hours_to_overhaul != null && e.hours_to_overhaul <= 0)
     || (e.next_overhaul_on && e.next_overhaul_on <= today));
   e.alt_service_due = !!(e.alt_needs_service || (e.next_alt_service_on && e.next_alt_service_on <= today));
-  e.report_stale = !e.report_month || e.report_month < expected;
+  e.report_stale = !!e.report_month && e.report_month >= REPORTS_TRACKED_FROM && e.report_month < expected;
   delete e.total_count;
   return e;
 }

@@ -10,7 +10,7 @@ export default function Islands() {
   const state = useApi(`/islands${qs({ atoll_id: filters.atoll_id, q: filters.q })}`);
 
   return <>
-    <PageHead title="Islands & assets" />
+    <PageHead title="Islands & assets" icon="island" />
     <div className="filters">
       <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
         options={(atolls.data || []).map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />

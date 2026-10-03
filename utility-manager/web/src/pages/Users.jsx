@@ -8,7 +8,7 @@ export default function Users() {
   const state = useApi('/users');
   const [editing, setEditing] = useState(null);
   return <>
-    <PageHead title="Users" actions={<button className="btn primary" onClick={() => setEditing({})}>Add user</button>} />
+    <PageHead title="Users" icon="users" actions={<button className="btn primary" onClick={() => setEditing({})}>Add user</button>} />
     <Card>
       <p className="muted small">
         <strong>Managers</strong> report incidents, update asset status and manage projects, facilities and assets

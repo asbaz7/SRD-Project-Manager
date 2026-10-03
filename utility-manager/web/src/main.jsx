@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth.jsx';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
@@ -15,11 +15,16 @@ import Projects from './pages/Projects.jsx';
 import Project from './pages/Project.jsx';
 import Users from './pages/Users.jsx';
 import Audit from './pages/Audit.jsx';
-import Engines from './pages/Engines.jsx';
-import ConditionReports from './pages/ConditionReports.jsx';
+import Service from './pages/Service.jsx';
 import Work from './pages/Work.jsx';
 import WorkItem from './pages/WorkItem.jsx';
 import './styles.css';
+
+// Old addresses (bookmarks) go to their place in the sections.
+function Moved({ to }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
 
 function NotFound() {
   return <><h1>Page not found</h1><p className="muted">Check the address, or use the menu.</p></>;
@@ -34,8 +39,12 @@ createRoot(document.getElementById('root')).render(
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Dashboard />} />
             <Route path="account" element={<Account />} />
-            <Route path="engines" element={<Engines />} />
-            <Route path="reports" element={<ConditionReports />} />
+            {['electricity', 'water', 'sewerage'].map((svc) => [
+              <Route key={svc} path={svc} element={<Service svc={svc} />} />,
+              <Route key={`${svc}-tab`} path={`${svc}/:tab`} element={<Service svc={svc} />} />,
+            ])}
+            <Route path="engines" element={<Moved to="/electricity/engines" />} />
+            <Route path="reports" element={<Moved to="/electricity/reports" />} />
             <Route path="work" element={<Work />} />
             <Route path="work/new" element={<WorkItem />} />
             <Route path="work/:id" element={<WorkItem />} />

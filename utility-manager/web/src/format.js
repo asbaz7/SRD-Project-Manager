@@ -1,9 +1,9 @@
 export const TZ = 'Indian/Maldives';
 
 export const SERVICES = {
-  electricity: { label: 'Electricity', icon: '⚡' },
-  water: { label: 'Water', icon: '💧' },
-  sewerage: { label: 'Sewerage', icon: '♻' },
+  electricity: { label: 'Electricity', icon: '⚡', path: '/electricity' },
+  water: { label: 'Water', icon: '💧', path: '/water' },
+  sewerage: { label: 'Sewerage', icon: '♻', path: '/sewerage' },
 };
 
 export const ASSET_STATUS = {
@@ -31,7 +31,7 @@ export const PROJECT_STATES = { planned: 'Planned', ongoing: 'Ongoing', on_hold:
 export const CONDITIONS = {
   ok: { label: 'OK', icon: '●', tone: 'ok' },
   minor_fault: { label: 'Minor fault', icon: '▲', tone: 'warn' },
-  major_fault: { label: 'Major fault', icon: '■', tone: 'bad' },
+  major_fault: { label: 'Major fault', icon: '■', tone: 'serious' },
   not_running: { label: 'Not running', icon: '✕', tone: 'bad' },
 };
 export const WORK_KINDS = {
@@ -59,6 +59,8 @@ export function num(value, digits = 0) {
   if (value === null || value === undefined || value === '') return '—';
   return Number(value).toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 }
+// 66472 kW -> '66.5 MW'; smaller figures stay in kW.
+export const power = (kw) => (kw == null ? '—' : kw >= 10000 ? `${num(kw / 1000, 1)} MW` : `${num(kw)} kW`);
 export const withUnit = (value, unit, digits) => (value == null ? '—' : `${num(value, digits)} ${unit}`);
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric' });

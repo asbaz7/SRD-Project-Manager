@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { id, parse } from '../http.js';
-import { expectedMonth } from '../reportImport.js';
+import { expectedMonth, reportState } from '../reportImport.js';
 import { mvToday } from './engines.js';
 
 // Everything the overview page needs in one call. Optional atoll filter.
@@ -13,7 +13,7 @@ export default async function dashboardRoutes(app) {
 
     const today = await mvToday(db, config.timezone);
     const expected = expectedMonth(today);
-    const [services, incidents, projects, down, openIncidents, activeProjects, fuel, engines, reports, work] = await Promise.all([
+    const [services, incidents, projects, down, openIncidents, activeProjects, fuel, engines, reports, work, open] = await Promise.all([
       // Facility and asset counts per service.
       db.query(`
         select f.service::text as service,
@@ -104,7 +104,7 @@ export default async function dashboardRoutes(app) {
          order by r.report_month nulls first, a.code, i.name`, [atoll]),
       // Ongoing work.
       db.query(`
-        select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.kind, w.title, w.status, w.target_on,
+        select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.service, w.kind, w.title, w.status, w.target_on,
                (w.target_on < current_date) as overdue, i.id as island_id, i.name as island_name, a.code as atoll_code,
                s.id as asset_id, s.tag as asset_tag, s.kind as asset_kind,
                (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update
@@ -115,12 +115,21 @@ export default async function dashboardRoutes(app) {
          where w.status not in ('completed', 'cancelled') and ($1::uuid is null or i.atoll_id = $1)
          order by array_position(array['in_progress','awaiting_parts','on_hold','planned'], w.status), w.target_on nulls last
          limit 30`, [atoll]),
+      // Open work and incidents per section, for the overview tiles.
+      db.query(`
+        select svc.service::text as service,
+               (select count(*) from work_orders w join islands i on i.id = w.island_id
+                 where w.service = svc.service and w.status not in ('completed', 'cancelled') and ($1::uuid is null or i.atoll_id = $1)) as work,
+               (select count(*) from incidents x join islands i on i.id = x.island_id
+                 where x.service = svc.service and x.status = 'open' and ($1::uuid is null or i.atoll_id = $1)) as incidents
+          from unnest(enum_range(null::service_type)) as svc(service)`, [atoll]),
     ]);
 
     const byService = Object.fromEntries(['electricity', 'water', 'sewerage'].map((s) => [s, {
-      facilities: 0, islands: 0, assets: 0, running: 0, standby: 0, down: 0, unknown: 0, installed_kw: 0, available_kw: 0,
+      facilities: 0, islands: 0, assets: 0, running: 0, standby: 0, down: 0, unknown: 0, installed_kw: 0, available_kw: 0, open_work: 0, open_incidents: 0,
     }]));
     for (const row of services.rows) Object.assign(byService[row.service], row);
+    for (const row of open.rows) Object.assign(byService[row.service], { open_work: row.work, open_incidents: row.incidents });
 
     return {
       services: byService,
@@ -135,7 +144,7 @@ export default async function dashboardRoutes(app) {
       reports: {
         expected_month: expected,
         total: reports.rows.length,
-        missing: reports.rows.filter((r) => !r.report_month || r.report_month < expected),
+        missing: reports.rows.filter((r) => ['missing', 'never'].includes(reportState(r.report_month, expected))),
       },
       work: work.rows,
       assets_down: down.rows,

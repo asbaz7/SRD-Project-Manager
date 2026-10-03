@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Icon } from './icons.jsx';
 import { ASSET_STATUS, CONDITIONS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES } from '../format.js';
 
 export function Stat({ label, value, sub, tone = '', to }) {
@@ -43,7 +44,26 @@ export function ProjectState({ value }) {
 export function Service({ value, short }) {
   const s = SERVICES[value];
   if (!s) return value;
-  return <span className={`svc ${value}`} title={s.label}>{s.icon}{!short && ` ${s.label}`}</span>;
+  return <span className="svc" title={s.label}><span className={`svc-dot ${value}`} aria-hidden="true" />{short ? null : s.label}</span>;
+}
+
+// Engine conditions as one stacked bar plus a legend that doubles as links.
+// Status colours with labels and counts, so colour never stands alone.
+export function ConditionMeter({ e, link = (k) => `/electricity/engines?condition=${k}` }) {
+  const parts = [
+    ['ok', 'OK', e.ok, 'ok', 'var(--good-fill)'], ['minor_fault', 'Minor fault', e.minor_fault, 'warn', 'var(--warn-fill)'],
+    ['major_fault', 'Major fault', e.major_fault, 'serious', 'var(--serious-fill)'], ['not_running', 'Not running', e.not_running, 'bad', 'var(--bad-fill)'],
+    ['no_report', 'No report', e.no_report, 'none', 'var(--none-fill)'],
+  ];
+  const total = e.total || 1;
+  return <>
+    <div className="meter" role="img" aria-label={parts.map(([, l, n]) => `${n} ${l}`).join(', ')}>
+      {parts.filter(([, , n]) => n > 0).map(([k, l, n, tone]) => <span key={k} className={tone} style={{ width: `${(100 * n) / total}%` }} title={`${l}: ${n} of ${e.total} engines`} />)}
+    </div>
+    <div className="legend">{parts.map(([k, l, n, , fill]) => (
+      <Link key={k} to={link(k)}><i style={{ background: fill }} />{l}<strong>{n}</strong></Link>
+    ))}</div>
+  </>;
 }
 
 export function Progress({ value }) {
@@ -64,11 +84,15 @@ export function Card({ title, actions, children, className = '' }) {
   );
 }
 
-export function PageHead({ title, crumbs, actions, children }) {
+export function PageHead({ title, crumbs, actions, children, icon, tone = 'neutral', subtitle }) {
   return (
     <div className="page-head">
       {crumbs && <nav className="crumbs">{crumbs.map((c, i) => <span key={i}>{c.to ? <Link to={c.to}>{c.label}</Link> : c.label}{i < crumbs.length - 1 && ' › '}</span>)}</nav>}
-      <div className="page-title"><h1>{title}</h1>{actions && <div className="actions">{actions}</div>}</div>
+      <div className="page-title">
+        {icon && <span className={`title-icon ${tone}`}><Icon name={icon} size={24} /></span>}
+        <div><h1>{title}</h1>{subtitle && <p className="subtitle">{subtitle}</p>}</div>
+        {actions && <div className="actions">{actions}</div>}
+      </div>
       {children}
     </div>
   );

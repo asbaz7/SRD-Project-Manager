@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Select, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, WORK_KINDS, WORK_STATES, date, dateTime } from '../format.js';
+import { ASSET_KINDS, SERVICES, WORK_KINDS, WORK_STATES, date, dateTime } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 export default function WorkItem() {
@@ -33,6 +33,7 @@ function WorkView({ work: w, reload }) {
       <Card title="Details">
         <dl className="facts">
           <dt>Status</dt><dd><WorkState value={w.status} /></dd>
+          <dt>Service</dt><dd>{SERVICES[w.service]?.label}</dd>
           <dt>Type</dt><dd>{WORK_KINDS[w.kind]}</dd>
           <dt>Where</dt><dd><Link to={`/islands/${w.island_id}`}>{w.atoll_code} · {w.island_name}</Link>{w.facility_name && ` · ${w.facility_name}`}</dd>
           {w.asset_id && <><dt>Asset</dt><dd><Link to={`/assets/${w.asset_id}`}>{ASSET_KINDS[w.asset_kind]} {w.asset_tag}</Link>{w.asset_model && <span className="muted"> · {w.asset_model}</span>}</dd></>}
@@ -77,11 +78,13 @@ function WorkForm({ work, onDone }) {
   const asset = useApi(presetAsset && !work ? `/assets/${presetAsset}` : null);
   const [f, setF] = useState(() => work || {
     island_id: params.get('island_id') || '', asset_id: presetAsset || '', kind: params.get('kind') || 'repair',
+    service: params.get('service') || '',
     title: '', description: '', status: 'in_progress', assigned_to: '', started_on: '', target_on: '',
   });
   const islandId = f.island_id || asset.data?.island_id || '';
   const island = useApi(islandId && !work ? `/islands/${islandId}` : null);
-  const assets = (island.data?.facilities || []).filter((x) => x.active).flatMap((x) => x.assets.filter((a) => a.active));
+  const assets = (island.data?.facilities || []).filter((x) => x.active && (!f.service || x.service === f.service))
+    .flatMap((x) => x.assets.filter((a) => a.active).map((a) => ({ ...a, service: x.service })));
   const set = (k) => (v) => setF((prev) => ({ ...prev, [k]: v?.target ? v.target.value : v }));
 
   const { submit, busy, error } = useSubmit(async () => {
@@ -93,7 +96,7 @@ function WorkForm({ work, onDone }) {
       await api(`/work/${work.id}`, { method: 'PATCH', body: { ...body, completed_on: f.completed_on || null } });
       onDone();
     } else {
-      const created = await api('/work', { method: 'POST', body: { ...body, island_id: islandId || null, asset_id: f.asset_id || null } });
+      const created = await api('/work', { method: 'POST', body: { ...body, island_id: islandId || null, asset_id: f.asset_id || null, service: f.service || null } });
       navigate(`/work/${created.id}`, { replace: true });
     }
   });
@@ -104,10 +107,12 @@ function WorkForm({ work, onDone }) {
       <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <ErrorBox error={error} />
         {!work && <>
+          <Field label="Service"><Select required={!f.asset_id} value={f.service} onChange={(v) => setF({ ...f, service: v, asset_id: '' })} placeholder="Choose…"
+            options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} /></Field>
           <Field label="Island"><Select required value={islandId} onChange={(v) => setF({ ...f, island_id: v, asset_id: '' })} placeholder="Choose island…"
             options={mine.map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} /></Field>
-          <Field label="Genset / asset (optional)" hint="Leave empty for work on the island or powerhouse as a whole.">
-            <Select value={f.asset_id} onChange={set('asset_id')} placeholder="— whole island —" options={assets.map((a) => [a.id, `${ASSET_KINDS[a.kind]} ${a.tag}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>
+          <Field label="Asset (optional)" hint="Leave empty for work on the plant or island as a whole.">
+            <Select value={f.asset_id} onChange={(v) => setF({ ...f, asset_id: v, service: v ? assets.find((a) => a.id === v)?.service || f.service : f.service })} placeholder="— whole island —" options={assets.map((a) => [a.id, `${ASSET_KINDS[a.kind]} ${a.tag}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>
         </>}
         <Field label="Type"><Select value={f.kind} onChange={set('kind')} options={WORK_KINDS} /></Field>
         <Field label="Status"><Select value={f.status} onChange={set('status')} options={WORK_STATES} /></Field>

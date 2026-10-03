@@ -294,6 +294,16 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
   return { gensets_updated: updated, gensets_added: created, events_added: events };
 }
 
+// Powerhouses whose latest report is older than this are not chased as
+// "missing" (their reporting stopped long ago and is handled separately).
+export const REPORTS_TRACKED_FROM = '2024-01-01';
+
+export function reportState(reportMonth, expected) {
+  if (!reportMonth) return 'never';
+  if (reportMonth < REPORTS_TRACKED_FROM) return 'untracked';
+  return reportMonth >= expected ? 'up_to_date' : 'missing';
+}
+
 /**
  * Which month's report every powerhouse should have sent by `today`
  * (Maldives date, 'YYYY-MM-DD'): last month's, once the 10th has passed.

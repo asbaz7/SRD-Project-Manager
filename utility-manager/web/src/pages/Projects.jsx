@@ -13,7 +13,7 @@ export default function Projects() {
   const state = useApi(`/projects${qs(params)}`);
 
   return <>
-    <PageHead title="Projects" actions={<>
+    <PageHead title="Projects" icon="project" actions={<>
       <a className="btn ghost" href={csvUrl('/projects', { ...params, offset: undefined })}>Export CSV</a>
       {can('manager') && <Link className="btn primary" to={`/projects/new${qs({ island_id: filters.island_id })}`}>New project</Link>}
     </>} />

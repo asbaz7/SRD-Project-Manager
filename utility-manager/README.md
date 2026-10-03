@@ -16,17 +16,18 @@ This app is separate from the existing read-only dashboard in
 
 ## What it does
 
+The system is organised into three sections, **Electricity**, **Water** and
+**Sewerage**, plus the shared activity lists. The overview opens with a
+"Needs attention" list.
+
 | | |
 |---|---|
-| Overview | Engine condition, overhauls due, missing condition reports, work in progress, open incidents |
-| Engines | Every genset: condition from the latest report, hours since overhaul, last overhaul and alternator service, faults, flags and ongoing work. One-click filters |
-| Condition reports | Drop in the monthly ENGINE CONDITION REPORT Excel files as they are. The system reads them, keeps the latest condition, and adds every overhaul, alternator service, valve clearance and battery change date to each engine's maintenance history. Shows which powerhouses are missing this month's report (after the 10th) |
-| Work | Ongoing work on a genset or island, with status and updates. Completed work on an engine goes into its maintenance history |
-| Islands & assets | Register of powerhouses, RO plants, sewage plants and their gensets, RO units and pumps, with status history |
-| Incidents | Outages, breakdowns and maintenance, with duration, customers affected and resolution |
-| Projects | Status, progress, budget, contractor and a timeline of updates |
-| Export | Asset, incident and project lists download as CSV for Excel |
-| Users & audit | Managers assigned to islands or atolls, administrators, optional read-only viewers, and a full change history |
+| Overview | Needs attention (serious incidents, engines not running or with major faults, assets out of service, missing reports, overdue work), one tile per service, engine condition, work, incidents, projects |
+| Electricity | Overview · **Engines** (every genset: condition, hours since overhaul, last overhaul and alternator service, faults, open work; one-click filters) · **Condition reports** (drop in the monthly Excel files as they are; the latest condition is kept and maintenance history builds itself; missing reports are flagged after the 10th, reports from before 2024 are not chased) · Powerhouses |
+| Water · Sewerage | Overview · Assets · Plants, with each service's work, incidents and projects |
+| Work | Ongoing work on an asset, plant or island, per service, with updates. Completed engine work goes into its maintenance history |
+| Incidents · Projects · Islands | Shared lists, filterable by service |
+| Users & audit | Managers assigned to islands or atolls, administrators, optional read-only viewers, full change history |
 
 ## Try it privately (one command)
 

@@ -3,7 +3,7 @@ import { assertIslandWrite, requireRole } from '../auth.js';
 import { parseConditionReport } from '../conditionReport.js';
 import { badRequest } from '../errors.js';
 import { id, parse } from '../http.js';
-import { applyImport, expectedMonth, matchIsland, planImport } from '../reportImport.js';
+import { REPORTS_TRACKED_FROM, applyImport, expectedMonth, matchIsland, planImport, reportState } from '../reportImport.js';
 
 const upload = z.object({
   file_name: z.string().trim().max(300).default(''),
@@ -48,15 +48,14 @@ export default async function conditionReportRoutes(app) {
        where f.active and f.service = 'electricity' and f.kind = 'powerhouse'
          and ($1::uuid is null or i.atoll_id = $1)
        order by (r.report_month is null) desc, r.report_month, a.code, i.name`, [q.atoll_id ?? null]);
-    for (const r of rows) {
-      r.state = !r.report_month ? 'never' : r.report_month >= expected ? 'up_to_date' : 'missing';
-    }
+    for (const r of rows) r.state = reportState(r.report_month, expected);
     return {
       today: day,
       expected_month: expected,
       due_day: 10,
       powerhouses: rows,
-      missing: rows.filter((r) => r.state !== 'up_to_date').length,
+      missing: rows.filter((r) => r.state === 'missing' || r.state === 'never').length,
+      tracked_from: REPORTS_TRACKED_FROM,
     };
   });
 

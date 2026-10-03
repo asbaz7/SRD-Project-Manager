@@ -56,7 +56,7 @@ export default function Island() {
             {f.kind === 'powerhouse' && (() => {
               const r = island.reports.find((x) => x.facility_id === f.id);
               return <> · Condition report: {r ? <strong>{month(r.report_month)}</strong> : 'none yet'}
-                {r?.peak_load_month && ` · peak ${r.peak_load_month}`} · <Link to="/reports">upload</Link></>;
+                {r?.peak_load_month && ` · peak ${r.peak_load_month}`} · <Link to="/electricity/reports">upload</Link></>;
             })()}
           </p>}
           {f.assets.length === 0 ? <Empty>No assets recorded.</Empty> :

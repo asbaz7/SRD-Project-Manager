@@ -18,7 +18,7 @@ const CHIPS = [
   ['flag', 'stale', 'Report out of date', null],
 ];
 
-export default function Engines() {
+export default function Engines({ embedded }) {
   const [filters, setFilter] = useFilters({ sort: 'island' });
   const atolls = useApi('/atolls');
   const params = { atoll_id: filters.atoll_id, condition: filters.condition, flag: filters.flag, q: filters.q, sort: filters.sort };
@@ -29,7 +29,7 @@ export default function Engines() {
   const active = (key, value) => (key ? filters[key] === value : !filters.condition && !filters.flag);
 
   return <>
-    <PageHead title="Engines" actions={<a className="btn ghost" href={csvUrl('/engines', params)}>Export CSV</a>} />
+    {!embedded && <PageHead title="Engines" icon="electricity" tone="electricity" />}
     <div className="chips">
       {CHIPS.map(([key, value, lab, countKey]) => {
         const n = countKey && summary.data?.summary[countKey];
@@ -44,6 +44,7 @@ export default function Engines() {
       <Select value={filters.sort} onChange={(v) => setFilter('sort', v)} aria-label="Sort"
         options={{ island: 'Sort: island', condition: 'Sort: worst condition first', hours_since_overhaul: 'Sort: most hours since overhaul', total_hours: 'Sort: most running hours', last_overhaul: 'Sort: oldest overhaul first' }} />
       <input type="search" placeholder="Search island, model, serial, fault…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
+      <a className="btn ghost" href={csvUrl('/engines', params)}>Export CSV</a>
     </div>
     <Async state={state}>{(d) => (
       <Card>

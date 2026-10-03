@@ -7,7 +7,7 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { AssetForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, WORK_KINDS, date, dateTime, localDate, month, num, withUnit } from '../format.js';
+import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 const ago = (iso) => {
@@ -31,7 +31,7 @@ export default function Asset() {
     const openWork = a.work.filter((w) => !['completed', 'cancelled'].includes(w.status));
     return <>
       <PageHead title={`${a.atoll_code} · ${a.island_name} · ${ASSET_KINDS[a.kind]} ${a.tag}`}
-        crumbs={[{ to: isEngine ? '/engines' : '/islands', label: isEngine ? 'Engines' : 'Islands' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${ASSET_KINDS[a.kind]} ${a.tag}` }]}
+        crumbs={[{ to: `/${a.service}${isEngine ? '/engines' : ''}`, label: isEngine ? 'Engines' : SERVICES[a.service]?.label || 'Assets' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${ASSET_KINDS[a.kind]} ${a.tag}` }]}
         actions={manage && <>
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
@@ -49,7 +49,7 @@ export default function Asset() {
           <p className="muted small">Now: <AssetStatus status={a.status} />{a.status_note && ` · ${a.status_note}`}</p>
           <p className={`small ${e.report_stale ? 'bad' : 'muted'}`}>
             {c ? <>From the {month(c.report_month)} report{c.uploaded_by_name && ` (uploaded by ${c.uploaded_by_name})`}{e.report_stale && ' — a newer report is due'}</> : 'No condition report uploaded yet.'}
-            {' '}<Link to="/reports">Upload report</Link>
+            {' '}<Link to="/electricity/reports">Upload report</Link>
           </p>
         </Card>
 

@@ -23,7 +23,7 @@ export default function Audit() {
   const [filters, setFilter] = useFilters();
   const state = useApi(`/audit${qs({ entity: filters.entity, entity_id: filters.entity_id, offset: filters.offset })}`);
   return <>
-    <PageHead title="Audit trail" />
+    <PageHead title="Audit trail" icon="audit" />
     <div className="filters">
       <Select value={filters.entity} onChange={(v) => setFilter('entity', v)} placeholder="All records" options={ENTITIES} aria-label="Record type" />
       {filters.entity_id && <button className="btn ghost small" onClick={() => setFilter('entity_id', '')}>✕ one record</button>}

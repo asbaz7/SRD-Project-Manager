@@ -24,6 +24,7 @@ import auditRoutes from './routes/audit.js';
 import conditionReportRoutes from './routes/conditionReports.js';
 import engineRoutes from './routes/engines.js';
 import workRoutes from './routes/work.js';
+import serviceRoutes from './routes/services.js';
 
 const PREFIX = '/api/v1';
 const PUBLIC_ROUTES = new Set([`${PREFIX}/auth/login`, `${PREFIX}/health`]);
@@ -192,7 +193,7 @@ export async function buildApp({ db, config, logger = true }) {
     return { ok: true };
   });
   for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes,
-    workRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes]) {
+    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes]) {
     await routes(api);
   }
   // Unknown API paths: still require sign-in, then 404.

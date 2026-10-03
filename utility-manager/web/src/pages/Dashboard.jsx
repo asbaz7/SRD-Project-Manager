@@ -1,125 +1,131 @@
+// Overview: what needs attention first, then one tile per service.
 import { Link } from 'react-router-dom';
-import { useAuth } from '../auth.jsx';
-import { AssetStatus, Async, Card, Empty, PageHead, Progress, ProjectState, Select, Service, Severity, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, month, num, since, withUnit } from '../format.js';
-import { useApi, useFilters } from '../hooks.js';
 import { qs } from '../api.js';
+import { useAuth } from '../auth.jsx';
+import { Icon } from '../components/icons.jsx';
+import { Async, Card, ConditionMeter, Empty, PageHead, Progress, ProjectState, Select, Service, Severity, WorkState } from '../components/ui.jsx';
+import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, month, power, since } from '../format.js';
+import { useApi, useFilters } from '../hooks.js';
+
+const greeting = () => {
+  const h = Number(new Date().toLocaleString('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Indian/Maldives' }));
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+};
+
+// The short list a manager should look at first, most serious first.
+function attentionItems(d) {
+  const items = [];
+  for (const x of d.incidents.list.filter((i) => ['critical', 'high'].includes(i.severity))) {
+    items.push({ tone: 'bad', mark: '!', to: `/incidents/${x.id}`, text: x.title, sub: `${SERVICES[x.service]?.label} · ${x.atoll_code} ${x.island_name} · ${x.severity} · ${since(x.started_at)}` });
+  }
+  const e = d.engines;
+  if (e.not_running) items.push({ tone: 'bad', mark: e.not_running, to: '/electricity/engines?condition=not_running', text: `${e.not_running} engine${e.not_running === 1 ? '' : 's'} not running`, sub: 'From the latest condition reports' });
+  if (e.major_fault) items.push({ tone: 'serious', mark: e.major_fault, to: '/electricity/engines?condition=major_fault', text: `${e.major_fault} engine${e.major_fault === 1 ? '' : 's'} with a major fault`, sub: 'Still running — check before they fail' });
+  for (const svc of ['water', 'sewerage']) {
+    const down = d.assets_down.filter((a) => a.service === svc);
+    if (down.length) items.push({ tone: 'bad', mark: down.length, to: `/${svc}`, text: `${down.length} ${SERVICES[svc].label.toLowerCase()} asset${down.length === 1 ? '' : 's'} out of service`, sub: down.slice(0, 3).map((a) => `${a.atoll_code} ${a.island_name} ${ASSET_KINDS[a.kind]} ${a.tag}`).join(' · ') });
+  }
+  if (d.reports.missing.length) items.push({ tone: 'warn', mark: d.reports.missing.length, to: '/electricity/reports', text: `${d.reports.missing.length} condition report${d.reports.missing.length === 1 ? '' : 's'} missing for ${month(d.reports.expected_month)}`, sub: d.reports.missing.slice(0, 4).map((r) => `${r.atoll_code} ${r.island_name}`).join(' · ') + (d.reports.missing.length > 4 ? ' …' : '') });
+  for (const w of d.work.filter((x) => x.overdue)) {
+    items.push({ tone: 'warn', mark: '⏱', to: `/work/${w.id}`, text: `${w.title} — past target date`, sub: `${w.atoll_code} ${w.island_name} · target ${date(w.target_on)}` });
+  }
+  if (e.overhaul_due) items.push({ tone: 'info', mark: e.overhaul_due, to: '/electricity/engines?flag=overhaul', text: `${e.overhaul_due} engine${e.overhaul_due === 1 ? '' : 's'} due for overhaul`, sub: e.alt_service_due ? `${e.alt_service_due} alternator services due as well` : '' });
+  return items;
+}
 
 export default function Dashboard() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
   const state = useApi(`/dashboard${qs({ atoll_id: filters.atoll_id })}`);
 
   return <>
-    <PageHead title="Overview" actions={
-      <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
-        options={(atolls.data || []).map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />
-    } />
-    <Async state={state}>{(d) => <>
-      <div className="stats">
-        <Stat label="Gensets running" value={`${d.services.electricity.running} of ${d.services.electricity.assets}`}
-          sub={`${num(d.services.electricity.available_kw)} kW available of ${num(d.services.electricity.installed_kw)} kW`} />
-        <Stat label="Engines with major faults" value={d.engines.major_fault + d.engines.not_running}
-          sub={`${d.engines.not_running} not running · ${d.engines.minor_fault} minor faults`}
-          tone={d.engines.major_fault + d.engines.not_running ? 'alert' : ''} to="/engines?condition=faults" />
-        <Stat label="Overhaul due" value={d.engines.overhaul_due} sub={d.engines.alt_service_due ? `${d.engines.alt_service_due} alternator services due` : ''}
-          tone={d.engines.overhaul_due ? 'warn' : ''} to="/engines?flag=overhaul" />
-        <Stat label="Work in progress" value={d.work.length} to="/work" />
-        <Stat label="Open incidents" value={d.incidents.open} tone={d.incidents.by_severity.critical ? 'alert' : ''}
-          sub={['critical', 'high'].filter((s) => d.incidents.by_severity[s]).map((s) => `${d.incidents.by_severity[s]} ${s}`).join(' · ')} to="/incidents?status=open" />
-        <Stat label="Fuel capacity" value={withUnit(d.fuel_storage.capacity_l, 'L')}
-          sub={d.fuel_storage.not_set ? `${d.fuel_storage.not_set} powerhouse${d.fuel_storage.not_set === 1 ? '' : 's'} not set` : ''} to="/islands" />
-      </div>
-
-      <div className="grid-2">
-        <Card title="Engine condition" actions={<Link to="/engines" className="btn small ghost">All engines</Link>}>
-          <EngineMeter e={d.engines} />
-          <p className="muted small">From the latest monthly condition reports.</p>
-        </Card>
-        <Card title={`Reports for ${month(d.reports.expected_month)} · ${d.reports.missing.length ? `${d.reports.missing.length} of ${d.reports.total} missing` : 'all in'}`}
-          actions={<Link to="/reports" className="btn small">Upload reports</Link>}>
-          {d.reports.missing.length === 0 ? <Empty>Every powerhouse has sent its report. 🎉</Empty> :
-            <div className="scroll-y small">{d.reports.missing.map((r, i) => <span key={r.facility_id}>
-              {i > 0 && ' · '}<Link to={`/islands/${r.island_id}`}>{r.atoll_code} {r.island_name}</Link>
-              <span className="muted"> ({r.report_month ? `last ${month(r.report_month)}` : 'none yet'})</span>
-            </span>)}</div>}
-        </Card>
-      </div>
-
-      <div className="grid-2">
-        <Card title={`Work in progress (${d.work.length})`} actions={can('manager') && <Link to="/work/new" className="btn small">Log work</Link>}>
-          {d.work.length === 0 ? <Empty>No work in progress.</Empty> :
-            <div className="scroll-y"><table><tbody>{d.work.map((w) => <tr key={w.id}>
-              <td className="wrap"><Link to={`/work/${w.id}`}>{w.title}</Link><br />
-                <small className="muted">{w.atoll_code} · {w.island_name}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`} · {WORK_KINDS[w.kind]}</small>
-                {w.last_update && <div className="small">{w.last_update}</div>}</td>
-              <td><WorkState value={w.status} />{w.target_on && <><br /><small className={w.overdue ? 'bad' : 'muted'}>{w.overdue ? '⚠ ' : ''}{date(w.target_on)}</small></>}</td>
-            </tr>)}</tbody></table></div>}
-        </Card>
-        <Card title={`Open incidents (${d.incidents.open})`} actions={can('manager') && <Link to="/incidents/new" className="btn small">Report incident</Link>}>
-          {d.incidents.list.length === 0 ? <Empty>No open incidents.</Empty> :
-            <table><tbody>{d.incidents.list.map((x) => <tr key={x.id}>
-              <td><Severity value={x.severity} /></td>
-              <td className="wrap"><Link to={`/incidents/${x.id}`}>{x.title}</Link><br />
-                <small className="muted"><Service value={x.service} short /> {x.atoll_code} · {x.island_name} · {INCIDENT_CATEGORIES[x.category]} · {since(x.started_at)}</small></td>
-            </tr>)}</tbody></table>}
+    <PageHead title={`${greeting()}, ${user.fullName.split(' ')[0]}`} subtitle={new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Indian/Maldives' })}
+      actions={<Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
+        options={(atolls.data || []).map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />} />
+    <Async state={state}>{(d) => {
+      const items = attentionItems(d);
+      const el = d.services.electricity;
+      return <>
+        <Card title={`Needs attention${items.length ? ` (${items.length})` : ''}`}>
+          {items.length === 0 ? <p className="all-clear"><Icon name="check" /> Nothing needs attention right now.</p> :
+            <ul className="attention-list">{items.slice(0, 8).map((it, i) => (
+              <li key={i}><Link to={it.to}>
+                <span className={`dot ${it.tone}`} aria-hidden="true">{it.mark}</span>
+                <span className="grow"><strong>{it.text}</strong>{it.sub && <small>{it.sub}</small>}</span>
+                <Icon name="arrow" />
+              </Link></li>
+            ))}</ul>}
+          {items.length > 8 && <p className="muted small">and {items.length - 8} more</p>}
         </Card>
 
-        <Card title={`Active projects (${d.projects.active})`} actions={<Link to="/projects?status=active" className="btn small ghost">All projects</Link>}>
-          {d.projects.list.length === 0 ? <Empty>No active projects.</Empty> :
-            <div className="scroll-y"><table><tbody>{d.projects.list.map((p) => <tr key={p.id}>
-              <td className="wrap"><Link to={`/projects/${p.id}`}>{p.title}</Link><br />
-                <small className="muted"><Service value={p.service} short /> {p.island_name ? `${p.atoll_code} · ${p.island_name}` : 'Regional'} · <ProjectState value={p.status} /></small></td>
-              <td className="nowrap"><Progress value={p.progress_pct} />
-                {p.target_date && <><br /><small className={p.overdue ? 'bad' : 'muted'}>{p.overdue ? '⚠ due ' : 'due '}{date(p.target_date)}</small></>}</td>
-            </tr>)}</tbody></table></div>}
-        </Card>
-      </div>
+        <div className="grid-3">
+          <ServiceTile svc="electricity" s={el}
+            hero={<>{el.running}<small> of {el.assets} gensets running</small></>}
+            facts={[
+              [power(el.available_kw), `available of ${power(el.installed_kw)}`],
+              [d.engines.major_fault + d.engines.not_running, 'serious faults', d.engines.major_fault + d.engines.not_running > 0],
+              [el.open_work, 'work ongoing'],
+            ]} />
+          {['water', 'sewerage'].map((svc) => {
+            const s = d.services[svc];
+            return <ServiceTile key={svc} svc={svc} s={s}
+              hero={s.assets ? <>{s.running}<small> of {s.assets} assets running</small></> : <small>No assets recorded yet</small>}
+              facts={[[s.facilities, `plant${s.facilities === 1 ? '' : 's'} · ${s.islands} islands`], [s.down, 'out of service', s.down > 0], [s.open_work, 'work ongoing']]} />;
+          })}
+        </div>
 
-      <Card title={`Assets out of service (${d.assets_down.length})`}>
-        {d.assets_down.length === 0 ? <Empty>Everything with a status is in service.</Empty> :
-          <table>
-            <thead><tr><th>Island</th><th>Asset</th><th>Status</th><th className="hide-sm">Note</th><th className="hide-sm">Since</th></tr></thead>
-            <tbody>{d.assets_down.map((a) => <tr key={a.id}>
-              <td><Link to={`/islands/${a.island_id}`}>{a.atoll_code} · {a.island_name}</Link></td>
-              <td><Link to={`/assets/${a.id}`}><Service value={a.service} short /> {ASSET_KINDS[a.kind]} {a.tag}</Link>
-                <br /><small className="muted">{a.make_model} {a.rated_capacity ? `· ${num(a.rated_capacity)} ${a.capacity_unit || ''}` : ''}</small></td>
-              <td><AssetStatus status={a.status} /></td>
-              <td className="wrap hide-sm">{a.status_note || <span className="muted">—</span>}</td>
-              <td className="muted small hide-sm">{date(a.status_at)}</td>
-            </tr>)}</tbody>
-          </table>}
-      </Card>
+        <div className="grid-2">
+          <Card title="Engine condition" actions={<Link to="/electricity/engines" className="btn small ghost">All engines</Link>}>
+            <ConditionMeter e={d.engines} />
+            <p className="muted small">{d.engines.total} gensets · from the latest monthly condition reports</p>
+          </Card>
+          <Card title={`Work in progress (${d.work.length})`} actions={can('manager') && <Link to="/work/new" className="btn small">Log work</Link>}>
+            {d.work.length === 0 ? <Empty>No work in progress.</Empty> :
+              <div className="scroll-y"><table><tbody>{d.work.map((w) => <tr key={w.id}>
+                <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
+                  <small className="muted"><Service value={w.service} short />{w.atoll_code} · {w.island_name}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`} · {WORK_KINDS[w.kind]}</small>
+                  {w.last_update && <div className="small">{w.last_update}</div>}</td>
+                <td><WorkState value={w.status} /></td>
+              </tr>)}</tbody></table></div>}
+          </Card>
+        </div>
 
-      <Card title="By service">
-        <table>
-          <thead><tr><th>Service</th><th className="num">Islands</th><th className="num">Facilities</th><th className="num">Assets</th><th className="num">Running</th><th className="num">Down</th><th className="num hide-sm">No status</th></tr></thead>
-          <tbody>{Object.keys(SERVICES).map((s) => { const v = d.services[s]; return <tr key={s}>
-            <td><Service value={s} /></td><td className="num">{v.islands}</td><td className="num">{v.facilities}</td><td className="num">{v.assets}</td>
-            <td className="num">{v.running}</td><td className={`num ${v.down ? 'bad' : ''}`}>{v.down}</td><td className="num hide-sm muted">{v.unknown}</td>
-          </tr>; })}</tbody>
-        </table>
-      </Card>
-    </>}</Async>
+        <div className="grid-2">
+          <Card title={`Open incidents (${d.incidents.open})`} actions={can('manager') && <Link to="/incidents/new" className="btn small">Report incident</Link>}>
+            {d.incidents.list.length === 0 ? <Empty>No open incidents.</Empty> :
+              <table><tbody>{d.incidents.list.map((x) => <tr key={x.id}>
+                <td><Severity value={x.severity} /></td>
+                <td className="wrap"><Link to={`/incidents/${x.id}`}>{x.title}</Link><br />
+                  <small className="muted"><Service value={x.service} short />{x.atoll_code} · {x.island_name} · {INCIDENT_CATEGORIES[x.category]} · {since(x.started_at)}</small></td>
+              </tr>)}</tbody></table>}
+          </Card>
+          <Card title={`Active projects (${d.projects.active})`} actions={<Link to="/projects?status=active" className="btn small ghost">All projects</Link>}>
+            {d.projects.list.length === 0 ? <Empty>No active projects.</Empty> :
+              <table><tbody>{d.projects.list.map((p) => <tr key={p.id}>
+                <td className="wrap"><Link to={`/projects/${p.id}`}>{p.title}</Link><br />
+                  <small className="muted"><Service value={p.service} short />{p.island_name ? `${p.atoll_code} · ${p.island_name}` : 'Regional'} · <ProjectState value={p.status} /></small></td>
+                <td className="nowrap"><Progress value={p.progress_pct} />
+                  {p.target_date && <><br /><small className={p.overdue ? 'bad' : 'muted'}>{p.overdue ? '⚠ due ' : 'due '}{date(p.target_date)}</small></>}</td>
+              </tr>)}</tbody></table>}
+          </Card>
+        </div>
+      </>;
+    }}</Async>
   </>;
 }
 
-// Share of engines in each condition, as one bar with clickable counts.
-function EngineMeter({ e }) {
-  const parts = [
-    ['ok', 'OK', e.ok, 'ok'], ['minor_fault', 'Minor fault', e.minor_fault, 'warn'],
-    ['major_fault', 'Major fault', e.major_fault, 'bad'], ['not_running', 'Not running', e.not_running, 'bad'],
-    ['no_report', 'No report', e.no_report, 'none'],
-  ];
-  const total = e.total || 1;
-  return <>
-    <div className="meter" role="img" aria-label={parts.map(([, l, n]) => `${n} ${l}`).join(', ')}>
-      {parts.map(([k, l, n, tone]) => n > 0 && <span key={k} className={tone} style={{ width: `${(100 * n) / total}%` }} title={`${n} ${l}`} />)}
-    </div>
-    <table><tbody>{parts.map(([k, l, n, tone]) => <tr key={k}>
-      <td><Link to={`/engines?condition=${k}`}><span className={`status ${tone}`}>{l}</span></Link></td>
-      <td className="num"><strong>{n}</strong></td>
-    </tr>)}</tbody></table>
-  </>;
+function ServiceTile({ svc, s, hero, facts }) {
+  return (
+    <Link to={SERVICES[svc].path} className={`tile ${svc}`}>
+      <div className="tile-head">
+        <span className="icon-wrap"><Icon name={svc} /></span>
+        <h2>{SERVICES[svc].label}</h2>
+        <span className="go"><Icon name="arrow" /></span>
+      </div>
+      <div className="hero">{hero}</div>
+      <div className="tile-facts">{facts.map(([v, l, alert], i) => <div key={i} className={alert ? 'alert' : ''}><strong>{v}</strong><span>{l}</span></div>)}</div>
+      {s.open_incidents > 0 && <span className="flag bad">{s.open_incidents} open incident{s.open_incidents === 1 ? '' : 's'}</span>}
+    </Link>
+  );
 }

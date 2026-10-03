@@ -275,8 +275,44 @@ describe('work and maintenance history', () => {
   });
 
   test('work cannot be logged on another island', async () => {
-    const res = await call('POST', '/work', { token: manager, body: { island_id: dhigurah.id, kind: 'other', title: 'x' } });
+    const res = await call('POST', '/work', { token: manager, body: { island_id: dhigurah.id, service: 'electricity', kind: 'other', title: 'x' } });
     assert.equal(res.status, 403);
+  });
+
+  test('island-wide work names its service; each section shows its own work', async () => {
+    const noService = await call('POST', '/work', { token: manager, body: { island_id: maafushi.id, kind: 'repair', title: 'Water main leak' } });
+    assert.equal(noService.status, 400);
+    const water = await call('POST', '/work', { token: manager, body: { island_id: maafushi.id, service: 'water', kind: 'repair', title: 'Water main leak' } });
+    assert.equal(water.status, 201, JSON.stringify(water.body));
+    assert.equal(water.body.service, 'water');
+    const waterList = (await call('GET', '/work?service=water', { token: admin })).body;
+    assert.deepEqual(waterList.items.map((w) => w.title), ['Water main leak']);
+    const section = (await call('GET', '/services/water', { token: admin })).body;
+    assert.deepEqual(section.work.map((w) => w.title), ['Water main leak']);
+    const dash = (await call('GET', '/dashboard', { token: admin })).body;
+    assert.equal(dash.services.water.open_work, 1);
+  });
+
+  test('the electricity section summarises engines, faults and reports', async () => {
+    const e = (await call('GET', '/services/electricity', { token: admin })).body;
+    assert.equal(e.engines.not_running, 1);
+    assert.ok(e.attention.some((a) => a.tag === '9' && a.condition === 'not_running'));
+    assert.ok(e.facilities.find((f) => f.island_id === maafushi.id).report_state === 'up_to_date');
+    assert.equal(e.reports.missing.length, e.facilities.filter((f) => f.kind === 'powerhouse').length - 1);
+    assert.ok(e.capacity.find((c) => c.unit === 'kW').rated > 0);
+    assert.equal((await call('GET', '/services/gas', { token: admin })).status, 400);
+  });
+
+  test('powerhouses whose latest report is before 2024 are not chased', async () => {
+    const data = maafushiReport({ powerhouse: 'K. DHIFFUSHI', months: ['2023-11-01', '2023-12-01'] });
+    const islands = (await call('GET', '/islands', { token: admin })).body;
+    const dhiffushi = islands.find((i) => i.name === 'Dhiffushi');
+    const res = await call('POST', '/condition-reports/import', { token: admin, body: { data, island_id: dhiffushi.id } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const t = (await call('GET', '/condition-reports', { token: admin })).body;
+    assert.equal(t.powerhouses.find((p) => p.island_id === dhiffushi.id).state, 'untracked');
+    const e = (await call('GET', '/services/electricity', { token: admin })).body;
+    assert.ok(!e.reports.missing.some((m) => m.island_id === dhiffushi.id));
   });
 
   test('maintenance can be recorded by hand; report records are protected', async () => {

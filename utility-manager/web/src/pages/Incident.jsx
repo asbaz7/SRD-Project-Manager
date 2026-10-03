@@ -70,7 +70,7 @@ function IncidentForm({ incident, onDone }) {
   const [f, setF] = useState(() => incident ? {
     ...incident, started_at: toLocalInput(incident.started_at), resolved_at: toLocalInput(incident.resolved_at),
   } : {
-    island_id: params.get('island_id') || '', service: 'electricity', category: 'outage', severity: 'medium',
+    island_id: params.get('island_id') || '', service: params.get('service') || 'electricity', category: 'outage', severity: 'medium',
     title: '', description: '', started_at: toLocalInput(new Date().toISOString()), facility_id: '', asset_id: '', customers_affected: '',
   });
   const island = useApi(f.island_id ? `/islands/${f.island_id}` : null);

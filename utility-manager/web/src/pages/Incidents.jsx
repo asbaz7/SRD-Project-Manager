@@ -16,7 +16,7 @@ export default function Incidents() {
   const state = useApi(`/incidents${qs(params)}`);
 
   return <>
-    <PageHead title="Incidents" actions={<>
+    <PageHead title="Incidents" icon="incident" actions={<>
       <a className="btn ghost" href={csvUrl('/incidents', { ...params, offset: undefined })}>Export CSV</a>
       {can('manager') && <Link className="btn primary" to={`/incidents/new${qs({ island_id: filters.island_id })}`}>Report incident</Link>}
     </>} />
