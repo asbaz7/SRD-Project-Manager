@@ -332,4 +332,16 @@ describe('work and maintenance history', () => {
     assert.equal(asset.engine.hours_to_overhaul, -603);
     assert.equal(asset.engine.overhaul_due, true);
   });
+
+  test('a facility added by mistake can be deleted by an admin, but not one with history', async () => {
+    const T = { token: admin };
+    const f = (await call('POST', '/facilities', { ...T, body: { island_id: maafushi.id, service: 'water', kind: 'water_plant', name: 'Test RO Plant' } })).body;
+    const a = (await call('POST', '/assets', { ...T, body: { facility_id: f.id, kind: 'ro_unit', tag: 'RO-9' } })).body;
+    await call('POST', '/assets/status', { ...T, body: { items: [{ asset_id: a.id, status: 'maintenance', note: 'test' }] } });
+    const g = (await call('POST', '/facilities', { ...T, body: { island_id: maafushi.id, service: 'water', kind: 'water_plant', name: 'Used RO Plant' } })).body;
+    assert.equal((await call('POST', '/work', { ...T, body: { island_id: maafushi.id, facility_id: g.id, service: 'water', kind: 'repair', title: 'Real work' } })).status, 201);
+    assert.equal((await call('DELETE', `/facilities/${g.id}`, T)).status, 409);
+    assert.equal((await call('DELETE', `/facilities/${f.id}`, T)).status, 200);
+    assert.equal((await call('GET', `/assets/${a.id}`, T)).status, 404);
+  });
 });

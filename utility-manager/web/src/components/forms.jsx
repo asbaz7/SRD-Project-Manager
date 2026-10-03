@@ -1,6 +1,7 @@
 // Create / edit forms for facilities and assets, shown in modals.
 import { useState } from 'react';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { useSubmit } from '../hooks.js';
 import { ASSET_KINDS, FACILITY_KINDS, SERVICES } from '../format.js';
 import { ErrorBox, Field, Modal, Select } from './ui.jsx';
@@ -21,10 +22,16 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
     else await api('/facilities', { method: 'POST', body: { ...body, island_id: islandId } });
     onSaved();
   });
+  const { can } = useAuth();
+  const remove = useSubmit(async () => {
+    if (!window.confirm(`Delete ${facility.name} and its ${facility.assets?.length || 0} asset(s)? Only do this for something added by mistake. It can't be undone.`)) return;
+    await api(`/facilities/${facility.id}`, { method: 'DELETE' });
+    onSaved();
+  });
   return (
     <Modal title={facility ? `Edit ${facility.name}` : 'Add facility'} onClose={onClose}>
       <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <ErrorBox error={error} />
+        <ErrorBox error={error || remove.error} />
         <Field label="Name" wide><input required value={f.name} onChange={set('name')} placeholder="e.g. Maafushi RO Plant" /></Field>
         <Field label="Service"><Select value={f.service} onChange={set('service')} options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} /></Field>
         <Field label="Type"><Select value={f.kind} onChange={set('kind')} options={FACILITY_KINDS} /></Field>
@@ -33,7 +40,9 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
         <Field label="Commissioned on"><input type="date" value={f.commissioned_on ?? ''} onChange={set('commissioned_on')} /></Field>
         <Field label="Notes" wide><textarea rows="2" value={f.notes ?? ''} onChange={set('notes')} /></Field>
         {facility && <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => set('active')(e.target.checked)} /> In use</label>}
-        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>
+        <div className="form-actions">
+          {facility && can('admin') && <button type="button" className="btn ghost danger" style={{ marginRight: 'auto' }} disabled={remove.busy} onClick={remove.submit}>Delete</button>}
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>
       </form>
     </Modal>
   );

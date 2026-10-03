@@ -3,6 +3,7 @@ import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
 import { expectedMonth } from '../reportImport.js';
 import { ENGINE_SELECT, describeEngine, mvToday } from './engines.js';
 import { sendCsv } from '../csv.js';
+import { conflict } from '../errors.js';
 import {
   Where, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
 } from '../http.js';
@@ -114,6 +115,26 @@ export default async function assetRoutes(app) {
     const set = updateSet(body, FACILITY_COLS);
     return db.tx(req.user.id, async (t) => one((await t.query(
       `update facilities set ${set.sql} where id = $1 returning *`, [facilityId, ...set.values])).rows, 'Facility'));
+  });
+
+  // Deleting is for facilities added by mistake (e.g. a test). Real ones that
+  // close are marked not in use, which keeps their history; so anything with
+  // work, incidents, projects or readings on it can't be deleted.
+  app.delete('/facilities/:id', { preHandler: requireRole('admin') }, async (req) => {
+    const { id: facilityId } = parse(idParam, req.params);
+    await db.tx(req.user.id, async (t) => {
+      const f = one((await t.query('select id, name from facilities where id = $1', [facilityId])).rows, 'Facility');
+      const linked = (await t.query(`
+        select (select count(*) from work_orders w where w.facility_id = $1 or w.asset_id in (select id from assets where facility_id = $1))::int as work,
+               (select count(*) from incidents i where i.facility_id = $1 or i.asset_id in (select id from assets where facility_id = $1))::int as incidents,
+               (select count(*) from projects p where p.facility_id = $1)::int as projects,
+               (select count(*) from readings r where r.facility_id = $1)::int as readings`, [facilityId])).rows[0];
+      const used = Object.entries(linked).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`);
+      if (used.length) throw conflict(`${f.name} has ${used.join(', ')} recorded against it. Untick "In use" instead to keep that history.`);
+      await t.query('delete from assets where facility_id = $1', [facilityId]);
+      await t.query('delete from facilities where id = $1', [facilityId]);
+    });
+    return { ok: true };
   });
 
   // --- Assets ---------------------------------------------------------------

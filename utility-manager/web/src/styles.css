@@ -399,3 +399,4 @@ input:disabled, select:disabled { opacity: .7; }
   .sheet { position: fixed; left: 10px; right: 10px; bottom: 84px; z-index: 46; border-radius: 22px; padding: 10px; display: flex; flex-direction: column; gap: 2px; background: var(--glass-strong); }
   .tile-facts { grid-template-columns: repeat(3, 1fr); }
 }
+.btn.danger { color: var(--bad); }
