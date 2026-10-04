@@ -24,6 +24,9 @@
   // Database connection: Hyperdrive config "srd-utility-db", pointing at the
   // srd-utility-manager Supabase project (created with
   // `npx wrangler hyperdrive create srd-utility-db --connection-string=…`).
+  // Query caching is DISABLED on this config (`wrangler hyperdrive update <id>
+  // --caching-disabled true`): with it on, lists showed old data for up to a
+  // minute after a change (e.g. a new user not appearing until refresh).
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
