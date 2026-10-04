@@ -23,7 +23,7 @@ async function getApp(env) {
     sessionTtlHours: Number(env.SESSION_TTL_HOURS) || 12,
     webDist: '',
     trustProxy: true,
-    telegramToken: env.TELEGRAM_BOT_TOKEN || '',
+    telegramToken: (env.TELEGRAM_BOT_TOKEN || '').trim(),
     publicUrl: env.PUBLIC_URL || '',
   });
   if (!config.databaseUrl) throw new Error('Configure a HYPERDRIVE binding or a DATABASE_URL secret');

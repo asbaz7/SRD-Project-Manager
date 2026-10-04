@@ -44,7 +44,7 @@ export function loadConfig(overrides = {}) {
     trustProxy: env.TRUST_PROXY === 'true',
     logLevel: env.LOG_LEVEL || (production ? 'info' : 'debug'),
     // Telegram bot token from @BotFather; the bot is off without it.
-    telegramToken: env.TELEGRAM_BOT_TOKEN || '',
+    telegramToken: (env.TELEGRAM_BOT_TOKEN || '').trim(),
     // The site's public address, for links in Telegram messages.
     publicUrl: env.PUBLIC_URL || '',
     ...overrides,

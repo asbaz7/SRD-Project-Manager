@@ -163,7 +163,11 @@ export function createTelegram({ db, config, log }) {
         last_error: hook.last_error_message || null,
       };
     } catch (err) {
-      return { enabled: true, error: err.message };
+      // Describe the stored token without revealing it.
+      const shape = /^\d{6,12}:[A-Za-z0-9_-]{30,40}$/.test(token)
+        ? 'The token looks right but Telegram rejects it: it may have been revoked. Copy the current one from @BotFather (/token) and store it again.'
+        : `The stored token isn't in Telegram's format (${token.length} characters; it should look like 123456789:ABC…). The clipboard probably held something else when it was stored.`;
+      return { enabled: true, error: err.code === 404 || err.code === 401 ? shape : err.message };
     }
   }
 
