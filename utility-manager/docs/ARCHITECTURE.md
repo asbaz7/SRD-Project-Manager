@@ -395,9 +395,9 @@ a generic message to the user).
 ## 11. Roadmap (deliberately not in the minimal version)
 
 * Attachments (photos, engine reports) in S3-compatible object storage
-* **WhatsApp:** "Share to WhatsApp" buttons only (`components/share.jsx`).
-  Automatic WhatsApp needs the Meta Business Platform and can't use group
-  chats, so the Telegram bot below was built instead.
+* **WhatsApp:** "Share to WhatsApp" buttons were added, then removed in
+  Oct 2026 in favour of the Telegram bot. Automatic WhatsApp would need the
+  Meta Business Platform and can't post to group chats.
 * **Telegram as an agent** (discussed, deferred): plain-language messages
   handled by Claude (Anthropic API, Haiku to start), using the existing bot
   actions as tools. Every change would need a Confirm/Cancel tap, with a

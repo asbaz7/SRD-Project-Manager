@@ -21,7 +21,6 @@ const paths = {
   upload: 'M12 16V4m0 0-4 4m4-4 4 4M4 16v4h16v-4',
   check: 'M5 12.5 10 17l9-10',
   telegram: 'M21 4 3 11l6 2m12-9-3 16-9-7m12-9L9 13m0 0v6l3-4',
-  whatsapp: 'M4 20l1.3-3.9A8 8 0 1 1 8 18.8L4 20Zm5.5-11.5c-.3 1.6.9 3.6 2.4 4.8 1.3 1 2.7 1.5 3.6.9l.4-1.1-1.7-.8-.8.8c-.9-.4-2-1.4-2.4-2.4l.8-.8-.8-1.7-1.1.4Z',
 };
 
 export function Icon({ name, size = 20, title, className = '' }) {

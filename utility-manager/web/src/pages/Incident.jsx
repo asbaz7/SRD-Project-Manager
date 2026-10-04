@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, ErrorBox, Field, PageHead, Select, Service, Severity } from '../components/ui.jsx';
-import { ShareWhatsApp, incidentMessage } from '../components/share.jsx';
 import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, SEVERITIES, dateTime, duration, fromLocalInput, num, toLocalInput } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
@@ -24,7 +23,7 @@ function IncidentView({ incident: x, reload }) {
   if (editing) return <IncidentForm incident={x} onDone={() => { setEditing(false); reload(); }} />;
   return <>
     <PageHead title={x.title} crumbs={[{ to: '/incidents', label: 'Incidents' }, { label: x.ref }]}
-      actions={<><ShareWhatsApp text={incidentMessage(x)} path={`/incidents/${x.id}`} />{writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>}</>} />
+      actions={writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>} />
     <ErrorBox error={error} />
     <div className="grid-2">
       <Card title="Details">

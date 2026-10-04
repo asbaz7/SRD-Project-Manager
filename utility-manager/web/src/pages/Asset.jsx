@@ -9,7 +9,6 @@ import { AssetForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
-import { ShareWhatsApp, assetMessage } from '../components/share.jsx';
 
 const ago = (iso) => {
   if (!iso) return '';
@@ -33,14 +32,11 @@ export default function Asset() {
     return <>
       <PageHead title={`${a.atoll_code} · ${a.island_name} · ${ASSET_KINDS[a.kind]} ${a.tag}`}
         crumbs={[{ to: `/${a.service}${isEngine ? '/engines' : ''}`, label: isEngine ? 'Engines' : SERVICES[a.service]?.label || 'Assets' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${ASSET_KINDS[a.kind]} ${a.tag}` }]}
-        actions={<>
-          <ShareWhatsApp text={assetMessage(a)} path={`/assets/${a.id}`} />
-          {manage && <>
+        actions={manage && <>
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
           {isEngine && <button className="btn" onClick={() => setModal('event')}>Add maintenance record</button>}
           <button className="btn ghost" onClick={() => setModal('edit')}>Edit details</button>
-          </>}
         </>}>
         <p className="muted">{a.make_model || '—'}{a.rated_capacity ? ` · ${num(a.rated_capacity)} ${a.capacity_unit || ''}` : ''}{a.serial_no ? ` · S/N ${a.serial_no}` : ''}</p>
       </PageHead>

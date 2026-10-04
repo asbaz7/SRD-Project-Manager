@@ -345,7 +345,6 @@ input:disabled, select:disabled { opacity: .7; }
 .btn.ghost { background: transparent; border-color: var(--hairline); }
 .btn.small { padding: 4px 11px; font-size: .84rem; border-radius: 10px; }
 .btn.block { width: 100%; justify-content: center; }
-.share-wa .icon { color: #1f9d55; }
 
 .error, .success, .notice { border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
 .error { color: var(--bad); background: color-mix(in srgb, var(--bad-fill) 12%, var(--glass-strong)); }

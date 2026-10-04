@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Progress, ProjectState, Select, Service } from '../components/ui.jsx';
-import { ShareWhatsApp, projectMessage } from '../components/share.jsx';
 import { PROJECT_STATES, SERVICES, date, dateTime, num } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
@@ -29,7 +28,7 @@ function ProjectView({ project: p, reload }) {
   if (editing) return <ProjectForm project={p} onDone={() => { setEditing(false); reload(); }} />;
   return <>
     <PageHead title={p.title} crumbs={[{ to: '/projects', label: 'Projects' }, { label: p.ref }]}
-      actions={<><ShareWhatsApp text={projectMessage(p)} path={`/projects/${p.id}`} />{can('manager') && writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>}</>} />
+      actions={can('manager') && writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>} />
     <div className="grid-2">
       <Card title="Details">
         <dl className="facts">
