@@ -4,6 +4,7 @@ import { expectedMonth } from '../reportImport.js';
 import { ENGINE_SELECT, describeEngine, mvToday } from './engines.js';
 import { sendCsv } from '../csv.js';
 import { conflict } from '../errors.js';
+import { assetName, esc } from '../telegram.js';
 import {
   Where, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
 } from '../http.js';
@@ -71,7 +72,7 @@ const ASSET_LIST = `
     left join users u on u.id = s.status_by`;
 
 export default async function assetRoutes(app) {
-  const { db } = app;
+  const { db, telegram } = app;
   const manager = { preHandler: requireRole('manager') };
 
   // --- Facilities -----------------------------------------------------------
@@ -248,6 +249,10 @@ export default async function assetRoutes(app) {
     for (const assetId of new Set(body.items.map((i) => i.asset_id))) {
       await assertIslandWrite(db, req.user, { assetId });
     }
+    const before = (await db.query(
+      `select s.id, s.kind, s.tag, s.status, f.service, i.name as island_name, a.code as atoll_code
+         from assets s join facilities f on f.id = s.facility_id join islands i on i.id = f.island_id join atolls a on a.id = i.atoll_id
+        where s.id = any($1::uuid[])`, [body.items.map((i) => i.asset_id)])).rows;
     await db.tx(req.user.id, async (t) => {
       for (const item of body.items) {
         await t.query(
@@ -256,6 +261,16 @@ export default async function assetRoutes(app) {
           [item.asset_id, item.status, item.note, item.running_hours ?? null, reportedAt, req.user.id]);
       }
     });
+    // Telegram: something going out of service, or coming back.
+    const lines = [];
+    for (const item of body.items) {
+      const a = before.find((x) => x.id === item.asset_id);
+      if (!a || a.status === item.status) continue;
+      const name = `${a.atoll_code}. ${a.island_name} ${assetName(a)}`;
+      if (item.status === 'down') lines.push(`🔴 <b>${esc(name)} is down</b>${item.note ? `: ${esc(item.note)}` : ''}`);
+      else if (item.status === 'running' && ['down', 'maintenance'].includes(a.status)) lines.push(`🟢 <b>${esc(name)} is running again</b>${item.note ? `: ${esc(item.note)}` : ''}`);
+    }
+    if (lines.length) await telegram.alert(`${lines.join('\n')}\n<i>${esc(req.user.fullName)}</i>${lines.length === 1 ? ` · ${telegram.link(`/assets/${body.items[0].asset_id}`, 'Open')}` : ''}`);
     return { ok: true, count: body.items.length };
   });
 }

@@ -168,6 +168,37 @@ icon and a label. Each service has its own identity colour.
 Work orders carry a `service` (migration 005): taken from the asset or
 facility, or chosen for island-wide work.
 
+## Telegram bot (added Oct 2026)
+
+`src/telegram.js`, `routes/telegram.js`, migration 006.
+
+- **Linking:** a user gets a one-time code (15 minutes) on their account page
+  and sends it to the bot (`/start CODE`, private chat only). This stores
+  `users.telegram_user_id`.
+- **Commands:** `/status <island>`, `/work [island]`, `/down`, `/up`,
+  `/standby` and `/maintenance <island> <asset> [note]`,
+  `/incident <island> [service] [severity] <text>`,
+  `/update WO-n [status] <text>`, `/done WO-n [note]`, `/summary`,
+  `/alerts on|off`, `/unlink`.
+- **Acting as the user:** every command runs through the normal API as the
+  linked user (`asUser` in app.js: a session that lasts one call), so role,
+  island scope, validation and the audit trail are the same as on the website.
+- **Alerts:** sent to chats where a manager sent `/alerts on`
+  (`telegram_chats`):
+  - high or critical incidents opened or resolved;
+  - assets going down or back to running;
+  - work completed;
+  - a daily summary at 07:45 MVT (Worker cron `45 2 * * *`, `scheduled()` in
+    worker.js).
+
+  A failed delivery never undoes the change.
+- **Webhook:** `POST /api/v1/telegram/webhook` is public but requires the
+  `X-Telegram-Bot-Api-Secret-Token` header. Its value is derived from the
+  token and registered by an administrator with "Connect bot"
+  (`POST /telegram/connect`), which calls `setWebhook` and `setMyCommands`.
+- **Configuration:** `TELEGRAM_BOT_TOKEN` (a Cloudflare secret) and
+  `PUBLIC_URL` (wrangler vars). Without the token the bot is off.
+
 ## 4a. Engine condition (added Oct 2026)
 
 The system's main job is now **engine condition**: what state every genset
@@ -364,20 +395,9 @@ a generic message to the user).
 ## 11. Roadmap (deliberately not in the minimal version)
 
 * Attachments (photos, engine reports) in S3-compatible object storage
-* **WhatsApp** (requested). Step 1 is done: "Share to WhatsApp" buttons on
-  incidents, work, projects, assets, the overview and each section open
-  WhatsApp with a ready-written message and a link. The person picks the
-  group, and no WhatsApp account is connected (`components/share.jsx`).
-  Next, using the official WhatsApp Business Platform (Cloud API):
-  - automatic alerts to individual managers (critical incident, engine not
-    running, report missing after the 10th);
-  - **reporting by WhatsApp**: managers message the system's number
-    (e.g. "Maafushi G3 down, radiator leak"). A webhook on the Worker
-    matches the sender to their user account, logs the status change,
-    incident or work update for their islands, and replies to confirm.
-  This needs a dedicated phone number, a verified Meta Business account and
-  approved message templates. Ordinary group chats can't be read or posted
-  to by the official API, and unofficial group bots break WhatsApp's terms.
+* **WhatsApp:** "Share to WhatsApp" buttons only (`components/share.jsx`).
+  Automatic WhatsApp needs the Meta Business Platform and can't use group
+  chats, so the Telegram bot below was built instead.
 * Email or SMS alerts for critical incidents
 * Offline-capable incident reporting (PWA) for islands with poor connectivity
 * SSO with the corporate identity provider (OIDC)

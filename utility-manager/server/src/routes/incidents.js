@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { assertIslandWrite, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { badRequest } from '../errors.js';
+import { esc } from '../telegram.js';
 import { Where, date, datetime, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
 
 const CATEGORIES = ['outage', 'breakdown', 'maintenance', 'quality', 'safety', 'other'];
@@ -70,7 +71,9 @@ async function checkLinks(db, islandId, { facility_id, asset_id }) {
 }
 
 export default async function incidentRoutes(app) {
-  const { db } = app;
+  const { db, telegram } = app;
+  const SERIOUS = ['high', 'critical'];
+  const SERVICE = { electricity: 'Electricity', water: 'Water', sewerage: 'Sewerage' };
   const manager = { preHandler: requireRole('manager') };
 
   app.get('/incidents', async (req, reply) => {
@@ -117,7 +120,11 @@ export default async function incidentRoutes(app) {
       body.title, body.description, body.started_at, body.resolved_at ?? null, body.customers_affected ?? null,
       body.resolution, resolved ? 'resolved' : 'open', req.user.id, resolved ? req.user.id : null]));
     reply.code(201);
-    return one((await db.query(`${SELECT} where x.id = $1`, [rows[0].id])).rows);
+    const x = one((await db.query(`${SELECT} where x.id = $1`, [rows[0].id])).rows);
+    if (SERIOUS.includes(x.severity) && x.status === 'open') {
+      await telegram.alert(`🚨 <b>${x.severity === 'critical' ? 'Critical' : 'High'}: ${esc(x.title)}</b>\n${esc(x.atoll_code)}. ${esc(x.island_name)} · ${SERVICE[x.service]}\n<i>${esc(req.user.fullName)}</i> · ${telegram.link(`/incidents/${x.id}`, x.ref)}`);
+    }
+    return x;
   });
 
   app.patch('/incidents/:id', manager, async (req) => {
@@ -143,6 +150,9 @@ export default async function incidentRoutes(app) {
     await db.tx(req.user.id, (t) => t.query(`update incidents set ${set.sql} where id = $1`, [incidentId, ...set.values]));
     const row = one((await db.query(`${SELECT} where x.id = $1`, [incidentId])).rows);
     delete row.total_count;
+    if (current.status === 'open' && row.status !== 'open' && SERIOUS.includes(row.severity)) {
+      await telegram.alert(`✅ <b>Resolved: ${esc(row.title)}</b>\n${esc(row.atoll_code)}. ${esc(row.island_name)}${row.resolution ? `: ${esc(row.resolution.slice(0, 200))}` : ''}\n<i>${esc(req.user.fullName)}</i> · ${telegram.link(`/incidents/${row.id}`, row.ref)}`);
+    }
     return row;
   });
 }

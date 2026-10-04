@@ -400,3 +400,6 @@ input:disabled, select:disabled { opacity: .7; }
   .tile-facts { grid-template-columns: repeat(3, 1fr); }
 }
 .btn.danger { color: var(--bad); }
+
+.title-with-icon { display: inline-flex; align-items: center; gap: 8px; }
+.title-with-icon .icon { color: #229ed9; }

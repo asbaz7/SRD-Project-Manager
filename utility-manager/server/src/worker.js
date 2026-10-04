@@ -23,6 +23,8 @@ async function getApp(env) {
     sessionTtlHours: Number(env.SESSION_TTL_HOURS) || 12,
     webDist: '',
     trustProxy: true,
+    telegramToken: env.TELEGRAM_BOT_TOKEN || '',
+    publicUrl: env.PUBLIC_URL || '',
   });
   if (!config.databaseUrl) throw new Error('Configure a HYPERDRIVE binding or a DATABASE_URL secret');
   // Workers can't share a database connection between requests, so each
@@ -39,5 +41,11 @@ export default {
       return Response.json({ error: 'The service is unavailable. Please try again shortly.' }, { status: 503 });
     }
     return app.fetch(request, env, ctx);
+  },
+
+  // Cron trigger (wrangler.jsonc): the morning Telegram summary.
+  async scheduled(event, env, ctx) {
+    app ??= await getApp(env);
+    ctx.waitUntil(app.daily().catch((err) => console.error(JSON.stringify({ level: 'error', msg: 'daily summary failed', err: { message: err.message } }))));
   },
 };

@@ -5,6 +5,7 @@ import { useAuth } from '../auth.jsx';
 import { Card, ErrorBox, Field, PageHead } from '../components/ui.jsx';
 import { ROLES } from '../format.js';
 import { useSubmit } from '../hooks.js';
+import TelegramCard from '../components/TelegramCard.jsx';
 
 export default function Account() {
   const { user, refresh } = useAuth();
@@ -32,6 +33,7 @@ export default function Account() {
         <dt>Role</dt><dd>{ROLES[user.role]}</dd>
       </dl>
     </Card>
+    {!user.mustChangePassword && <TelegramCard />}
     <Card title="Change password">
       <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <ErrorBox error={error} />

@@ -9,7 +9,8 @@
 //   config.rateLimit: { max, timeWindow }     e.g. { max: 10, timeWindow: '1 minute' }
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
-import { SESSION_COOKIE, loadSession } from './auth.js';
+import { SESSION_COOKIE, createSession, destroySession, loadSession } from './auth.js';
+import { createTelegram } from './telegram.js';
 import { parseCookies, serializeCookie } from './cookies.js';
 import { HttpError, badRequest, errorHandler, forbidden, notFound, unauthorized } from './errors.js';
 import { createLogger, silentLogger } from './logger.js';
@@ -25,9 +26,10 @@ import conditionReportRoutes from './routes/conditionReports.js';
 import engineRoutes from './routes/engines.js';
 import workRoutes from './routes/work.js';
 import serviceRoutes from './routes/services.js';
+import telegramRoutes from './routes/telegram.js';
 
 const PREFIX = '/api/v1';
-const PUBLIC_ROUTES = new Set([`${PREFIX}/auth/login`, `${PREFIX}/health`]);
+const PUBLIC_ROUTES = new Set([`${PREFIX}/auth/login`, `${PREFIX}/health`, `${PREFIX}/telegram/webhook`]);
 const PASSWORD_ROUTES = new Set([`${PREFIX}/auth/password`, `${PREFIX}/auth/me`, `${PREFIX}/auth/logout`]);
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const BODY_LIMIT = 5 * 1024 * 1024; // CSV imports
@@ -178,8 +180,28 @@ export async function buildApp({ db, config, logger = true }) {
     return response;
   };
 
+  // Run an API call as a given user, with the same checks as the website
+  // (used by the Telegram bot): a session that lasts only for this call.
+  async function asUser(userId, method, path, body) {
+    const { token } = await createSession(db, userId, { ttlHours: 0.05, ip: null, userAgent: 'telegram bot' });
+    try {
+      const res = await hono.request(PREFIX + path, {
+        method,
+        headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch { json = undefined; }
+      return { status: res.status, body: json };
+    } finally {
+      await destroySession(db, token);
+    }
+  }
+  const telegram = createTelegram({ db, config, log });
+
   // The object route modules register on.
-  const api = { db, config, log };
+  const api = { db, config, log, telegram, asUser };
   for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
     api[method] = (path, options, handler) => {
       if (typeof options === 'function') [handler, options] = [options, {}];
@@ -193,7 +215,7 @@ export async function buildApp({ db, config, logger = true }) {
     return { ok: true };
   });
   for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes,
-    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes]) {
+    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes]) {
     await routes(api);
   }
   // Unknown API paths: still require sign-in, then 404.
@@ -201,6 +223,9 @@ export async function buildApp({ db, config, logger = true }) {
 
   return {
     log,
+    telegram,
+    // Daily Telegram summary (Cloudflare cron trigger, see worker.js).
+    daily: () => telegram.daily(asUser),
     fetch: (request, env, ctx) => hono.fetch(request, env, ctx),
     // Test helper: run a request in-process (used by the API tests).
     async inject({ method = 'GET', url, headers = {}, payload }) {

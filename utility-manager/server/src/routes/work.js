@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { assertIslandWrite, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { badRequest } from '../errors.js';
+import { assetName, esc } from '../telegram.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
 
 export const WORK_KINDS = ['overhaul', 'top_overhaul', 'alternator_service', 'repair', 'service', 'inspection', 'installation', 'other'];
@@ -67,7 +68,11 @@ async function locate(db, b) {
 }
 
 export default async function workRoutes(app) {
-  const { db } = app;
+  const { db, telegram } = app;
+  const completedAlert = async (workId, user, note) => {
+    const w = one((await db.query(`${SELECT} where w.id = $1`, [workId])).rows);
+    await telegram.alert(`✅ <b>Work completed: ${esc(w.title)}</b>\n${esc(w.atoll_code)}. ${esc(w.island_name)}${w.asset_tag ? ` · ${esc(assetName({ kind: w.asset_kind, tag: w.asset_tag }))}` : ''}${note ? `\n${esc(note.slice(0, 200))}` : ''}\n<i>${esc(user.fullName)}</i> · ${telegram.link(`/work/${w.id}`, w.ref)}`);
+  };
   const manager = { preHandler: requireRole('manager') };
 
   app.get('/work', async (req, reply) => {
@@ -134,18 +139,20 @@ export default async function workRoutes(app) {
     await db.tx(req.user.id, (t) => t.query(`update work_orders set ${set.sql} where id = $1`, [workId, ...set.values]));
     const row = one((await db.query(`${SELECT} where w.id = $1`, [workId])).rows);
     delete row.total_count;
+    if (patch.status === 'completed' && current.status !== 'completed') await completedAlert(workId, req.user);
     return row;
   });
 
   app.post('/work/:id/updates', manager, async (req, reply) => {
     const { id: workId } = parse(serialParam, req.params);
     const b = parse(z.object({ body: text(5000), status: z.enum(WORK_STATES).nullish() }), req.body);
-    const current = one((await db.query('select island_id from work_orders where id = $1', [workId])).rows, 'Work');
+    const current = one((await db.query('select island_id, status from work_orders where id = $1', [workId])).rows, 'Work');
     await assertIslandWrite(db, req.user, { islandId: current.island_id });
     const { rows } = await db.tx(req.user.id, (t) => t.query(`
       insert into work_updates (work_id, body, status, created_by) values ($1, $2, $3, $4) returning *`,
     [workId, b.body, b.status ?? null, req.user.id]));
     reply.code(201);
+    if (b.status === 'completed' && current.status !== 'completed') await completedAlert(workId, req.user, b.body);
     return rows[0];
   });
 }

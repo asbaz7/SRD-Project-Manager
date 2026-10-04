@@ -15,8 +15,12 @@
   },
   "vars": {
     "LOG_LEVEL": "info",
-    "APP_TIMEZONE": "Indian/Maldives"
+    "APP_TIMEZONE": "Indian/Maldives",
+    "PUBLIC_URL": "https://srd-utility-manager.abdul-salaam2005.workers.dev"
   },
+  // Secret (not here): TELEGRAM_BOT_TOKEN, set with `npx wrangler secret put`.
+  // Morning Telegram summary at 07:45 Maldives time (02:45 UTC).
+  "triggers": { "crons": ["45 2 * * *"] },
   // Database connection: Hyperdrive config "srd-utility-db", pointing at the
   // srd-utility-manager Supabase project (created with
   // `npx wrangler hyperdrive create srd-utility-db --connection-string=…`).
