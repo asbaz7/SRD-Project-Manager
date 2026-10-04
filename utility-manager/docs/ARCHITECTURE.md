@@ -398,6 +398,11 @@ a generic message to the user).
 * **WhatsApp:** "Share to WhatsApp" buttons only (`components/share.jsx`).
   Automatic WhatsApp needs the Meta Business Platform and can't use group
   chats, so the Telegram bot below was built instead.
+* **Telegram as an agent** (discussed, deferred): plain-language messages
+  handled by Claude (Anthropic API, Haiku to start), using the existing bot
+  actions as tools. Every change would need a Confirm/Cancel tap, with a
+  short memory per chat and replies in groups only when mentioned. Needs an
+  ANTHROPIC_API_KEY secret.
 * Email or SMS alerts for critical incidents
 * Offline-capable incident reporting (PWA) for islands with poor connectivity
 * SSO with the corporate identity provider (OIDC)
