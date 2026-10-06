@@ -43,21 +43,28 @@ export default function Asset() {
 
       {isEngine && <div className="panels">
         <Card title="Condition">
-          <div className="big"><Condition value={c?.condition} text={c?.condition_source === 'status' ? c.condition_note : c?.status_text} /></div>
-          {c?.condition_source === 'status' ? <>
-            <p className="small">{c.condition_note || (a.status === 'maintenance' ? 'In maintenance' : 'Set down')}</p>
-            <p className="muted small">Status updated {dateTime(c.condition_at)}{a.status_by_name && ` by ${a.status_by_name}`}, after the {month(c.report_month) || 'last'} report
-              {c.report_condition && <> (which said <Condition value={c.report_condition} text={c.status_text} />{c.fault && `: ${c.fault}`})</>}.</p>
-          </> : <>
-            <p className="small">{c?.status_text || ''}</p>
-            {c?.fault && <p className="pre"><strong>Fault:</strong> {c.fault}</p>}
-          </>}
+          {/* One current state, then labelled facts: why, where it came from,
+              and what the last report said when that differs. */}
+          <div className="big"><Condition value={c?.condition} /></div>
+          {(() => {
+            const fromStatus = c?.condition_source === 'status';
+            const why = fromStatus ? c.condition_note : c?.fault;
+            return <dl className="facts condition-facts">
+              {why && <><dt>{fromStatus && a.status === 'running' ? 'Note' : 'Fault'}</dt><dd>{why}</dd></>}
+              {fromStatus && <>
+                <dt>Source</dt><dd>Status update · {dateTime(c.condition_at)}{a.status_by_name && ` · ${a.status_by_name}`}</dd>
+                {c.report_month && <><dt>Last report</dt><dd className="muted">{month(c.report_month)}: <Condition value={c.report_condition} text={c.status_text} />{c.fault && ` · ${c.fault}`}</dd></>}
+              </>}
+              {!fromStatus && c?.report_month && <>
+                <dt>Source</dt><dd>{month(c.report_month)} report{c.uploaded_by_name && ` · uploaded by ${c.uploaded_by_name}`}</dd>
+                {c.status_text && <><dt>Report says</dt><dd className="muted">{c.status_text}</dd></>}
+              </>}
+              {!c && <><dt>Source</dt><dd className="muted">No condition report uploaded yet</dd></>}
+            </dl>;
+          })()}
           <p className={`small ${e.report_stale ? 'bad' : 'muted'}`}>
-            {c?.condition_source === 'status' ? 'The next monthly report will replace this.'
-              : c?.report_month ? <>From the {month(c.report_month)} report{c.uploaded_by_name && ` (uploaded by ${c.uploaded_by_name})`}</>
-              : 'No condition report uploaded yet.'}
-            {e.report_stale && ' A newer report is due.'}
-            {' '}<Link to="/electricity/reports">Upload report</Link>
+            {e.report_stale ? '⚠ A newer monthly report is due. ' : c?.condition_source === 'status' ? 'The next monthly report will update this. ' : ''}
+            <Link to="/electricity/reports">Upload report</Link>
           </p>
         </Card>
 

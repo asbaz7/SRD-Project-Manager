@@ -402,3 +402,6 @@ input:disabled, select:disabled { opacity: .7; }
 
 .title-with-icon { display: inline-flex; align-items: center; gap: 8px; }
 .title-with-icon .icon { color: #229ed9; }
+
+.condition-facts { margin: 10px 0 12px; }
+.condition-facts dd { overflow-wrap: anywhere; }
