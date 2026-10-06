@@ -16,7 +16,7 @@ export default function WorkItem() {
 function WorkView({ work: w, reload }) {
   const { technical } = useAuth();
   const [editing, setEditing] = useState(false);
-  // The server decides: technical managers of the island run the work;
+  // The server decides: technical managers run the work;
   // people added to it may comment.
   const writable = w.can_run;
   const [u, setU] = useState({ body: '', status: '' });
@@ -92,7 +92,7 @@ function Commenters({ work: w, reload }) {
     .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}${p.technical ? '' : ' (non-technical)'}`]);
   return <Card title="People who can comment">
     <ErrorBox error={add.error || remove.error} />
-    {w.commenters.length === 0 ? <p className="muted small">Only technical staff on this island can post here. Add people, such as non-technical staff, who should be able to comment.</p> :
+    {w.commenters.length === 0 ? <p className="muted small">Only technical managers can post here. Add people, such as non-technical staff, who should be able to comment.</p> :
       <ul className="people">{w.commenters.map((c) => <li key={c.user_id}>
         <span><strong>{c.full_name}</strong>{c.designation && <span className="muted"> · {c.designation}</span>}<br />
           <small className="muted">Added {date(c.added_at)}{c.added_by_name && ` by ${c.added_by_name}`}</small></span>

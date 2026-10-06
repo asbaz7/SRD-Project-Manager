@@ -134,7 +134,7 @@ function UploadItem({ item, onIsland, onImport }) {
         <Select value="" onChange={choose} placeholder="Choose island…"
           options={[...(p.candidates || []), ...(p.islands || []).filter((i) => !(p.candidates || []).some((c) => c.id === i.id))].map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} />
       </div>}
-      {p?.island && p.can_write === false && <div className="error">You can only upload reports for islands assigned to you.</div>}
+      {p?.island && p.can_write === false && <div className="error">You don't have permission to upload condition reports.</div>}
       {p?.island && <>
         {p.warnings?.map((w) => <div key={w} className="notice small">{w}</div>)}
         <p className="muted small">

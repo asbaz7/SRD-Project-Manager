@@ -20,7 +20,9 @@ const create = z.object({
   // Technical staff see engines, condition reports, assets and plants.
   technical: z.boolean().default(true),
   password: z.string().max(200),
-  scopes: z.array(scope).max(200).default([]),
+  // Head office staff cover the whole region; island-level scopes remain
+  // supported by the API but are not offered in the app.
+  scopes: z.array(scope).max(200).default([{ region: true }]),
 });
 const patch = create.omit({ email: true, password: true }).partial().extend({
   active: z.boolean().optional(),

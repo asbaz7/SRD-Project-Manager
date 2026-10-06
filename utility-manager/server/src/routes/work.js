@@ -175,7 +175,7 @@ export default async function workRoutes(app) {
     const b = parse(z.object({ body: text(5000), status: z.enum(WORK_STATES).nullish() }), req.body);
     const current = await workAccess(req.user, workId);
     if (!current.run) {
-      if (!current.commenter) throw forbidden('Only technical staff on this island, or people added to this work, can post here');
+      if (!current.commenter) throw forbidden('Only technical managers, or people added to this work, can post here');
       if (b.status) throw forbidden('You can comment on this work but not change its status');
     }
     const { rows } = await db.tx(req.user.id, (t) => t.query(`

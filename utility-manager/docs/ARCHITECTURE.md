@@ -168,6 +168,16 @@ icon and a label. Each service has its own identity colour.
 Work orders carry a `service` (migration 005): taken from the asset or
 facility, or chosen for island-wide work.
 
+## Users: head office only (decided Oct 2026)
+
+The system is used only by department staff at head office. No island
+managers or island staff use it. Every user covers the whole region:
+- the user form no longer offers island or atoll assignments;
+- new users get the whole-region scope by default.
+
+Island scopes stay in the database and API (`user_scopes`,
+`assertIslandWrite`) and do no harm, but nothing in the app sets them.
+
 ## Access: technical and non-technical staff (Oct 2026)
 
 There are three settings per user:

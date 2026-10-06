@@ -50,7 +50,7 @@ const HELP = `<b>SRD Utility Bot</b>
 /work: ongoing work (add an island to narrow it down)
 /summary: today's summary
 
-<b>Report</b> (managers, for their own islands)
+<b>Report</b> (managers)
 /down Maafushi G3 radiator leak
 /up Maafushi G3
 /standby or /maintenance work the same way
