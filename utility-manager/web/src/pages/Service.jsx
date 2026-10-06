@@ -23,7 +23,12 @@ const SUBTITLE = {
 
 export default function Service({ svc }) {
   const { tab = '' } = useParams();
-  const { can } = useAuth();
+  const { can, technical } = useAuth();
+  if (!technical) return <>
+    <PageHead title={SERVICES[svc].label} icon={svc} tone={svc} />
+    <Card><p>This section holds technical information (engines, condition reports, assets and plants) and is available to technical staff.</p>
+      <p className="muted small">You can follow <Link to={`/work?service=${svc}`}>{SERVICES[svc].label.toLowerCase()} work</Link>, <Link to={`/incidents?service=${svc}`}>incidents</Link> and <Link to={`/projects?service=${svc}`}>projects</Link>.</p></Card>
+  </>;
   return <>
     <PageHead title={SERVICES[svc].label} subtitle={SUBTITLE[svc]} icon={svc} tone={svc}
       actions={can('manager') && <>

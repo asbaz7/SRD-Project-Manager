@@ -270,7 +270,7 @@ export default async function assetRoutes(app) {
       if (item.status === 'down') lines.push(`🔴 <b>${esc(name)} is down</b>${item.note ? `: ${esc(item.note)}` : ''}`);
       else if (item.status === 'running' && ['down', 'maintenance'].includes(a.status)) lines.push(`🟢 <b>${esc(name)} is running again</b>${item.note ? `: ${esc(item.note)}` : ''}`);
     }
-    if (lines.length) await telegram.alert(`${lines.join('\n')}\n<i>${esc(req.user.fullName)}</i>${lines.length === 1 ? ` · ${telegram.link(`/assets/${body.items[0].asset_id}`, 'Open')}` : ''}`);
+    if (lines.length) await telegram.alert(`${lines.join('\n')}\n<i>${esc(req.user.fullName)}</i>${lines.length === 1 ? ` · ${telegram.link(`/assets/${body.items[0].asset_id}`, 'Open')}` : ''}`, { technical: true });
     return { ok: true, count: body.items.length };
   });
 }

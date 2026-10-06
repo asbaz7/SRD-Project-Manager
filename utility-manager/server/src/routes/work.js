@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { assertIslandWrite, requireRole } from '../auth.js';
+import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
-import { badRequest } from '../errors.js';
+import { badRequest, forbidden } from '../errors.js';
 import { assetName, esc } from '../telegram.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
 
@@ -75,6 +75,23 @@ export default async function workRoutes(app) {
   };
   const manager = { preHandler: requireRole('manager') };
 
+  // Running a work item (create, edit, change status, post updates) is for
+  // technical managers of its island and administrators. Others may only
+  // comment, and only when added to it (work_commenters).
+  const canRun = (user, island) => user.role === 'admin' || (user.technical && canWriteIsland(user, island));
+  async function workAccess(user, workId) {
+    const { rows } = await db.query(`
+      select w.id, w.island_id, w.status, w.created_by, i.atoll_id,
+             exists (select 1 from work_commenters c where c.work_id = w.id and c.user_id = $2) as commenter
+        from work_orders w join islands i on i.id = w.island_id where w.id = $1`, [workId, user.id]);
+    const w = one(rows, 'Work');
+    const run = canRun(user, { id: w.island_id, atoll_id: w.atoll_id });
+    return { ...w, run, comment: run || w.commenter, share: run || (w.created_by === user.id && user.technical) };
+  }
+  const technicalOnly = (user) => {
+    if (!user.technical) throw forbidden('Work is started and run by technical staff');
+  };
+
   app.get('/work', async (req, reply) => {
     const q = parse(listQuery, req.query);
     const w = new Where()
@@ -103,6 +120,14 @@ export default async function workRoutes(app) {
     const { id: workId } = parse(serialParam, req.params);
     const work = one((await db.query(`${SELECT} where w.id = $1`, [workId])).rows, 'Work');
     delete work.total_count;
+    const access = await workAccess(req.user, workId);
+    work.can_run = access.run;
+    work.can_comment = access.comment;
+    work.can_share = access.share;
+    work.commenters = (await db.query(`
+      select c.user_id, u.full_name, u.designation, (u.technical or u.role = 'admin') as technical, c.added_at, a.full_name as added_by_name
+        from work_commenters c join users u on u.id = c.user_id left join users a on a.id = c.added_by
+       where c.work_id = $1 order by u.full_name`, [workId])).rows;
     work.updates = (await db.query(`
       select u.*, us.full_name as created_by_name from work_updates u left join users us on us.id = u.created_by
        where u.work_id = $1 order by u.created_at desc`, [workId])).rows;
@@ -110,6 +135,7 @@ export default async function workRoutes(app) {
   });
 
   app.post('/work', manager, async (req, reply) => {
+    technicalOnly(req.user);
     const b = parse(body, req.body);
     const where = await locate(db, b);
     await assertIslandWrite(db, req.user, { islandId: where.island_id });
@@ -132,6 +158,7 @@ export default async function workRoutes(app) {
     const patch = parse(body.omit({ island_id: true, asset_id: true, facility_id: true, service: true }).partial(), req.body);
     for (const k of Object.keys(patch)) if (!(k in (req.body || {}))) delete patch[k];
     const current = one((await db.query('select island_id, status, completed_on from work_orders where id = $1', [workId])).rows, 'Work');
+    technicalOnly(req.user);
     await assertIslandWrite(db, req.user, { islandId: current.island_id });
     if (patch.status === 'completed' && !patch.completed_on) patch.completed_on = current.completed_on || new Date().toISOString().slice(0, 10);
     if (patch.status && !['completed', 'cancelled'].includes(patch.status)) patch.completed_on = null;
@@ -143,16 +170,40 @@ export default async function workRoutes(app) {
     return row;
   });
 
-  app.post('/work/:id/updates', manager, async (req, reply) => {
+  app.post('/work/:id/updates', async (req, reply) => {
     const { id: workId } = parse(serialParam, req.params);
     const b = parse(z.object({ body: text(5000), status: z.enum(WORK_STATES).nullish() }), req.body);
-    const current = one((await db.query('select island_id, status from work_orders where id = $1', [workId])).rows, 'Work');
-    await assertIslandWrite(db, req.user, { islandId: current.island_id });
+    const current = await workAccess(req.user, workId);
+    if (!current.run) {
+      if (!current.commenter) throw forbidden('Only technical staff on this island, or people added to this work, can post here');
+      if (b.status) throw forbidden('You can comment on this work but not change its status');
+    }
     const { rows } = await db.tx(req.user.id, (t) => t.query(`
       insert into work_updates (work_id, body, status, created_by) values ($1, $2, $3, $4) returning *`,
     [workId, b.body, b.status ?? null, req.user.id]));
     reply.code(201);
     if (b.status === 'completed' && current.status !== 'completed') await completedAlert(workId, req.user, b.body);
     return rows[0];
+  });
+
+  // People (usually non-technical staff) allowed to comment on one work item.
+  app.post('/work/:id/commenters', async (req, reply) => {
+    const { id: workId } = parse(serialParam, req.params);
+    const { user_id: userId } = parse(z.object({ user_id: id }), req.body);
+    const access = await workAccess(req.user, workId);
+    if (!access.share) throw forbidden('Only the technical staff running this work can add people to it');
+    one((await db.query('select id from users where id = $1 and active', [userId])).rows, 'User');
+    await db.tx(req.user.id, (t) => t.query(
+      'insert into work_commenters (work_id, user_id, added_by) values ($1, $2, $3) on conflict do nothing', [workId, userId, req.user.id]));
+    reply.code(201);
+    return { ok: true };
+  });
+
+  app.delete('/work/:id/commenters/:userId', async (req) => {
+    const { id: workId, userId } = parse(z.object({ id: z.coerce.number().int().positive(), userId: id }), req.params);
+    const access = await workAccess(req.user, workId);
+    if (!access.share) throw forbidden('Only the technical staff running this work can remove people from it');
+    await db.tx(req.user.id, (t) => t.query('delete from work_commenters where work_id = $1 and user_id = $2', [workId, userId]));
+    return { ok: true };
   });
 }

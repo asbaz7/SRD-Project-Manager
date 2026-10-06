@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { id, parse, service } from '../http.js';
 import { expectedMonth, reportState } from '../reportImport.js';
 import { mvToday } from './engines.js';
+import { projectVisible } from './projects.js';
 
 export default async function serviceRoutes(app) {
   const { db, config } = app;
@@ -15,6 +16,7 @@ export default async function serviceRoutes(app) {
     const today = await mvToday(db, config.timezone);
     const expected = expectedMonth(today);
     const scope = '($2::uuid is null or i.atoll_id = $2)';
+    const vis = projectVisible(req.user, 3);
 
     const [summary, capacity, facilities, attention, work, incidents, projects, engines] = await Promise.all([
       db.query(`
@@ -91,8 +93,9 @@ export default async function serviceRoutes(app) {
                (p.target_date < current_date) as overdue, i.id as island_id, i.name as island_name, a.code as atoll_code
           from projects p left join islands i on i.id = p.island_id left join atolls a on a.id = i.atoll_id
          where p.service = $1 and p.status in ('planned', 'ongoing', 'on_hold') and ($2::uuid is null or i.atoll_id = $2)
+           and ${vis.sql}
          order by (p.target_date < current_date) desc nulls last, p.target_date nulls last
-         limit 20`, [svc, atoll]),
+         limit 20`, [svc, atoll, ...vis.values]),
       svc === 'electricity' ? db.query(`
         select count(*) as total,
                count(*) filter (where c.condition = 'ok') as ok,

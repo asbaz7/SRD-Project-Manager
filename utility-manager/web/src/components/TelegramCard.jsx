@@ -18,7 +18,7 @@ export default function TelegramCard() {
   const unlink = useSubmit(async () => { await api('/telegram/link', { method: 'DELETE' }); setCode(null); state.reload(); });
   const connect = useSubmit(async () => { await api('/telegram/connect', { method: 'POST' }); state.reload(); });
   const testAlert = useSubmit(async () => { await api('/telegram/test', { method: 'POST' }); });
-  const setAlerts = useSubmit(async (chatId, alerts) => { await api(`/telegram/chats/${chatId}`, { method: 'PATCH', body: { alerts } }); state.reload(); });
+  const setAlerts = useSubmit(async (chatId, change) => { await api(`/telegram/chats/${chatId}`, { method: 'PATCH', body: change }); state.reload(); });
   const remove = useSubmit(async (chatId) => { await api(`/telegram/chats/${chatId}`, { method: 'DELETE' }); state.reload(); });
 
   if (!t) return null;
@@ -54,10 +54,11 @@ export default function TelegramCard() {
       </div>
       <h4>Chats receiving alerts</h4>
       {t.chats?.length ? <table>
-        <thead><tr><th>Chat</th><th>Alerts</th><th className="hide-sm">Added</th><th /></tr></thead>
+        <thead><tr><th>Chat</th><th>Alerts</th><th>Technical alerts</th><th className="hide-sm">Added</th><th /></tr></thead>
         <tbody>{t.chats.map((c) => <tr key={c.chat_id}>
           <td>{c.title || c.chat_id}</td>
-          <td><label className="check"><input type="checkbox" checked={c.alerts} onChange={(e) => setAlerts.submit(c.chat_id, e.target.checked)} /> {c.alerts ? 'On' : 'Off'}</label></td>
+          <td><label className="check"><input type="checkbox" checked={c.alerts} onChange={(e) => setAlerts.submit(c.chat_id, { alerts: e.target.checked })} /> {c.alerts ? 'On' : 'Off'}</label></td>
+          <td><label className="check" title="Gensets and assets going down or back up, and engine figures in the morning summary"><input type="checkbox" checked={c.technical} onChange={(e) => setAlerts.submit(c.chat_id, { technical: e.target.checked })} /> {c.technical ? 'Included' : 'Not included'}</label></td>
           <td className="hide-sm small muted">{dateTime(c.created_at)}{c.added_by_name && ` · ${c.added_by_name}`}</td>
           <td><button className="btn ghost small" onClick={() => remove.submit(c.chat_id)}>Remove</button></td>
         </tr>)}</tbody>

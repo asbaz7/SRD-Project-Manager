@@ -99,10 +99,11 @@ export function createTelegram({ db, config, log }) {
 
   // Post to every chat that has alerts on. Never throws: an alert that can't
   // be delivered must not undo the change that caused it.
-  async function alert(text) {
+  // technical: only chats set to receive technical alerts (gensets, assets).
+  async function alert(text, { technical = false } = {}) {
     if (!token) return;
     try {
-      const { rows } = await db.query('select chat_id from telegram_chats where alerts');
+      const { rows } = await db.query(`select chat_id from telegram_chats where alerts${technical ? ' and technical' : ''}`);
       await Promise.all(rows.map(async ({ chat_id: chatId }) => {
         try {
           await send(chatId, text);
@@ -172,7 +173,7 @@ export function createTelegram({ db, config, log }) {
   }
 
   // ---- Daily summary ------------------------------------------------------
-  async function summaryText(asUser) {
+  async function summaryText(asUser, { technical = true } = {}) {
     const { rows } = await db.query(`select id from users where role = 'admin' and active order by created_at limit 1`);
     if (!rows[0]) return null;
     const res = await asUser(rows[0].id, 'GET', '/dashboard');
@@ -182,11 +183,20 @@ export function createTelegram({ db, config, log }) {
     const e = d.engines || {};
     const day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: config.timezone });
     const mw = (kw) => (kw >= 10000 ? `${(kw / 1000).toFixed(1)} MW` : `${Math.round(kw)} kW`);
-    const lines = [
-      `📋 <b>SRD summary: ${esc(day)}</b>`,
+    const lines = [`📋 <b>SRD summary: ${esc(day)}</b>`];
+    if (!technical) {
+      lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open incidents`);
+      const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
+      if (inc.length) lines.push('', '<b>Serious incidents</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
+      const overdue = d.work.filter((w) => w.overdue).slice(0, 5);
+      if (overdue.length) lines.push('', '<b>Overdue work</b>', ...overdue.map((w) => `• ${esc(w.ref)} ${esc(w.title)} (${esc(w.atoll_code)}. ${esc(w.island_name)})`));
+      lines.push('', link('/', 'Open the dashboard'));
+      return lines.join('\n');
+    }
+    lines.push(
       `⚡ ${el.running}/${el.assets} gensets running · ${mw(el.available_kw)} available`,
       `   ${e.not_running ?? 0} not running · ${e.major_fault ?? 0} major fault · ${e.minor_fault ?? 0} minor`,
-    ];
+    );
     for (const s of ['water', 'sewerage']) {
       const v = d.services[s];
       if (v.assets) lines.push(`${SERVICE_ICON[s]} ${v.running}/${v.assets} ${SERVICE_LABEL[s].toLowerCase()} assets running${v.down ? ` · ${v.down} out of service` : ''}`);
@@ -206,16 +216,21 @@ export function createTelegram({ db, config, log }) {
     return lines.join('\n');
   }
 
+  // Technical chats get the full summary; others get work and incidents only.
   async function daily(asUser) {
     if (!token) return;
-    const text = await summaryText(asUser);
-    if (text) await alert(text);
+    const { rows: chats } = await db.query('select chat_id, technical from telegram_chats where alerts');
+    if (!chats.length) return;
+    const texts = {};
+    for (const technical of new Set(chats.map((c) => c.technical))) texts[technical] = await summaryText(asUser, { technical });
+    await Promise.all(chats.map((c) => texts[c.technical] && send(c.chat_id, texts[c.technical]).catch((err) =>
+      log.warn({ err: { message: err.message }, chatId: c.chat_id }, 'telegram summary failed'))));
   }
 
   // ---- Commands -----------------------------------------------------------
   async function linkedUser(telegramId) {
     const { rows } = await db.query(
-      'select id, full_name, role from users where telegram_user_id = $1 and active', [telegramId]);
+      "select id, full_name, role, (technical or role = 'admin') as technical from users where telegram_user_id = $1 and active", [telegramId]);
     return rows[0] || null;
   }
 
@@ -373,13 +388,14 @@ export function createTelegram({ db, config, log }) {
     if (user.role === 'viewer') return 'Only managers and administrators can turn alerts on or off.';
     const on = !/^(off|stop|no)$/i.test(words[0] || 'on');
     const title = chat.title || [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || null;
-    await db.tx(user.id, (t) => t.query(
-      `insert into telegram_chats (chat_id, title, alerts, added_by) values ($1, $2, $3, $4)
-       on conflict (chat_id) do update set title = excluded.title, alerts = excluded.alerts`,
-      [chat.id, title, on, user.id]));
-    return on
-      ? '🔔 Alerts are on for this chat: serious incidents, assets going down or back up, completed work, and a summary every morning. Send <code>/alerts off</code> to stop.'
-      : '🔕 Alerts are off for this chat.';
+    const { rows } = await db.tx(user.id, (t) => t.query(
+      `insert into telegram_chats (chat_id, title, alerts, added_by, technical) values ($1, $2, $3, $4, $5)
+       on conflict (chat_id) do update set title = excluded.title, alerts = excluded.alerts returning technical`,
+      [chat.id, title, on, user.id, user.technical]));
+    if (!on) return '🔕 Alerts are off for this chat.';
+    return rows[0].technical
+      ? '🔔 Alerts are on for this chat: serious incidents, gensets and assets going down or back up, completed work, and a summary every morning. Send <code>/alerts off</code> to stop.'
+      : '🔔 Alerts are on for this chat: serious incidents, completed work, and a summary of work and incidents every morning. Send <code>/alerts off</code> to stop.';
   }
 
   async function cmdLink(code, from, chat) {
@@ -421,6 +437,8 @@ export function createTelegram({ db, config, log }) {
     const user = await linkedUser(msg.from.id);
     if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
 
+    const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance']);
+    if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /incident, /summary, and comment on work you have been added to with /update.');
     try {
       let text;
       if (cmd === 'status') text = await cmdStatus(user, words, asUser);
@@ -429,7 +447,7 @@ export function createTelegram({ db, config, log }) {
       else if (cmd === 'update') text = await cmdWorkUpdate(user, words, asUser);
       else if (cmd === 'done') text = await cmdWorkUpdate(user, words, asUser, 'completed');
       else if (cmd === 'work') text = await cmdWork(user, words, asUser);
-      else if (cmd === 'summary') text = await summaryText(asUser);
+      else if (cmd === 'summary') text = await summaryText(asUser, { technical: user.technical });
       else if (cmd === 'alerts') text = await cmdAlerts(user, words, chat);
       else if (cmd === 'unlink') {
         await db.tx(user.id, (t) => t.query('update users set telegram_user_id = null, telegram_name = null where id = $1', [user.id]));

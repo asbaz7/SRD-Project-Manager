@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { id, parse } from '../http.js';
 import { expectedMonth, reportState } from '../reportImport.js';
 import { mvToday } from './engines.js';
+import { projectVisible } from './projects.js';
 
 // Everything the overview page needs in one call. Optional atoll filter.
 export default async function dashboardRoutes(app) {
@@ -11,11 +12,15 @@ export default async function dashboardRoutes(app) {
     const q = parse(z.object({ atoll_id: id.optional() }), req.query);
     const atoll = q.atoll_id ?? null;
 
+    const technical = req.user.technical;
+    const vis = projectVisible(req.user, 2);
+    const skip = Promise.resolve({ rows: [] });
     const today = await mvToday(db, config.timezone);
     const expected = expectedMonth(today);
     const [services, incidents, projects, down, openIncidents, activeProjects, fuel, engines, reports, work, open] = await Promise.all([
-      // Facility and asset counts per service.
-      db.query(`
+      // Facility and asset counts per service (technical staff only, as are
+      // assets down, fuel storage, engine condition and reports below).
+      !technical ? skip : db.query(`
         select f.service::text as service,
                count(distinct f.id) as facilities,
                count(distinct f.island_id) as islands,
@@ -41,9 +46,9 @@ export default async function dashboardRoutes(app) {
                count(*) filter (where p.status = 'ongoing') as ongoing,
                count(*) filter (where p.status in ('planned', 'ongoing', 'on_hold') and p.target_date < current_date) as overdue
           from projects p left join islands i on i.id = p.island_id
-         where ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
+         where ($1::uuid is null or i.atoll_id = $1) and ${vis.sql}`, [atoll, ...vis.values]),
       // Assets out of service, longest first.
-      db.query(`
+      !technical ? skip : db.query(`
         select s.id, s.kind, s.tag, s.make_model, s.status, s.status_note, s.status_at, s.rated_capacity, s.capacity_unit,
                f.service, f.name as facility_name, i.id as island_id, i.name as island_name, a.code as atoll_code
           from assets s
@@ -67,17 +72,17 @@ export default async function dashboardRoutes(app) {
           from projects p
           left join islands i on i.id = p.island_id
           left join atolls a on a.id = i.atoll_id
-         where p.status in ('planned', 'ongoing', 'on_hold') and ($1::uuid is null or i.atoll_id = $1)
+         where p.status in ('planned', 'ongoing', 'on_hold') and ($1::uuid is null or i.atoll_id = $1) and ${vis.sql}
          order by (p.target_date < current_date) desc nulls last, p.target_date nulls last, p.id
-         limit 20`, [atoll]),
-      db.query(`
+         limit 20`, [atoll, ...vis.values]),
+      !technical ? skip : db.query(`
         select coalesce(sum(f.fuel_capacity_l), 0) as capacity_l,
                count(*) filter (where f.fuel_capacity_l is null) as not_set
           from facilities f join islands i on i.id = f.island_id and i.active
          where f.active and f.service = 'electricity' and f.kind = 'powerhouse'
            and ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
       // Engine condition from the latest reports.
-      db.query(`
+      !technical ? skip : db.query(`
         select count(*) as total,
                count(*) filter (where c.condition = 'ok') as ok,
                count(*) filter (where c.condition = 'minor_fault') as minor_fault,
@@ -93,7 +98,7 @@ export default async function dashboardRoutes(app) {
           left join engine_current c on c.asset_id = s.id
          where s.kind = 'genset' and s.active and ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
       // Powerhouses whose report for the expected month has not come in.
-      db.query(`
+      !technical ? skip : db.query(`
         select f.id as facility_id, i.id as island_id, i.name as island_name, a.code as atoll_code, r.report_month
           from facilities f
           join islands i on i.id = f.island_id and i.active
@@ -132,6 +137,7 @@ export default async function dashboardRoutes(app) {
     for (const row of open.rows) Object.assign(byService[row.service], { open_work: row.work, open_incidents: row.incidents });
 
     return {
+      technical,
       services: byService,
       incidents: {
         open: incidents.rows.reduce((n, r) => n + r.n, 0),
@@ -139,13 +145,13 @@ export default async function dashboardRoutes(app) {
         list: openIncidents.rows,
       },
       projects: { ...projects.rows[0], list: activeProjects.rows },
-      fuel_storage: fuel.rows[0],
-      engines: engines.rows[0],
-      reports: {
+      fuel_storage: technical ? fuel.rows[0] : null,
+      engines: technical ? engines.rows[0] : null,
+      reports: technical ? {
         expected_month: expected,
         total: reports.rows.length,
         missing: reports.rows.filter((r) => ['missing', 'never'].includes(reportState(r.report_month, expected))),
-      },
+      } : null,
       work: work.rows,
       assets_down: down.rows,
     };

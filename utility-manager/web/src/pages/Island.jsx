@@ -20,15 +20,17 @@ export default function Island() {
         crumbs={[{ to: '/islands', label: 'Islands' }, { to: `/islands?atoll_id=${island.atoll_id}`, label: `${island.atoll_code} · ${island.atoll_name}` }, { label: island.name }]}
         actions={<>
           {island.can_edit && <Link className="btn" to={`/incidents/new?island_id=${island.id}`}>Report incident</Link>}
-          {island.can_edit && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
-          {manage && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
+          {island.can_edit && island.technical && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
+          {manage && island.technical && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
         </>} />
       <div className="stats">
-        <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} />
-        <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
-        <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
-        <Stat label="Fuel capacity" value={island.fuel_capacity_l ? withUnit(island.fuel_capacity_l, 'L') : 'Not set'}
-          sub={!island.fuel_capacity_l && manage ? 'Set it with Edit on the powerhouse' : ''} />
+        {island.technical && <>
+          <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} />
+          <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
+          <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
+          <Stat label="Fuel capacity" value={island.fuel_capacity_l ? withUnit(island.fuel_capacity_l, 'L') : 'Not set'}
+            sub={!island.fuel_capacity_l && manage ? 'Set it with Edit on the powerhouse' : ''} />
+        </>}
         <Stat label="Open incidents" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/incidents?island_id=${island.id}&status=open`} />
         <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
@@ -42,7 +44,7 @@ export default function Island() {
         </tr>)}</tbody></table>
       </Card>}
 
-      {island.facilities.length === 0 && <Empty>No facilities recorded for this island yet.</Empty>}
+      {island.technical && island.facilities.length === 0 && <Empty>No facilities recorded for this island yet.</Empty>}
       {island.facilities.map((f) => (
         <Card key={f.id} className={f.active ? '' : 'inactive'}
           title={<><Service value={f.service} short /> {f.name} <span className="muted small">· {FACILITY_KINDS[f.kind]}{!f.active && ' · not in use'}</span></>}

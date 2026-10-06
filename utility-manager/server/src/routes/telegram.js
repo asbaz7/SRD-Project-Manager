@@ -28,7 +28,7 @@ export default async function telegramRoutes(app) {
     if (telegram.enabled) out.bot = (await telegram.botInfo().catch(() => null))?.username ?? null;
     if (req.user.role === 'admin') {
       out.status = await telegram.status();
-      out.chats = (await db.query(`select c.chat_id::text, c.title, c.alerts, c.created_at, u.full_name as added_by_name
+      out.chats = (await db.query(`select c.chat_id::text, c.title, c.alerts, c.technical, c.created_at, u.full_name as added_by_name
         from telegram_chats c left join users u on u.id = c.added_by order by c.created_at`)).rows;
     }
     return out;
@@ -60,8 +60,10 @@ export default async function telegramRoutes(app) {
 
   app.patch('/telegram/chats/:chatId', admin, async (req) => {
     const { chatId } = parse(z.object({ chatId: z.string().regex(/^-?\d{1,20}$/) }), req.params);
-    const { alerts } = parse(z.object({ alerts: z.boolean() }), req.body);
-    await db.tx(req.user.id, (t) => t.query('update telegram_chats set alerts = $2 where chat_id = $1', [chatId, alerts]));
+    const b = parse(z.object({ alerts: z.boolean().optional(), technical: z.boolean().optional() }), req.body);
+    await db.tx(req.user.id, (t) => t.query(
+      'update telegram_chats set alerts = coalesce($2, alerts), technical = coalesce($3, technical) where chat_id = $1',
+      [chatId, b.alerts ?? null, b.technical ?? null]));
     return { ok: true };
   });
 

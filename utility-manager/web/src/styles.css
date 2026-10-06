@@ -405,3 +405,11 @@ input:disabled, select:disabled { opacity: .7; }
 
 .condition-facts { margin: 10px 0 12px; }
 .condition-facts dd { overflow-wrap: anywhere; }
+
+.people { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.people li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; background: var(--glass-hover); }
+.inline-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.inline-add select { flex: 1 1 220px; }
+.sharing { display: grid; gap: 8px; }
+.member-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.member-row select:first-child { flex: 1 1 220px; }

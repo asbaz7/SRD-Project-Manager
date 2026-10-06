@@ -17,6 +17,8 @@ const create = z.object({
   designation: optText(200),
   phone: optText(50),
   role,
+  // Technical staff see engines, condition reports, assets and plants.
+  technical: z.boolean().default(true),
   password: z.string().max(200),
   scopes: z.array(scope).max(200).default([]),
 });
@@ -26,7 +28,7 @@ const patch = create.omit({ email: true, password: true }).partial().extend({
 });
 
 const LIST_SQL = `
-  select u.id, u.email, u.full_name, u.designation, u.phone, u.role, u.active,
+  select u.id, u.email, u.full_name, u.designation, u.phone, u.role, u.technical, u.active,
          u.must_change_password, u.last_login_at, u.created_at,
          coalesce(json_agg(json_build_object(
            'atoll_id', s.atoll_id, 'island_id', s.island_id,
@@ -57,7 +59,7 @@ export default async function userRoutes(app) {
 
   // Lightweight list for pickers (project owner, etc.), visible to everyone signed in.
   app.get('/users/directory', async () => {
-    const { rows } = await db.query('select id, full_name, designation, role from users where active order by full_name');
+    const { rows } = await db.query("select id, full_name, designation, role, (technical or role = 'admin') as technical from users where active order by full_name");
     return rows;
   });
 
@@ -68,9 +70,9 @@ export default async function userRoutes(app) {
     const hash = await hashPassword(body.password);
     const user = await db.tx(req.user.id, async (t) => {
       const { rows } = await t.query(
-        `insert into users (email, full_name, designation, phone, role, password_hash, must_change_password)
-         values ($1, $2, $3, $4, $5, $6, true) returning id`,
-        [body.email, body.full_name, body.designation, body.phone, body.role, hash],
+        `insert into users (email, full_name, designation, phone, role, technical, password_hash, must_change_password)
+         values ($1, $2, $3, $4, $5, $6, $7, true) returning id`,
+        [body.email, body.full_name, body.designation, body.phone, body.role, body.technical, hash],
       );
       await writeScopes(t, rows[0].id, body.scopes);
       return rows[0];
@@ -94,15 +96,17 @@ export default async function userRoutes(app) {
       fields.password_hash = await hashPassword(body.password);
       fields.must_change_password = true;
     }
+    const before = one((await db.query('select role, technical from users where id = $1', [userId])).rows, 'User');
     await db.tx(req.user.id, async (t) => {
-      const cols = ['full_name', 'designation', 'phone', 'role', 'active', 'password_hash', 'must_change_password'];
+      const cols = ['full_name', 'designation', 'phone', 'role', 'technical', 'active', 'password_hash', 'must_change_password'];
       if (Object.keys(fields).some((k) => cols.includes(k))) {
         const set = updateSet(fields, cols);
         one((await t.query(`update users set ${set.sql} where id = $1 returning id`, [userId, ...set.values])).rows, 'User');
       }
       if (body.scopes) await writeScopes(t, userId, body.scopes);
       // Deactivated users, role changes and password resets end existing sessions.
-      if (body.active === false || body.role || body.password !== undefined) {
+      if (body.active === false || (body.role && body.role !== before.role)
+        || (body.technical !== undefined && body.technical !== before.technical) || body.password !== undefined) {
         await t.query('delete from sessions where user_id = $1', [userId]);
       }
     });

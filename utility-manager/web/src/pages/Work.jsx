@@ -6,7 +6,7 @@ import { ASSET_KINDS, SERVICES, WORK_KINDS, WORK_STATES, date, dateTime } from '
 import { useApi, useFilters } from '../hooks.js';
 
 export default function Work() {
-  const { can } = useAuth();
+  const { can, technical } = useAuth();
   const [filters, setFilter] = useFilters({ status: 'open' });
   const atolls = useApi('/atolls');
   const params = { status: filters.status, service: filters.service, atoll_id: filters.atoll_id, island_id: filters.island_id, kind: filters.kind, q: filters.q, offset: filters.offset };
@@ -15,7 +15,7 @@ export default function Work() {
   return <>
     <PageHead title="Work" icon="work" subtitle="Repairs, overhauls, services and other work on assets and islands" actions={<>
       <a className="btn ghost" href={csvUrl('/work', { ...params, offset: undefined })}>Export CSV</a>
-      {can('manager') && <Link className="btn primary" to={`/work/new${qs({ island_id: filters.island_id, service: filters.service })}`}>Log work</Link>}
+      {can('manager') && technical && <Link className="btn primary" to={`/work/new${qs({ island_id: filters.island_id, service: filters.service })}`}>Log work</Link>}
     </>} />
     <div className="filters">
       <Select value={filters.status} onChange={(v) => setFilter('status', v)} options={{ open: 'Ongoing', all: 'All', ...WORK_STATES }} aria-label="Status" />

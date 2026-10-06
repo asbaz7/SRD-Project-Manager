@@ -32,6 +32,11 @@ const PREFIX = '/api/v1';
 const PUBLIC_ROUTES = new Set([`${PREFIX}/auth/login`, `${PREFIX}/health`, `${PREFIX}/telegram/webhook`]);
 const PASSWORD_ROUTES = new Set([`${PREFIX}/auth/password`, `${PREFIX}/auth/me`, `${PREFIX}/auth/logout`]);
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+// Technical information: engines, condition reports, assets, plants and the
+// Electricity / Water / Sewerage sections. Only technical staff (and
+// administrators) may use these, whatever their role.
+const TECHNICAL_PREFIXES = ['/engines', '/maintenance', '/condition-reports', '/assets', '/facilities', '/services']
+  .map((p) => PREFIX + p);
 const BODY_LIMIT = 5 * 1024 * 1024; // CSV imports
 
 export const SECURITY_HEADERS = {
@@ -125,6 +130,9 @@ export async function buildApp({ db, config, logger = true }) {
       try { originHost = origin && new URL(origin).host; } catch { /* malformed: rejected below */ }
       const allowed = originHost === req.host || config.allowedOrigins.includes(origin);
       if (origin && !allowed) throw forbidden('Cross-site request blocked');
+    }
+    if (!req.user.technical && TECHNICAL_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) {
+      throw forbidden('This is technical information, available to technical staff');
     }
     // A temporary password must be replaced before anything else.
     if (req.user.mustChangePassword && !PASSWORD_ROUTES.has(path)) {

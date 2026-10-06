@@ -40,25 +40,29 @@ const Link = ({ item, onClick }) => (
 );
 
 export default function Layout() {
-  const { user, logout, can } = useAuth();
+  const { user, logout, can, technical } = useAuth();
   const [sheet, setSheet] = useState(false);
   const location = useLocation();
   const [lastPath, setLastPath] = useState(location.pathname);
   if (lastPath !== location.pathname) { setLastPath(location.pathname); setSheet(false); }
   const admin = ADMIN.filter((n) => can(n.role));
+  // Non-technical staff don't have the service sections (engines, assets,
+  // plants); work, incidents and projects move up instead.
+  const main = technical ? MAIN : [MAIN[0], ...MORE.slice(0, 3)];
+  const more = technical ? MORE : MORE.slice(3);
 
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Main">
         <Brand />
-        {MAIN.map((n) => <Link key={n.to} item={n} />)}
-        <div className="nav-section">Activity</div>
-        {MORE.map((n) => <Link key={n.to} item={n} />)}
+        {main.map((n) => <Link key={n.to} item={n} />)}
+        <div className="nav-section">{technical ? 'Activity' : 'More'}</div>
+        {more.map((n) => <Link key={n.to} item={n} />)}
         {admin.length > 0 && <><div className="nav-section">Administration</div>{admin.map((n) => <Link key={n.to} item={n} />)}</>}
         <div className="nav-foot">
           <NavLink to="/account" className="who">
             <span className="avatar" aria-hidden="true">{initials(user.fullName)}</span>
-            <span><span className="who-name">{user.fullName}</span><small>{ROLES[user.role]}</small></span>
+            <span><span className="who-name">{user.fullName}</span><small>{ROLES[user.role]}{user.role !== 'admin' && ` · ${technical ? 'Technical' : 'Non-technical'}`}</small></span>
           </NavLink>
           <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
@@ -71,7 +75,7 @@ export default function Layout() {
       </header>
       <main className="page"><Outlet /></main>
       <nav className="bottom-bar" aria-label="Main">
-        {MAIN.map((n) => (
+        {main.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>
             <Icon name={n.icon} size={22} />{n.label}
           </NavLink>
@@ -81,7 +85,7 @@ export default function Layout() {
       {sheet && <>
         <div className="sheet-backdrop" onClick={() => setSheet(false)} />
         <div className="sheet" role="menu">
-          {[...MORE, ...admin].map((n) => <Link key={n.to} item={n} />)}
+          {[...more, ...admin].map((n) => <Link key={n.to} item={n} />)}
           <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
       </>}

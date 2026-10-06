@@ -51,7 +51,7 @@ export function pageOf(rows, { limit, offset }) {
 
 // Accumulates "and x = $n" filters.
 export class Where {
-  constructor() { this.parts = []; this.values = []; }
+  constructor(values = []) { this.parts = []; this.values = [...values]; }
   add(sqlWithQ, value) {
     if (value === undefined || value === null || value === '') return this;
     this.values.push(value);

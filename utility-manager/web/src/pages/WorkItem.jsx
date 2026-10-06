@@ -14,9 +14,11 @@ export default function WorkItem() {
 }
 
 function WorkView({ work: w, reload }) {
-  const { can, canWriteIsland } = useAuth();
+  const { technical } = useAuth();
   const [editing, setEditing] = useState(false);
-  const writable = can('manager') && canWriteIsland({ id: w.island_id, atoll_id: w.atoll_id });
+  // The server decides: technical managers of the island run the work;
+  // people added to it may comment.
+  const writable = w.can_run;
   const [u, setU] = useState({ body: '', status: '' });
   const { submit, busy, error } = useSubmit(async (status) => {
     await api(`/work/${w.id}/updates`, { method: 'POST', body: { body: u.body, status: (typeof status === 'string' ? status : u.status) || null } });
@@ -36,7 +38,7 @@ function WorkView({ work: w, reload }) {
           <dt>Service</dt><dd>{SERVICES[w.service]?.label}</dd>
           <dt>Type</dt><dd>{WORK_KINDS[w.kind]}</dd>
           <dt>Where</dt><dd><Link to={`/islands/${w.island_id}`}>{w.atoll_code} · {w.island_name}</Link>{w.facility_name && ` · ${w.facility_name}`}</dd>
-          {w.asset_id && <><dt>Asset</dt><dd><Link to={`/assets/${w.asset_id}`}>{ASSET_KINDS[w.asset_kind]} {w.asset_tag}</Link>{w.asset_model && <span className="muted"> · {w.asset_model}</span>}</dd></>}
+          {w.asset_id && <><dt>Asset</dt><dd>{technical ? <Link to={`/assets/${w.asset_id}`}>{ASSET_KINDS[w.asset_kind]} {w.asset_tag}</Link> : `${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.asset_model && <span className="muted"> · {w.asset_model}</span>}</dd></>}
           <dt>Assigned to</dt><dd>{w.assigned_to || '—'}</dd>
           <dt>Started</dt><dd>{date(w.started_on)}</dd>
           <dt>Target</dt><dd className={w.overdue ? 'bad' : ''}>{date(w.target_on)}{w.overdue && ' · overdue'}</dd>
@@ -57,7 +59,15 @@ function WorkView({ work: w, reload }) {
           </div>
         </form>
       </Card>}
+      {!writable && w.can_comment && <Card title="Add a comment">
+        <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+          <ErrorBox error={error} />
+          <Field label="Comment" hint="Everyone who can see this work will see your comment."><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} /></Field>
+          <div className="form-actions"><button className="btn primary" disabled={busy}>Post comment</button></div>
+        </form>
+      </Card>}
     </div>
+    <Commenters work={w} reload={reload} />
     <Card title="Updates">
       {w.updates.length === 0 ? <Empty>No updates yet.</Empty> :
         <ol className="timeline">{w.updates.map((x) => <li key={x.id}>
@@ -66,6 +76,33 @@ function WorkView({ work: w, reload }) {
         </li>)}</ol>}
     </Card>
   </>;
+}
+
+// People who aren't running the work (usually non-technical staff) but may
+// comment on it. Added and removed by the technical staff running it.
+function Commenters({ work: w, reload }) {
+  const directory = useApi(w.can_share ? '/users/directory' : null);
+  const [pick, setPick] = useState('');
+  const add = useSubmit(async () => { await api(`/work/${w.id}/commenters`, { method: 'POST', body: { user_id: pick } }); setPick(''); reload(); });
+  const remove = useSubmit(async (userId) => { await api(`/work/${w.id}/commenters/${userId}`, { method: 'DELETE' }); reload(); });
+  if (!w.can_share && w.commenters.length === 0) return null;
+  const taken = new Set(w.commenters.map((c) => c.user_id));
+  const options = (directory.data || []).filter((p) => !taken.has(p.id) && p.id !== w.created_by)
+    .sort((a, b) => a.technical - b.technical || a.full_name.localeCompare(b.full_name))
+    .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}${p.technical ? '' : ' (non-technical)'}`]);
+  return <Card title="People who can comment">
+    <ErrorBox error={add.error || remove.error} />
+    {w.commenters.length === 0 ? <p className="muted small">Only technical staff on this island can post here. Add people, such as non-technical staff, who should be able to comment.</p> :
+      <ul className="people">{w.commenters.map((c) => <li key={c.user_id}>
+        <span><strong>{c.full_name}</strong>{c.designation && <span className="muted"> · {c.designation}</span>}<br />
+          <small className="muted">Added {date(c.added_at)}{c.added_by_name && ` by ${c.added_by_name}`}</small></span>
+        {w.can_share && <button className="btn ghost small" disabled={remove.busy} onClick={() => remove.submit(c.user_id)}>Remove</button>}
+      </li>)}</ul>}
+    {w.can_share && <form className="inline-add" onSubmit={(e) => { e.preventDefault(); if (pick) add.submit(); }}>
+      <Select value={pick} onChange={setPick} placeholder="Add a person…" options={options} aria-label="Person" />
+      <button className="btn" disabled={!pick || add.busy}>Add</button>
+    </form>}
+  </Card>;
 }
 
 function WorkForm({ work, onDone }) {

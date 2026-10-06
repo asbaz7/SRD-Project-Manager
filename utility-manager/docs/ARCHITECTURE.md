@@ -168,6 +168,46 @@ icon and a label. Each service has its own identity colour.
 Work orders carry a `service` (migration 005): taken from the asset or
 facility, or chosen for island-wide work.
 
+## Access: technical and non-technical staff (Oct 2026)
+
+There are three settings per user:
+- **Role:** what they can change (admin, manager or viewer).
+- **Islands:** where they can change it.
+- **Staff type:** what they can see (migration 008, `users.technical`).
+
+**Technical information:** engines, condition reports, assets, plants and the
+Electricity, Water and Sewerage sections.
+- Only technical staff and administrators can see it.
+- It is enforced in `app.js` (`TECHNICAL_PREFIXES`). The dashboard, island
+  detail, islands list, audit trail and Telegram bot also strip it for
+  non-technical staff.
+- Administrators always count as technical.
+
+**Work**
+- Everyone can see work.
+- Technical managers of the island (and administrators) create it, edit it,
+  change its status and post updates.
+- The people running a work item, or its technical creator, can add
+  specific people as commenters (`work_commenters`). Commenters can post
+  comments but can't change the status.
+
+**Projects** are shared per project:
+- `visibility` is either `everyone` or `members`. New projects default to
+  `members`; existing ones were set to `everyone`.
+- `project_members` gives chosen people view or edit access.
+- The creator, the owner and administrators can always edit, and they decide
+  who has access. Others with edit access can edit but not change sharing.
+- `projectVisible()` filters every list, count and overview, and the audit
+  trail.
+
+**Incidents:** unchanged; visible to everyone.
+
+**Telegram**
+- Technical commands (`/status`, `/down`, `/up`…) need technical access.
+- Each alert chat has a `technical` flag. Technical chats get genset and
+  asset alerts and the full morning summary. Other chats get incidents, work
+  and a summary without engine figures.
+
 ## Engine state: one answer (Oct 2026)
 
 A genset's state has two sources:

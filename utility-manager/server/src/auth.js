@@ -64,7 +64,7 @@ export async function destroySession(db, token) {
 export async function loadSession(db, token) {
   if (!token || token.length > 100) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.full_name, u.role, u.must_change_password,
+    `select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical,
             s.last_seen_at, s.expires_at,
             coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
                      filter (where sc.id is not null), '[]') as scopes
@@ -87,6 +87,8 @@ export async function loadSession(db, token) {
     email: row.email,
     fullName: row.full_name,
     role: row.role,
+    // Technical information (engines, condition reports, assets, plants).
+    technical: row.role === 'admin' || row.technical,
     mustChangePassword: row.must_change_password,
     scope: {
       region: scopes.some((s) => !s.atoll_id && !s.island_id),
@@ -117,6 +119,13 @@ export function requireRole(minimum) {
   return async (req) => {
     if (!req.user) throw unauthorized();
     if (!hasRole(req.user, minimum)) throw forbidden();
+  };
+}
+
+export function requireTechnical() {
+  return async (req) => {
+    if (!req.user) throw unauthorized();
+    if (!req.user.technical) throw forbidden('This is technical information, available to technical staff');
   };
 }
 

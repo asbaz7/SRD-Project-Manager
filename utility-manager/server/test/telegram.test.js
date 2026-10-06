@@ -217,3 +217,24 @@ test('/unlink disconnects the account', async () => {
   await say(MANAGER_TG, '/status Maafushi');
   assert.match(repliesTo(MANAGER_TG), /Link your account first/);
 });
+
+test('a group set to non-technical alerts gets incidents but not genset alerts or the engine summary', async () => {
+  assert.equal((await call('PATCH', `/telegram/chats/${GROUP}`, { token: admin, body: { alerts: true, technical: false } })).status, 200);
+  await say(ADMIN_TG, '/down Maafushi 4 fuel pump');
+  assert.equal(repliesTo(GROUP), '');
+  await say(ADMIN_TG, '/incident Maafushi critical whole island without power');
+  assert.match(repliesTo(GROUP), /Critical: whole island without power/);
+  sent = [];
+  await app.daily();
+  assert.match(repliesTo(GROUP), /SRD summary/);
+  assert.doesNotMatch(repliesTo(GROUP), /gensets running/);
+});
+
+test('non-technical staff cannot use the technical bot commands', async () => {
+  await db.query(`insert into users (email, full_name, role, technical, password_hash, must_change_password, telegram_user_id)
+    select 'office@srd.mv', 'Office', 'manager', false, password_hash, false, 4004 from users where email = 'admin@srd.mv'`);
+  await say(4004, '/status Maafushi');
+  assert.match(repliesTo(4004), /needs technical access/);
+  await say(4004, '/down Maafushi 1 broken');
+  assert.match(repliesTo(4004), /needs technical access/);
+});

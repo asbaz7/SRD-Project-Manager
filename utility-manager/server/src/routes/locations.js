@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { assertIslandWrite, canWriteIsland, hasRole, requireRole } from '../auth.js';
 import { forbidden } from '../errors.js';
 import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
+import { projectVisible } from './projects.js';
 
 const atollBody = z.object({ code: text(10), name: text(100), active: z.boolean().optional() });
 const islandBody = z.object({
@@ -13,7 +14,8 @@ const islandBody = z.object({
 });
 
 // Per-island rollup used by the atoll and island lists.
-const ISLAND_SUMMARY = `
+// Counts only the projects the user may see (see projectVisible).
+const islandSummary = (vis) => `
   select i.id, i.name, i.population, i.notes, i.active, a.id as atoll_id, a.code as atoll_code, a.name as atoll_name,
          count(distinct f.id) filter (where f.active) as facility_count,
          coalesce(array_agg(distinct f.service::text) filter (where f.active), '{}') as services,
@@ -22,7 +24,7 @@ const ISLAND_SUMMARY = `
          count(s.id) filter (where s.status in ('down', 'maintenance')) as down_count,
          coalesce(sum(s.rated_capacity) filter (where s.kind = 'genset'), 0) as installed_kw,
          (select count(*) from incidents x where x.island_id = i.id and x.status = 'open') as open_incidents,
-         (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold')) as active_projects,
+         (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold') and ${vis.sql}) as active_projects,
          (select sum(fc.fuel_capacity_l) from facilities fc
            where fc.island_id = i.id and fc.active and fc.service = 'electricity') as fuel_capacity_l
     from islands i
@@ -65,19 +67,21 @@ export default async function locationRoutes(app) {
       q: z.string().max(100).optional(),
       include_inactive: z.coerce.boolean().optional(),
     }), req.query);
+    const vis = projectVisible(req.user, 1);
     const where = ['true'];
-    const values = [];
+    const values = [...vis.values];
     if (!q.include_inactive) where.push('i.active');
     if (q.atoll_id) { values.push(q.atoll_id); where.push(`i.atoll_id = $${values.length}`); }
     if (q.q) { values.push(`%${q.q}%`); where.push(`i.name ilike $${values.length}`); }
     const { rows } = await db.query(
-      `${ISLAND_SUMMARY} where ${where.join(' and ')} group by i.id, a.id order by a.code, i.name`, values);
+      `${islandSummary(vis)} where ${where.join(' and ')} group by i.id, a.id order by a.code, i.name`, values);
     return rows;
   });
 
   app.get('/islands/:id', async (req) => {
     const { id: islandId } = parse(idParam, req.params);
-    const island = one((await db.query(`${ISLAND_SUMMARY} where i.id = $1 group by i.id, a.id`, [islandId])).rows, 'Island');
+    const vis = projectVisible(req.user, 2);
+    const island = one((await db.query(`${islandSummary(vis)} where i.id = $1 group by i.id, a.id`, [islandId, ...vis.values])).rows, 'Island');
     const [{ rows: facilities }, { rows: assets }] = await Promise.all([
       db.query(`select f.* from facilities f where f.island_id = $1 order by f.active desc, f.service, f.name`, [islandId]),
       db.query(`select s.*, u.full_name as status_by_name,
@@ -107,11 +111,18 @@ export default async function locationRoutes(app) {
                  order by w.created_at desc`, [islandId]),
     ]);
     for (const s of assets) if (typeof s.open_work === 'string') s.open_work = JSON.parse(s.open_work);
-    island.reports = reports;
     island.open_work = work;
+    island.can_edit = hasRole(req.user, 'manager') && canWriteIsland(req.user, island);
+    // Plants, assets and condition reports are technical information.
+    island.technical = req.user.technical;
+    if (!req.user.technical) {
+      island.reports = [];
+      island.facilities = [];
+      return island;
+    }
+    island.reports = reports;
     for (const f of facilities) f.assets = assets.filter((s) => s.facility_id === f.id);
     island.facilities = facilities;
-    island.can_edit = hasRole(req.user, 'manager') && canWriteIsland(req.user, island);
     return island;
   });
 

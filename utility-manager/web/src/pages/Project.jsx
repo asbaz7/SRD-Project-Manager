@@ -14,9 +14,10 @@ export default function Project() {
 }
 
 function ProjectView({ project: p, reload }) {
-  const { can, canWriteIsland, user } = useAuth();
   const [editing, setEditing] = useState(false);
-  const writable = p.island_id ? canWriteIsland({ id: p.island_id, atoll_id: p.atoll_id }) : (user.role === 'admin' || user.scope.region);
+  // Per project: its creator, owner and administrators manage it; people
+  // given edit access can edit; others it is shared with can view.
+  const writable = p.can_edit;
   const [u, setU] = useState({ body: '', progress_pct: '', status: '' });
   const { submit, busy, error } = useSubmit(async () => {
     await api(`/projects/${p.id}/updates`, { method: 'POST', body: {
@@ -28,7 +29,7 @@ function ProjectView({ project: p, reload }) {
   if (editing) return <ProjectForm project={p} onDone={() => { setEditing(false); reload(); }} />;
   return <>
     <PageHead title={p.title} crumbs={[{ to: '/projects', label: 'Projects' }, { label: p.ref }]}
-      actions={can('manager') && writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>} />
+      actions={writable && <button className="btn" onClick={() => setEditing(true)}>{p.can_manage ? 'Edit & sharing' : 'Edit'}</button>} />
     <div className="grid-2">
       <Card title="Details">
         <dl className="facts">
@@ -45,7 +46,7 @@ function ProjectView({ project: p, reload }) {
         </dl>
         {p.description && <p className="pre">{p.description}</p>}
       </Card>
-      {can('manager') && writable && <Card title="Post an update">
+      {writable && <Card title="Post an update">
         <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <ErrorBox error={error} />
           <Field label="What happened"><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} /></Field>
@@ -55,6 +56,14 @@ function ProjectView({ project: p, reload }) {
         </form>
       </Card>}
     </div>
+    <Card title="Who has access">
+      <p className="small">{p.visibility === 'everyone' ? 'Everyone can view this project.' : 'Only the people below can see this project.'}
+        {' '}<span className="muted">Its creator{p.owner_name ? `, owner (${p.owner_name})` : ''} and administrators can always edit it.</span></p>
+      {p.members.length > 0 && <ul className="people">{p.members.map((m) => <li key={m.user_id}>
+        <span><strong>{m.full_name}</strong>{m.designation && <span className="muted"> · {m.designation}</span>}</span>
+        <span className={`pill ${m.access === 'edit' ? 'work-in_progress' : ''}`}>{m.access === 'edit' ? 'Can edit' : 'Can view'}</span>
+      </li>)}</ul>}
+    </Card>
     <Card title="Updates">
       {p.updates.length === 0 ? <Empty>No updates yet.</Empty> :
         <ol className="timeline">{p.updates.map((x) => <li key={x.id}>
@@ -76,14 +85,19 @@ function ProjectForm({ project, onDone }) {
   const [f, setF] = useState(project || {
     service: 'electricity', island_id: params.get('island_id') || '', title: '', description: '', status: 'planned',
     progress_pct: 0, budget: '', contractor: '', start_date: '', target_date: '', owner_id: '',
+    visibility: 'members', members: [],
   });
+  // Sharing is set by whoever creates the project, then by its creator,
+  // owner or an administrator.
+  const sharing = !project || project.can_manage;
+  const [members, setMembers] = useState((project?.members || []).map(({ user_id: userId, access }) => ({ user_id: userId, access })));
   const set = (k) => (v) => setF({ ...f, [k]: v?.target ? v.target.value : v });
   const { submit, busy, error } = useSubmit(async () => {
     const body = {
       service: f.service, title: f.title, description: f.description || null, status: f.status,
       progress_pct: Number(f.progress_pct) || 0, budget: f.budget === '' || f.budget == null ? null : Number(f.budget),
       contractor: f.contractor || null, start_date: f.start_date || null, target_date: f.target_date || null,
-      owner_id: f.owner_id || null,
+      ...(sharing ? { owner_id: f.owner_id || null, visibility: f.visibility, members: members.filter((m) => m.user_id) } : {}),
     };
     if (project) {
       await api(`/projects/${project.id}`, { method: 'PATCH', body: { ...body, completed_on: f.completed_on || null } });
@@ -107,13 +121,28 @@ function ProjectForm({ project, onDone }) {
         <Field label="Service"><Select value={f.service} onChange={set('service')} options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} /></Field>
         <Field label="Status"><Select value={f.status} onChange={set('status')} options={PROJECT_STATES} /></Field>
         <Field label="Progress (%)"><input type="number" min="0" max="100" value={f.progress_pct} onChange={set('progress_pct')} /></Field>
-        <Field label="Owner"><Select value={f.owner_id || ''} onChange={set('owner_id')} placeholder="—" options={(people.data || []).map((p) => [p.id, p.full_name])} /></Field>
+        {sharing && <Field label="Owner"><Select value={f.owner_id || ''} onChange={set('owner_id')} placeholder="—" options={(people.data || []).map((p) => [p.id, p.full_name])} /></Field>}
         <Field label="Contractor"><input value={f.contractor || ''} onChange={set('contractor')} /></Field>
         <Field label="Budget (MVR)"><input type="number" min="0" step="any" value={f.budget ?? ''} onChange={set('budget')} /></Field>
         <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={set('start_date')} /></Field>
         <Field label="Target date"><input type="date" value={f.target_date || ''} onChange={set('target_date')} /></Field>
         {project && <Field label="Completed on"><input type="date" value={f.completed_on || ''} onChange={set('completed_on')} /></Field>}
         <Field label="Description" wide><textarea rows="4" value={f.description || ''} onChange={set('description')} /></Field>
+        {sharing && <fieldset className="wide sharing">
+          <legend>Who can see and edit this project</legend>
+          <label className="check"><input type="radio" name="visibility" checked={f.visibility === 'everyone'} onChange={() => set('visibility')('everyone')} /> <strong>Everyone</strong> can view it</label>
+          <label className="check"><input type="radio" name="visibility" checked={f.visibility !== 'everyone'} onChange={() => set('visibility')('members')} /> <strong>Only the people I choose</strong></label>
+          <p className="muted small">{project ? 'Its creator' : 'You'}{f.owner_id ? ', the owner' : ''} and administrators can always edit it. Add people below to let them view or edit it.</p>
+          {members.map((m, i) => <div className="member-row" key={i}>
+            <Select value={m.user_id} onChange={(v) => setMembers(members.map((x, j) => (j === i ? { ...x, user_id: v } : x)))} placeholder="Choose person…"
+              options={(people.data || []).filter((p) => p.id !== user.id && (p.id === m.user_id || !members.some((x) => x.user_id === p.id)))
+                .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}`])} aria-label="Person" />
+            <Select value={m.access} onChange={(v) => setMembers(members.map((x, j) => (j === i ? { ...x, access: v } : x)))}
+              options={[['view', 'Can view'], ['edit', 'Can edit']]} aria-label="Access" />
+            <button type="button" className="btn ghost small" onClick={() => setMembers(members.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
+          </div>)}
+          <button type="button" className="btn small" onClick={() => setMembers([...members, { user_id: '', access: 'view' }])}>+ Add person</button>
+        </fieldset>}
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={() => (project ? onDone() : navigate(-1))}>Cancel</button>
           <button className="btn primary" disabled={busy}>{project ? 'Save changes' : 'Create project'}</button>

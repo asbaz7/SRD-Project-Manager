@@ -18,14 +18,14 @@ function attentionItems(d) {
   for (const x of d.incidents.list.filter((i) => ['critical', 'high'].includes(i.severity))) {
     items.push({ tone: 'bad', mark: '!', to: `/incidents/${x.id}`, text: x.title, sub: `${SERVICES[x.service]?.label} · ${x.atoll_code} ${x.island_name} · ${x.severity} · ${since(x.started_at)}` });
   }
-  const e = d.engines;
+  const e = d.engines || {};
   if (e.not_running) items.push({ tone: 'bad', mark: e.not_running, to: '/electricity/engines?condition=not_running', text: `${e.not_running} engine${e.not_running === 1 ? '' : 's'} not running`, sub: 'From the latest condition reports' });
   if (e.major_fault) items.push({ tone: 'serious', mark: e.major_fault, to: '/electricity/engines?condition=major_fault', text: `${e.major_fault} engine${e.major_fault === 1 ? '' : 's'} with a major fault`, sub: 'Still running — check before they fail' });
   for (const svc of ['water', 'sewerage']) {
-    const down = d.assets_down.filter((a) => a.service === svc);
+    const down = (d.assets_down || []).filter((a) => a.service === svc);
     if (down.length) items.push({ tone: 'bad', mark: down.length, to: `/${svc}`, text: `${down.length} ${SERVICES[svc].label.toLowerCase()} asset${down.length === 1 ? '' : 's'} out of service`, sub: down.slice(0, 3).map((a) => `${a.atoll_code} ${a.island_name} ${ASSET_KINDS[a.kind]} ${a.tag}`).join(' · ') });
   }
-  if (d.reports.missing.length) items.push({ tone: 'warn', mark: d.reports.missing.length, to: '/electricity/reports', text: `${d.reports.missing.length} condition report${d.reports.missing.length === 1 ? '' : 's'} missing for ${month(d.reports.expected_month)}`, sub: d.reports.missing.slice(0, 4).map((r) => `${r.atoll_code} ${r.island_name}`).join(' · ') + (d.reports.missing.length > 4 ? ' …' : '') });
+  if (d.reports?.missing.length) items.push({ tone: 'warn', mark: d.reports.missing.length, to: '/electricity/reports', text: `${d.reports.missing.length} condition report${d.reports.missing.length === 1 ? '' : 's'} missing for ${month(d.reports.expected_month)}`, sub: d.reports.missing.slice(0, 4).map((r) => `${r.atoll_code} ${r.island_name}`).join(' · ') + (d.reports.missing.length > 4 ? ' …' : '') });
   for (const w of d.work.filter((x) => x.overdue)) {
     items.push({ tone: 'warn', mark: '⏱', to: `/work/${w.id}`, text: `${w.title} — past target date`, sub: `${w.atoll_code} ${w.island_name} · target ${date(w.target_on)}` });
   }
@@ -34,7 +34,7 @@ function attentionItems(d) {
 }
 
 export default function Dashboard() {
-  const { user, can } = useAuth();
+  const { user, can, technical } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
   const state = useApi(`/dashboard${qs({ atoll_id: filters.atoll_id })}`);
@@ -59,7 +59,7 @@ export default function Dashboard() {
           {items.length > 8 && <p className="muted small">and {items.length - 8} more</p>}
         </Card>
 
-        <div className="grid-3">
+        {d.technical && <div className="grid-3">
           <ServiceTile svc="electricity" s={el}
             hero={<>{el.running}<small> of {el.assets} gensets running</small></>}
             facts={[
@@ -73,14 +73,14 @@ export default function Dashboard() {
               hero={s.assets ? <>{s.running}<small> of {s.assets} assets running</small></> : <small>No assets recorded yet</small>}
               facts={[[s.facilities, `plant${s.facilities === 1 ? '' : 's'} · ${s.islands} islands`], [s.down, 'out of service', s.down > 0], [s.open_work, 'work ongoing']]} />;
           })}
-        </div>
+        </div>}
 
-        <div className="grid-2">
-          <Card title="Engine condition" actions={<Link to="/electricity/engines" className="btn small ghost">All engines</Link>}>
+        <div className={d.technical ? 'grid-2' : ''}>
+          {d.technical && <Card title="Engine condition" actions={<Link to="/electricity/engines" className="btn small ghost">All engines</Link>}>
             <ConditionMeter e={d.engines} />
             <p className="muted small">{d.engines.total} gensets · from the latest monthly condition reports</p>
-          </Card>
-          <Card title={`Work in progress (${d.work.length})`} actions={can('manager') && <Link to="/work/new" className="btn small">Log work</Link>}>
+          </Card>}
+          <Card title={`Work in progress (${d.work.length})`} actions={can('manager') && technical && <Link to="/work/new" className="btn small">Log work</Link>}>
             {d.work.length === 0 ? <Empty>No work in progress.</Empty> :
               <div className="scroll-y"><table><tbody>{d.work.map((w) => <tr key={w.id}>
                 <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
