@@ -81,7 +81,7 @@ export default async function locationRoutes(app) {
     const [{ rows: facilities }, { rows: assets }] = await Promise.all([
       db.query(`select f.* from facilities f where f.island_id = $1 order by f.active desc, f.service, f.name`, [islandId]),
       db.query(`select s.*, u.full_name as status_by_name,
-                       c.report_month, c.condition, c.status_text as report_status, c.fault, c.total_hours,
+                       c.report_month, c.condition, c.report_condition, c.condition_source, c.condition_note, c.condition_at, c.status_text as report_status, c.fault, c.total_hours,
                        c.hours_since_overhaul, c.needs_overhaul, c.alt_needs_service,
                        greatest(c.last_overhaul_on, (select max(done_on) from maintenance_events e
                                 where e.asset_id = s.id and e.kind in ('overhaul', 'top_overhaul'))) as last_overhaul_on,
@@ -91,7 +91,7 @@ export default async function locationRoutes(app) {
                           from work_orders w where w.asset_id = s.id and w.status not in ('completed', 'cancelled')) as open_work
                   from assets s join facilities f on f.id = s.facility_id
                   left join users u on u.id = s.status_by
-                  left join engine_conditions c on c.asset_id = s.id
+                  left join engine_current c on c.asset_id = s.id
                  where f.island_id = $1
                  order by s.kind, length(s.tag), s.tag`, [islandId]),
     ]);

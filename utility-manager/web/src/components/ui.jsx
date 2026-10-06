@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Icon } from './icons.jsx';
-import { ASSET_STATUS, CONDITIONS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES } from '../format.js';
+import { ASSET_STATUS, CONDITIONS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES, date, month } from '../format.js';
 
 export function Stat({ label, value, sub, tone = '', to }) {
   const body = <><span>{label}</span><strong>{value}</strong>{sub && <small>{sub}</small>}</>;
@@ -17,6 +17,22 @@ export function Condition({ value, text }) {
   const c = CONDITIONS[value];
   if (!c) return <span className="status none">– No report</span>;
   return <span className={`status ${c.tone}`} title={text || c.label}>{c.icon} {c.label}</span>;
+}
+
+// A genset's current state: one answer, from whichever is newer of the
+// monthly report and the last status update (see engine_current in the
+// database). The second line says where it came from.
+export function EngineState({ e, compact = false }) {
+  const fromStatus = e.condition_source === 'status';
+  const text = fromStatus ? e.condition_note : (e.status_text || e.report_status);
+  return <>
+    <Condition value={e.condition} text={text} />
+    {!compact && (fromStatus
+      ? <><br /><small className="muted" title={`The ${month(e.report_month) || 'last'} report said: ${CONDITIONS[e.report_condition]?.label || 'no report'}`}>
+          {e.status === 'maintenance' ? 'In maintenance' : e.status === 'down' ? 'Set down' : 'Back in service'} {date(e.condition_at)}</small></>
+      : e.condition && e.status && !['running', 'unknown'].includes(e.status) && e.condition !== 'not_running'
+        ? <><br /><AssetStatus status={e.status} /></> : null)}
+  </>;
 }
 
 export function WorkState({ value }) {

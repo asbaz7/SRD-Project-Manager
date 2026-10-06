@@ -46,7 +46,7 @@ export default async function serviceRoutes(app) {
           join islands i on i.id = f.island_id and i.active
           join atolls a on a.id = i.atoll_id
           left join assets s on s.facility_id = f.id and s.active
-          left join engine_conditions c on c.asset_id = s.id
+          left join engine_current c on c.asset_id = s.id
           left join powerhouse_reports r on r.facility_id = f.id
          where f.active and f.service = $1 and ${scope}
          group by f.id, i.id, a.code, r.report_month
@@ -55,14 +55,14 @@ export default async function serviceRoutes(app) {
       // fault in the latest condition report.
       db.query(`
         select s.id, s.kind, s.tag, s.make_model, s.status, s.status_note, s.status_at,
-               c.condition, c.status_text, c.fault, i.id as island_id, i.name as island_name, a.code as atoll_code,
+               c.condition, c.condition_source, c.condition_note, c.condition_at, c.status_text, c.fault, i.id as island_id, i.name as island_name, a.code as atoll_code,
                (select w.title from work_orders w where w.asset_id = s.id and w.status not in ('completed', 'cancelled')
                  order by w.created_at desc limit 1) as work_title
           from assets s
           join facilities f on f.id = s.facility_id and f.active
           join islands i on i.id = f.island_id and i.active
           join atolls a on a.id = i.atoll_id
-          left join engine_conditions c on c.asset_id = s.id
+          left join engine_current c on c.asset_id = s.id
          where s.active and f.service = $1 and ${scope}
            and (s.status in ('down', 'maintenance') or c.condition in ('major_fault', 'not_running'))
          order by (c.condition = 'not_running' or s.status = 'down') desc, a.code, i.name, length(s.tag), s.tag
@@ -106,7 +106,7 @@ export default async function serviceRoutes(app) {
           from assets s
           join facilities f on f.id = s.facility_id and f.active
           join islands i on i.id = f.island_id and i.active
-          left join engine_conditions c on c.asset_id = s.id
+          left join engine_current c on c.asset_id = s.id
          where s.kind = 'genset' and s.active and f.service = $1 and ${scope}`, [svc, atoll]) : { rows: [] },
     ]);
 

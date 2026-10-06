@@ -225,6 +225,23 @@ function parseSheet(sheet, fileYear) {
       island[isl[1]] = isl[1] === 'updated_on' ? toDate(cell) : toText(cell);
     }
   });
+  // The "GENSET NO." label is sometimes typed over (Thulusdhoo, Apr–Aug 2026:
+  // "pr"). Without it, take the row of genset numbers just above the first
+  // engine field instead of silently skipping the month.
+  let numberLabelMissing = false;
+  if (!fieldRows.number) {
+    const first = Math.min(...Object.values(fieldRows).map((f) => f.r));
+    if (Number.isFinite(first) && Object.keys(fieldRows).length >= 5) {
+      for (let r = first - 1; r >= Math.max(0, first - 3); r--) {
+        const cells = (sheet.rows[r] || []).slice(1).filter((c) => c && String(c.v).trim() !== '');
+        if (cells.length && cells.every((c) => /^\s*\d{1,2}\s*$/.test(String(c.v)))) {
+          fieldRows.number = { r, type: 'tag' };
+          numberLabelMissing = true;
+          break;
+        }
+      }
+    }
+  }
   if (!fieldRows.number) return null;
 
   const numberRow = sheet.rows[fieldRows.number.r];
@@ -253,8 +270,15 @@ function parseSheet(sheet, fileYear) {
     updated_on: island.updated_on || null,
     peak_load_record: island.peak_load_record || null,
     peak_load_month: island.peak_load_month || null,
+    number_label_missing: numberLabelMissing,
     gensets,
   };
+}
+
+// A sheet that looks like a condition report (has engine field labels), used
+// to tell the uploader about months that could not be read.
+function looksLikeReport(sheet) {
+  return sheet.rows.some((row) => row && FIELDS.slice(1).some(([prefix]) => label(row[0])?.startsWith(prefix)));
 }
 
 /**
@@ -276,10 +300,13 @@ export function parseConditionReport(bytes, fileName = '') {
   const explicit = sheets.map((s) => sheetYear(s.name));
   const workbookYear = Math.max(0, ...explicit.filter(Boolean)) || (fileYear ? +fileYear : null);
   let carried = null;
+  const skipped = [];
   const reports = sheets
     .map((s, i) => {
       carried = explicit[i] || carried;
-      return { ...parseSheet(s, carried || workbookYear), index: i };
+      const r = parseSheet(s, carried || workbookYear);
+      if (!r && looksLikeReport(s)) skipped.push(s.name);
+      return { ...r, index: i };
     })
     .filter((r) => r.gensets);
   if (!reports.length) throw new Error('No engine condition report found in this file (expected the standard template with a "GENSET NO." row)');
@@ -290,5 +317,7 @@ export function parseConditionReport(bytes, fileName = '') {
     powerhouse: latest.powerhouse || reports.find((r) => r.powerhouse)?.powerhouse || null,
     reports: reports.map(({ index, ...r }) => r),
     latest: (({ index, ...r }) => r)(latest),
+    // Sheets that look like reports but could not be read.
+    skipped,
   };
 }

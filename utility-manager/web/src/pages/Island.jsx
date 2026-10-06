@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
-import { AssetStatus, Async, Card, Condition, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
+import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, FACILITY_KINDS, WORK_KINDS, date, month, num, withUnit } from '../format.js';
 import { useApi } from '../hooks.js';
 
@@ -69,7 +69,7 @@ export default function Island() {
                   {a.status_note && <><br /><small className="muted">{a.status_note}</small></>}
                   {a.status_at && <><br /><small className="muted">{date(a.status_at)}{a.status_by_name && ` · ${a.status_by_name}`}</small></>}</td>
                 {f.kind === 'powerhouse' && <>
-                  <td className="wrap"><Condition value={a.condition} text={a.report_status} />{a.fault && <><br /><small className="muted">{a.fault}</small></>}</td>
+                  <td className="wrap"><EngineState e={a} compact />{(a.condition_source === 'status' ? a.condition_note : a.fault) && <><br /><small className="muted">{a.condition_source === 'status' ? `Updated ${date(a.condition_at)}${a.condition_note ? `: ${a.condition_note}` : ''}` : a.fault}</small></>}</td>
                   <td className="num hide-sm">{a.hours_since_overhaul != null ? `${num(a.hours_since_overhaul)} h` : '—'}</td>
                   <td className="hide-sm small nowrap">{date(a.last_overhaul_on)}</td>
                 </>}

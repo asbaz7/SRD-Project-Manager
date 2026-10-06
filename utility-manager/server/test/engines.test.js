@@ -344,4 +344,78 @@ describe('work and maintenance history', () => {
     assert.equal((await call('DELETE', `/facilities/${f.id}`, T)).status, 200);
     assert.equal((await call('GET', `/assets/${a.id}`, T)).status, 404);
   });
+
+  test('a status update newer than the report decides the engine state (never "OK" and "Down" at once)', async () => {
+    const tagId = async (tag) => (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.kind = 'genset' and s.tag = $2`, [maafushi.id, tag])).rows[0].id;
+    const g1 = await tagId('1');
+    const g9 = await tagId('9');
+    const state = async (id) => (await call('GET', `/assets/${id}`, { token: admin })).body.condition;
+    assert.equal((await state(g1)).condition, 'ok');
+    const before = (await call('GET', '/dashboard', { token: admin })).body.engines;
+
+    // G1: the report says OK; a manager then sets it down.
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g1, status: 'down', note: 'radiator leak' }] } });
+    const s1 = await state(g1);
+    assert.equal(s1.condition, 'not_running');
+    assert.equal(s1.condition_source, 'status');
+    assert.equal(s1.condition_note, 'radiator leak');
+    assert.equal(s1.report_condition, 'ok');
+    const list = (await call('GET', '/engines?condition=not_running', { token: admin })).body.engines;
+    assert.ok(list.some((e) => e.id === g1 && e.status === 'down'));
+    assert.ok(!(await call('GET', '/engines?condition=ok', { token: admin })).body.engines.some((e) => e.id === g1));
+    const after = (await call('GET', '/dashboard', { token: admin })).body.engines;
+    assert.equal(+after.not_running, +before.not_running + 1);
+    assert.equal(+after.ok, +before.ok - 1);
+
+    // Back to running: the report's OK applies again.
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g1, status: 'running' }] } });
+    assert.deepEqual(((s) => [s.condition, s.condition_source])(await state(g1)), ['ok', 'report']);
+
+    // G9: the report says NOT RUNNING; once set running it is back in service.
+    assert.equal((await state(g9)).condition, 'not_running');
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g9, status: 'running', note: 'crankshaft replaced' }] } });
+    const s9 = await state(g9);
+    assert.equal(s9.condition, 'ok');
+    assert.equal(s9.condition_source, 'status');
+    assert.match(s9.condition_note, /Back in service: crankshaft replaced/);
+
+    // No engine anywhere reads as running in one place and down in another.
+    const all = (await call('GET', '/engines', { token: admin })).body.engines;
+    const conflicts = all.filter((e) => (e.condition === 'not_running') !== ['down', 'maintenance'].includes(e.status) && e.status !== 'unknown');
+    assert.deepEqual(conflicts.map((e) => `${e.island_name} ${e.tag}: ${e.condition}/${e.status}`), []);
+  });
+
+  test('a sheet whose "GENSET NO." label was typed over is still read, with a warning', async () => {
+    const month = (n) => shift(EXPECTED, n);
+    const sheets = [-1, 0].map((n, i) => {
+      const sheet = reportSheet({
+        name: sheetName(month(n), i + 1), powerhouse: 'ADH. DHIGURAH', updated: shift(month(n), 1),
+        gensets: [{ number: 1, make: 'CUMMINS', model: 'KTA 38', kw: 800, status: 'RUNNING; OK', total: { hours: 1000 + n } },
+          { number: 2, make: 'CUMMINS', model: 'KTA 38', kw: 800, status: 'RUNNING; OK', total: { hours: 2000 + n } }],
+      });
+      if (n === 0) sheet.rows[3][0] = 'pr';   // as in Thulusdhoo's April–August sheets
+      return sheet;
+    });
+    const data = Buffer.from(makeXlsx(sheets)).toString('base64');
+    const parsed = parseConditionReport(Buffer.from(data, 'base64'), 'ADH. DHIGURAH ENGINE CONDITION REPORT 2025.xlsx');
+    assert.equal(parsed.latest.month, EXPECTED);
+    assert.equal(parsed.latest.number_label_missing, true);
+    assert.deepEqual(parsed.skipped, []);
+    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'dhigurah.xlsx', data } })).body;
+    assert.equal(preview.report_month, EXPECTED);
+    assert.ok(preview.warnings.some((w) => /"GENSET NO\." label is missing/.test(w)), preview.warnings.join(' | '));
+  });
+
+  test('sheets that cannot be read are named, and an old latest month is called out', async () => {
+    const good = reportSheet({ name: sheetName(PREVIOUS, 1), powerhouse: 'ADH. DHIGURAH', updated: shift(PREVIOUS, 1),
+      gensets: [{ number: 1, make: 'CUMMINS', model: 'KTA 38', kw: 800, status: 'RUNNING; OK' }, { number: 2, status: 'RUNNING; OK', make: 'X' }] });
+    const broken = reportSheet({ name: sheetName(EXPECTED, 2), powerhouse: 'ADH. DHIGURAH', updated: shift(EXPECTED, 1),
+      gensets: [{ number: 1, make: 'CUMMINS', status: 'RUNNING; OK' }] });
+    broken.rows[3] = ['pr'];   // no numbers left at all
+    const data = Buffer.from(makeXlsx([good, broken])).toString('base64');
+    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'dhigurah.xlsx', data } })).body;
+    assert.equal(preview.report_month, PREVIOUS);
+    assert.ok(preview.warnings.some((w) => w.includes(`Could not read sheet "${sheetName(EXPECTED, 2)}"`)), preview.warnings.join(' | '));
+    assert.ok(preview.warnings.some((w) => /will still show as missing/.test(w)), preview.warnings.join(' | '));
+  });
 });

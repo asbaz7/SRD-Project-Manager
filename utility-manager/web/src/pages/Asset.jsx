@@ -43,12 +43,20 @@ export default function Asset() {
 
       {isEngine && <div className="panels">
         <Card title="Condition">
-          <div className="big"><Condition value={c?.condition} text={c?.status_text} /></div>
-          <p className="small">{c?.status_text || ''}</p>
-          {c?.fault && <p className="pre"><strong>Fault:</strong> {c.fault}</p>}
-          <p className="muted small">Now: <AssetStatus status={a.status} />{a.status_note && ` · ${a.status_note}`}</p>
+          <div className="big"><Condition value={c?.condition} text={c?.condition_source === 'status' ? c.condition_note : c?.status_text} /></div>
+          {c?.condition_source === 'status' ? <>
+            <p className="small">{c.condition_note || (a.status === 'maintenance' ? 'In maintenance' : 'Set down')}</p>
+            <p className="muted small">Status updated {dateTime(c.condition_at)}{a.status_by_name && ` by ${a.status_by_name}`}, after the {month(c.report_month) || 'last'} report
+              {c.report_condition && <> (which said <Condition value={c.report_condition} text={c.status_text} />{c.fault && `: ${c.fault}`})</>}.</p>
+          </> : <>
+            <p className="small">{c?.status_text || ''}</p>
+            {c?.fault && <p className="pre"><strong>Fault:</strong> {c.fault}</p>}
+          </>}
           <p className={`small ${e.report_stale ? 'bad' : 'muted'}`}>
-            {c ? <>From the {month(c.report_month)} report{c.uploaded_by_name && ` (uploaded by ${c.uploaded_by_name})`}{e.report_stale && ' — a newer report is due'}</> : 'No condition report uploaded yet.'}
+            {c?.condition_source === 'status' ? 'The next monthly report will replace this.'
+              : c?.report_month ? <>From the {month(c.report_month)} report{c.uploaded_by_name && ` (uploaded by ${c.uploaded_by_name})`}</>
+              : 'No condition report uploaded yet.'}
+            {e.report_stale && ' A newer report is due.'}
             {' '}<Link to="/electricity/reports">Upload report</Link>
           </p>
         </Card>

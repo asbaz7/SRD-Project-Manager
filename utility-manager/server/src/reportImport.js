@@ -113,6 +113,8 @@ async function powerhouseOf(t, islandId) {
 /**
  * What an upload would change, without changing anything.
  */
+const monthLabel = (m) => new Date(`${m}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+
 export async function planImport(db, parsed, islandId) {
   const facilityId = await powerhouseOf(db, islandId);
   const [{ rows: assets }, { rows: current }] = await Promise.all([
@@ -140,6 +142,20 @@ export async function planImport(db, parsed, islandId) {
   if (!latest.month) warnings.push('Could not tell which month this report is for.');
   if (currentMonth && latest.month && latest.month < currentMonth) {
     warnings.push(`A newer report (${currentMonth.slice(0, 7)}) is already in the system: only its history will be added.`);
+  }
+  if (currentMonth && latest.month && latest.month === currentMonth) {
+    warnings.push(`This file's latest report (${monthLabel(latest.month)}) is the one already in the system: nothing newer was found in it.`);
+  }
+  if (parsed.skipped?.length) {
+    warnings.push(`Could not read ${parsed.skipped.length === 1 ? 'sheet' : 'sheets'} ${parsed.skipped.map((s) => `"${s}"`).join(', ')}: the genset numbers row is missing. Check the template and upload again.`);
+  }
+  const relabelled = parsed.reports.filter((r) => r.number_label_missing).map((r) => r.sheet);
+  if (relabelled.length) {
+    warnings.push(`The "GENSET NO." label is missing on ${relabelled.length === 1 ? 'sheet' : 'sheets'} ${relabelled.map((s) => `"${s}"`).join(', ')}; the genset numbers were read from the row above "FIXED ASSET CODE". Please ask the island to fix the label.`);
+  }
+  const expected = expectedMonth(new Date().toLocaleDateString('en-CA', { timeZone: 'Indian/Maldives' }));
+  if (latest.month && latest.month < expected && (!currentMonth || latest.month >= currentMonth)) {
+    warnings.push(`The newest report in this file is ${monthLabel(latest.month)}; ${monthLabel(expected)} will still show as missing.`);
   }
   const newGensets = latest.gensets.filter((g) => !byTag.has(g.number)).map((g) => g.number);
   if (newGensets.length) warnings.push(`Genset${newGensets.length > 1 ? 's' : ''} ${newGensets.join(', ')} will be added to the register.`);

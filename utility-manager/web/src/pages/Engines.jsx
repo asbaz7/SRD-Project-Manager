@@ -2,7 +2,7 @@
 // alternator figures, flags and ongoing work. One click filters.
 import { Link } from 'react-router-dom';
 import { csvUrl, qs } from '../api.js';
-import { AssetStatus, Async, Card, Condition, Empty, Flags, PageHead, Select } from '../components/ui.jsx';
+import { Async, Card, EngineState, Empty, Flags, PageHead, Select } from '../components/ui.jsx';
 import { date, month, num } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
@@ -62,8 +62,9 @@ export default function Engines({ embedded }) {
                   <small className="muted">{e.make_model || '—'}{e.rated_capacity ? ` · ${num(e.rated_capacity)} kW` : ''}</small>
                   <div><Flags e={e} /></div>
                 </td>
-                <td><Condition value={e.condition} text={e.status_text} /><br /><AssetStatus status={e.status} /></td>
-                <td className="wrap hide-sm small">{e.fault || <span className="muted">—</span>}</td>
+                <td><EngineState e={e} /></td>
+                <td className="wrap hide-sm small">{(e.condition_source === 'status' ? e.condition_note : e.fault) || <span className="muted">—</span>}
+                  {e.condition_source === 'status' && e.fault && <><br /><span className="muted">Report: {e.fault}</span></>}</td>
                 <td className="num">{e.hours_since_overhaul != null ? `${num(e.hours_since_overhaul)} h` : '—'}
                   {e.hours_to_overhaul != null && <><br /><small className={e.hours_to_overhaul <= 0 ? 'bad' : 'muted'}>{e.hours_to_overhaul <= 0 ? `${num(-e.hours_to_overhaul)} h over` : `${num(e.hours_to_overhaul)} h to go`}</small></>}</td>
                 <td className="num hide-sm">{e.total_hours != null ? num(e.total_hours) : '—'}</td>

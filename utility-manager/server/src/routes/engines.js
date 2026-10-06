@@ -15,7 +15,7 @@ export const ENGINE_SELECT = `
          s.status, s.status_note, s.status_at, s.alt_make, s.alt_kw,
          s.next_overhaul_hours, s.next_overhaul_on, s.next_alt_service_on,
          f.id as facility_id, f.name as facility_name, i.id as island_id, i.name as island_name, i.atoll_id, a.code as atoll_code,
-         c.report_month, c.reported_on, c.condition, c.status_text, c.fault, c.total_hours, c.hours_since_overhaul,
+         c.report_month, c.reported_on, c.condition, c.report_condition, c.condition_source, c.condition_note, c.condition_at, c.status_text, c.fault, c.total_hours, c.hours_since_overhaul,
          c.last_overhaul_on as report_overhaul_on, c.last_alt_service_on as report_alt_service_on,
          c.needs_overhaul, c.alt_needs_service, c.max_load_kw, c.capable_kw, c.last_valve_on, c.last_battery_on,
          (select max(done_on) from maintenance_events e where e.asset_id = s.id and e.kind in ('overhaul', 'top_overhaul')) as last_overhaul_event,
@@ -27,7 +27,7 @@ export const ENGINE_SELECT = `
     join facilities f on f.id = s.facility_id and f.active
     join islands i on i.id = f.island_id and i.active
     join atolls a on a.id = i.atoll_id
-    left join engine_conditions c on c.asset_id = s.id`;
+    left join engine_current c on c.asset_id = s.id`;
 
 const maxDate = (...ds) => ds.filter(Boolean).sort().at(-1) || null;
 

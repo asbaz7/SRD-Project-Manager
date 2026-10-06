@@ -90,7 +90,7 @@ export default async function dashboardRoutes(app) {
           from assets s
           join facilities f on f.id = s.facility_id and f.active
           join islands i on i.id = f.island_id and i.active
-          left join engine_conditions c on c.asset_id = s.id
+          left join engine_current c on c.asset_id = s.id
          where s.kind = 'genset' and s.active and ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
       // Powerhouses whose report for the expected month has not come in.
       db.query(`

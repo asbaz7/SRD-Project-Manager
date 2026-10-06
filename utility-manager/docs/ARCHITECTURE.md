@@ -168,6 +168,38 @@ icon and a label. Each service has its own identity colour.
 Work orders carry a `service` (migration 005): taken from the asset or
 facility, or chosen for island-wide work.
 
+## Engine state: one answer (Oct 2026)
+
+A genset's state has two sources:
+- the monthly condition report, a snapshot as of its "record updated" date;
+- live status updates, from the website or the Telegram bot.
+
+The view `engine_current` (migration 007) combines them, and the most recent
+evidence wins:
+- A status of down or maintenance recorded after the report gives
+  `not_running`.
+- A status of running or standby recorded after a report that said
+  not_running gives `ok` ("Back in service").
+- Otherwise the report's condition applies.
+
+Every page, count, filter and the bot read `engine_current`, so a genset can
+never show "OK" and "Down" at once. Its columns `condition_source`
+('report' | 'status'), `condition_note`, `condition_at` and
+`report_condition` say where the answer came from. A newer report takes over
+again: the import also moves the live status when the report is newer.
+
+## Condition report parsing safeguards
+
+- **Missing "GENSET NO." label:** if the label was typed over, the genset
+  numbers are read from the row just above the first engine field. This
+  happened on Thulusdhoo's April to August 2026 sheets ("pr"), which used to
+  be skipped silently.
+- **Upload warnings in the preview:**
+  - sheets that look like reports but can't be read;
+  - sheets read without the label;
+  - a latest month that is the same as the one already stored;
+  - a latest month older than the month now expected.
+
 ## Telegram bot (added Oct 2026)
 
 `src/telegram.js`, `routes/telegram.js`, migration 006.

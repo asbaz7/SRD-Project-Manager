@@ -186,7 +186,7 @@ export default async function assetRoutes(app) {
       select id, title, category, severity, status, started_at, resolved_at
         from incidents where asset_id = $1 order by started_at desc limit 50`, [assetId])).rows;
     const [condition, maintenance, work, hours, engine] = await Promise.all([
-      db.query(`select c.*, u.full_name as uploaded_by_name from engine_conditions c
+      db.query(`select c.*, u.full_name as uploaded_by_name from engine_current c
                   left join users u on u.id = c.uploaded_by where c.asset_id = $1`, [assetId]),
       db.query(`select e.*, u.full_name as created_by_name, 'WO-' || lpad(e.work_id::text, 4, '0') as work_ref
                   from maintenance_events e left join users u on u.id = e.created_by

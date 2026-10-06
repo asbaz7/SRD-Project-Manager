@@ -94,7 +94,7 @@ function ServiceOverview({ svc }) {
                 <span className={`dot ${serious ? 'bad' : 'serious'}`} aria-hidden="true">{serious ? '✕' : '■'}</span>
                 <span className="grow"><strong>{a.atoll_code} · {a.island_name} · {ASSET_KINDS[a.kind]} {a.tag}</strong>
                   <small>{a.condition ? <Condition value={a.condition} /> : <AssetStatus status={a.status} />}{' '}
-                    {a.fault || a.status_note || a.make_model || ''}{a.work_title && ` · 🔧 ${a.work_title}`}</small></span>
+                    {(a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || a.make_model || ''}{a.work_title && ` · 🔧 ${a.work_title}`}</small></span>
                 <Icon name="arrow" />
               </Link></li>;
             })}</ul>}
