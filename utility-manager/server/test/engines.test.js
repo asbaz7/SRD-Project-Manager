@@ -514,4 +514,31 @@ describe('work and maintenance history', () => {
     assert.match(old.tag, /^1 \(removed/);
     assert.equal(old.status, 'decommissioned');
   });
+
+  test('a serial number corrected by hand is kept over the report, and not mistaken for a move', async () => {
+    const isl = (await call('GET', '/islands', { token: admin })).body;
+    const gaafaru = isl.find((i) => i.name === 'Gaafaru');
+    const gulhi = isl.find((i) => i.name === 'Gulhi');
+    const at = async (island, tag) => (await db.query(`select s.id, s.serial_no, s.facility_id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = $2 and s.kind = 'genset'`, [island.id, tag])).rows[0];
+    const real = await at(gulhi, '2');
+    await db.query(`update assets set serial_no = 'REAL-12345' where id = $1`, [real.id]);   // Gulhi G2 really has this serial
+    const g1 = await at(gaafaru, '1');
+    // Gaafaru's report wrongly gives its G1 Gulhi G2's serial; corrected by hand.
+    const fix = await call('PATCH', `/assets/${g1.id}`, { token: admin, body: { serial_no: 'GAAF-99999' } });
+    assert.equal(fix.status, 200);
+    assert.equal(fix.body.serial_locked, true);
+    const sheet = reportSheet({ name: sheetName(EXPECTED, 1), powerhouse: 'K. GAAFARU', updated: shift(EXPECTED, 1), gensets: [
+      { number: 1, make: 'CUMMINS', serial: 'REAL 12345', status: 'RUNNING; OK', total: { hours: 5000 } },
+      { number: 2, make: 'CUMMINS', status: 'RUNNING; OK', total: { hours: 4000 } },
+    ] });
+    const data = Buffer.from(makeXlsx([sheet])).toString('base64');
+    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'gaafaru.xlsx', data } })).body;
+    assert.deepEqual(preview.moves, []);
+    assert.ok(preview.warnings.some((w) => /corrected to GAAF-99999 in the register, which is kept/.test(w)), preview.warnings.join(' | '));
+    const res = await call('POST', '/condition-reports/import', { token: admin, body: { file_name: 'gaafaru.xlsx', data, island_id: gaafaru.id } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.gensets_moved, 0);
+    assert.equal((await at(gaafaru, '1')).serial_no, 'GAAF-99999');
+    assert.equal((await at(gulhi, '2')).facility_id, real.facility_id);
+  });
 });

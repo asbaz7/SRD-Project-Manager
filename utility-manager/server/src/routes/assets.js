@@ -247,8 +247,12 @@ export default async function assetRoutes(app) {
     const body = parse(assetBody.omit({ facility_id: true }).partial(), req.body);
     await assertIslandWrite(db, req.user, { assetId });
     const set = updateSet(body, ASSET_COLS);
+    // A serial number changed by hand is kept over what reports say.
+    const lock = body.serial_no !== undefined
+      ? `, serial_locked = (serial_locked or serial_no is distinct from $${set.values.length + 2})` : '';
     return db.tx(req.user.id, async (t) => one((await t.query(
-      `update assets set ${set.sql} where id = $1 returning *`, [assetId, ...set.values])).rows, 'Asset'));
+      `update assets set ${set.sql}${lock} where id = $1 returning *`,
+      [assetId, ...set.values, ...(lock ? [body.serial_no] : [])])).rows, 'Asset'));
   });
 
   // Status for one or many assets at once (e.g. the morning genset round).

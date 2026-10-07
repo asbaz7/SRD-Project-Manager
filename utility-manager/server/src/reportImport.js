@@ -127,6 +127,11 @@ async function detectMoves(db, gensets, byTag, facilityId) {
     const here = byTag.get(g.number);
     const reportSerial = normSerial(g.serial_no);
     if (here && (!reportSerial || normSerial(here.serial_no) === reportSerial)) continue;
+    // Corrected by hand: the register is right and the report is not.
+    if (here?.serial_locked) {
+      serialChanges.push({ number: g.number, was: here.serial_no, now: g.serial_no, locked: true });
+      continue;
+    }
     const from = await gensetBySerial(db, g.serial_no, facilityId || NO_FACILITY);
     if (from) moves.push({ number: g.number, serial: g.serial_no, from, replaces: here || null });
     else if (here && normSerial(here.serial_no)) serialChanges.push({ number: g.number, was: here.serial_no, now: g.serial_no });
@@ -140,7 +145,7 @@ export async function planImport(db, parsed, islandId) {
   const facilityId = await powerhouseOf(db, islandId);
   const [{ rows: assets }, { rows: current }] = await Promise.all([
     facilityId
-      ? db.query(`select a.id, a.tag, a.make_model, a.serial_no, c.report_month
+      ? db.query(`select a.id, a.tag, a.make_model, a.serial_no, a.serial_locked, c.report_month
                     from assets a left join engine_conditions c on c.asset_id = a.id
                    where a.facility_id = $1 and a.kind = 'genset' and a.active`, [facilityId])
       : { rows: [] },
@@ -185,7 +190,9 @@ export async function planImport(db, parsed, islandId) {
       m.replaces ? `, and the genset previously registered here as Genset ${m.number} (S/N ${m.replaces.serial_no}) will be marked as removed` : ''}.`);
   }
   for (const c of serialChanges) {
-    warnings.push(`Genset ${c.number}'s serial number changed from ${c.was} to ${c.now}. If the engine was replaced, record the old one's move or removal on its page.`);
+    warnings.push(c.locked
+      ? `The report gives Genset ${c.number}'s serial number as ${c.now}, but it was corrected to ${c.was} in the register, which is kept. Please ask the island to fix its report.`
+      : `Genset ${c.number}'s serial number changed from ${c.was} to ${c.now}. If the engine was replaced, record the old one's move or removal on its page.`);
   }
   const newGensets = latest.gensets.filter((g) => !byTag.has(g.number) && !moved.has(g.number)).map((g) => g.number);
   if (newGensets.length) warnings.push(`Genset${newGensets.length > 1 ? 's' : ''} ${newGensets.join(', ')} will be added to the register.`);
@@ -231,7 +238,7 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
   }
   const latest = parsed.latest;
   const { rows: existing } = await t.query(
-    "select id, tag, status, status_at, serial_no from assets where facility_id = $1 and kind = 'genset' and active", [facilityId]);
+    "select id, tag, status, status_at, serial_no, serial_locked from assets where facility_id = $1 and kind = 'genset' and active", [facilityId]);
   const byTag = new Map(existing.map((a) => [a.tag, a]));
   let created = 0;
 
@@ -252,7 +259,7 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
       assetId: m.from.id, facilityId, tag: m.number, movedOn, source: 'report', userId,
       notes: `Found in the ${latest.month?.slice(0, 7)} condition report${fileName ? ` (${fileName})` : ''}`,
     });
-    const { rows } = await t.query('select id, tag, status, status_at, serial_no from assets where id = $1', [m.from.id]);
+    const { rows } = await t.query('select id, tag, status, status_at, serial_no, serial_locked from assets where id = $1', [m.from.id]);
     byTag.set(m.number, rows[0]);
   }
 
@@ -265,7 +272,7 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
     if (byTag.has(g.number)) {
       await t.query(`
         update assets set
-          make_model = coalesce($2, make_model), serial_no = coalesce($3, serial_no),
+          make_model = coalesce($2, make_model), serial_no = case when serial_locked then serial_no else coalesce($3, serial_no) end,
           rated_capacity = coalesce($4, rated_capacity), operating_capacity = coalesce($5, operating_capacity),
           fixed_asset_code = coalesce($6, fixed_asset_code), cpl_spec = coalesce($7, cpl_spec),
           alt_make = coalesce($8, alt_make), alt_frame = coalesce($9, alt_frame), alt_serial = coalesce($10, alt_serial),
