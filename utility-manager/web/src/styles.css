@@ -278,7 +278,7 @@ tr.attention td { background: color-mix(in srgb, var(--bad-fill) 7%, transparent
 .sev.medium { color: var(--warn); border-color: var(--warn-fill); }
 .sev.low { color: var(--muted); border-color: var(--hairline); }
 .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; white-space: nowrap; color: var(--text-2); background: var(--track); font-weight: 600; }
-.pill.state-ongoing, .pill.inc-open, .pill.work-in_progress { color: var(--info); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pill.state-ongoing, .pill.inc-open, .pill.work-in_progress, .pill.work-dismantling, .pill.work-in_transit, .pill.work-installing { color: var(--info); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .pill.state-on_hold, .pill.work-on_hold, .pill.work-awaiting_parts { color: var(--warn); background: color-mix(in srgb, var(--warn-fill) 18%, transparent); }
 .pill.state-completed, .pill.inc-resolved, .pill.work-completed { color: var(--good); background: color-mix(in srgb, var(--good-fill) 14%, transparent); }
 .pill.state-cancelled, .pill.inc-closed, .pill.work-cancelled { color: var(--muted); }
@@ -413,3 +413,12 @@ input:disabled, select:disabled { opacity: .7; }
 .sharing { display: grid; gap: 8px; }
 .member-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .member-row select:first-child { flex: 1 1 220px; }
+
+/* Genset move stages */
+.stepper { display: flex; gap: 4px; margin: 4px 0 14px; flex-wrap: wrap; }
+.stepper li { list-style: none; flex: 1 1 90px; text-align: center; font-size: .8rem; color: var(--muted); padding-top: 10px; border-top: 4px solid var(--none-fill); border-radius: 2px; }
+.stepper li.done { border-top-color: var(--good-fill); color: var(--text); }
+.stepper li.current { border-top-color: var(--accent); color: var(--text); font-weight: 600; }
+.stepper { padding: 0; }
+.move-route { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 600; margin: 0 0 8px; }
+.move-route .arrow { color: var(--muted); }

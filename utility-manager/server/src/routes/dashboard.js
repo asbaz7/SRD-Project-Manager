@@ -118,7 +118,7 @@ export default async function dashboardRoutes(app) {
           join atolls a on a.id = i.atoll_id
           left join assets s on s.id = w.asset_id
          where w.status not in ('completed', 'cancelled') and ($1::uuid is null or i.atoll_id = $1)
-         order by array_position(array['in_progress','awaiting_parts','on_hold','planned'], w.status), w.target_on nulls last
+         order by array_position(array['in_progress','dismantling','in_transit','installing','awaiting_parts','on_hold','planned'], w.status), w.target_on nulls last
          limit 30`, [atoll]),
       // Open work and incidents per section, for the overview tiles.
       db.query(`

@@ -36,12 +36,18 @@ export const CONDITIONS = {
 };
 export const WORK_KINDS = {
   overhaul: 'Overhaul', top_overhaul: 'Top overhaul', alternator_service: 'Alternator service', repair: 'Repair',
-  service: 'Service', inspection: 'Inspection', installation: 'Installation', other: 'Other',
+  service: 'Service', inspection: 'Inspection', installation: 'Installation', relocation: 'Genset move', other: 'Other',
 };
 export const WORK_STATES = {
   planned: 'Planned', in_progress: 'In progress', awaiting_parts: 'Awaiting parts', on_hold: 'On hold',
+  dismantling: 'Dismantling', in_transit: 'In transit', installing: 'Installing',
   completed: 'Completed', cancelled: 'Cancelled',
 };
+// A genset move has its own stages; other work doesn't use them.
+export const MOVE_STAGES = ['planned', 'dismantling', 'in_transit', 'installing', 'completed'];
+const MOVE_ONLY = ['dismantling', 'in_transit', 'installing'];
+export const statesFor = (kind) => Object.fromEntries(Object.entries(WORK_STATES).filter(([k]) =>
+  (kind === 'relocation' ? !['in_progress', 'awaiting_parts'].includes(k) : !MOVE_ONLY.includes(k))));
 export const EVENT_KINDS = {
   overhaul: 'Overhaul', top_overhaul: 'Top overhaul', alternator_service: 'Alternator service',
   valve_clearance: 'Valve clearance', battery_change: 'Battery change', repair: 'Repair', service: 'Service',

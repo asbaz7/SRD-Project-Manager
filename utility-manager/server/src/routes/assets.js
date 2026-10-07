@@ -4,7 +4,6 @@ import { expectedMonth } from '../reportImport.js';
 import { ENGINE_SELECT, describeEngine, mvToday } from './engines.js';
 import { sendCsv } from '../csv.js';
 import { conflict } from '../errors.js';
-import { moveAsset } from '../assetMoves.js';
 import { assetName, esc } from '../telegram.js';
 import {
   Where, date, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
@@ -184,7 +183,7 @@ export default async function assetRoutes(app) {
         from asset_status_log l left join users u on u.id = l.reported_by
        where l.asset_id = $1 order by l.reported_at desc limit 100`, [assetId])).rows;
     asset.moves = (await db.query(`
-      select m.id, m.from_tag, m.to_tag, m.moved_on, m.notes, m.source, m.created_at, u.full_name as moved_by_name,
+      select m.id, m.from_tag, m.to_tag, m.moved_on, m.notes, m.source, m.created_at, u.full_name as moved_by_name, m.work_id,
              fi.name as from_island, fa.code as from_atoll, ff.name as from_facility, ti.name as to_island, ta.code as to_atoll
         from asset_moves m
         left join facilities ff on ff.id = m.from_facility_id left join islands fi on fi.id = ff.island_id left join atolls fa on fa.id = fi.atoll_id
@@ -287,27 +286,4 @@ export default async function assetRoutes(app) {
     return { ok: true, count: body.items.length };
   });
 
-  // Move an asset to another facility (e.g. a genset to another island's
-  // powerhouse). History goes with it; open work follows it.
-  app.post('/assets/:id/move', manager, async (req) => {
-    const { id: assetId } = parse(idParam, req.params);
-    const b = parse(z.object({
-      facility_id: id,
-      tag: z.string().trim().min(1).max(40).optional(),
-      moved_on: date,
-      notes: optText(1000),
-      move_open_work: z.boolean().default(true),
-    }), req.body);
-    await assertIslandWrite(db, req.user, { assetId });
-    await assertIslandWrite(db, req.user, { facilityId: b.facility_id });
-    const move = await db.tx(req.user.id, (t) => moveAsset(t, {
-      assetId, facilityId: b.facility_id, tag: b.tag, movedOn: b.moved_on, notes: b.notes,
-      userId: req.user.id, moveOpenWork: b.move_open_work,
-    }));
-    const a = (await db.query(`select s.kind, s.tag, i.name as island_name, a.code as atoll_code from assets s
-      join facilities f on f.id = s.facility_id join islands i on i.id = f.island_id join atolls a on a.id = i.atoll_id where s.id = $1`, [assetId])).rows[0];
-    const from = (await db.query(`select i.name, a.code from facilities f join islands i on i.id = f.island_id join atolls a on a.id = i.atoll_id where f.id = $1`, [move.from_facility_id])).rows[0];
-    await telegram.alert(`🚚 <b>${esc(assetName({ kind: a.kind, tag: move.from_tag }))} moved from ${esc(from?.code)}. ${esc(from?.name)} to ${esc(a.atoll_code)}. ${esc(a.island_name)}</b>${move.to_tag !== move.from_tag ? ` (now ${esc(assetName(a))})` : ''}${b.notes ? `\n${esc(b.notes)}` : ''}\n<i>${esc(req.user.fullName)}</i> · ${telegram.link(`/assets/${assetId}`, 'Open')}`, { technical: true });
-    return move;
-  });
 }

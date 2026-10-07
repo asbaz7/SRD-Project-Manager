@@ -249,21 +249,35 @@ again: the import also moves the live status when the report is newer.
 
 ## Moving gensets between islands (Oct 2026)
 
-A move keeps the asset's identity (the same `assets.id`), so its maintenance
-history, running hours, condition and status log go with it. Each move is
-recorded in `asset_moves` (migration 010). Logic is in `src/assetMoves.js`.
+A move is **work**: a work order of kind `relocation` (migration 013). It
+carries a destination facility and the asset's number there, and has its own
+stages: planned, dismantling, in transit, installing, completed (or on hold,
+cancelled). It has updates, commenters, Telegram `/update` and alerts like
+any other work, and it appears on both islands' work lists.
 
-- **By hand:** `POST /assets/:id/move` with the destination facility (same
-  service), the number there (must be free), the date and notes. Ongoing
-  work on it follows by default; finished work stays where it happened. A
-  technical Telegram alert is sent.
-- **From a report:** if a report lists a genset whose serial number matches
-  exactly one active genset at another powerhouse, the preview says so and
-  the import moves it instead of adding a duplicate. Serials are compared on
-  letters and digits only, and only from 5 characters up. If it takes a
-  number already used here by a different engine, that record is kept but
-  marked not in use and decommissioned ("N (removed YYYY-MM)"). A changed
-  serial with no match elsewhere is only flagged.
+What each stage does (`applyMoveProgress` in `routes/work.js`):
+- **Dismantling, in transit or installing:** the asset is set to maintenance
+  ("Being moved to X (WO-n): in transit"), so its old island doesn't count it
+  as available.
+- **Completed:** `moveAsset` (`src/assetMoves.js`) transfers the asset, which
+  keeps the same `assets.id` and so its maintenance history, running hours,
+  condition and status log. The move is recorded in `asset_moves` (linked by
+  `work_id`), other open work follows, and the asset is set to standby at the
+  destination.
+- **Cancelled once under way:** the asset's status becomes unknown, so it gets
+  checked.
+
+When a move is planned, the destination must be a facility of the same
+service and the number must be free there. Only one open move per asset is
+allowed. A finished move can't be reopened.
+
+**From reports:** if a report lists a genset whose serial number matches
+exactly one active genset at another powerhouse, it is moved rather than
+duplicated. An open move for it is completed; otherwise a completed move
+work order is recorded automatically. If it takes a number already used by
+a different engine, that record is kept, marked removed. Serials corrected
+by hand (`serial_locked`, migration 011) win over the report. Serials are
+compared on letters and digits only, from 5 characters up.
 
 ## Condition report parsing safeguards
 

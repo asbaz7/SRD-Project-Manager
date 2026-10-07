@@ -255,10 +255,29 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
                      values ($1, 'decommissioned', $2, now(), $3)`,
       [m.replaces.id, `Replaced by S/N ${m.serial} (moved from ${m.from.atoll_code}. ${m.from.island_name}) per the ${latest.month?.slice(0, 7)} report. Record where it went if known.`, userId]);
     }
-    await moveAsset(t, {
-      assetId: m.from.id, facilityId, tag: m.number, movedOn, source: 'report', userId,
-      notes: `Found in the ${latest.month?.slice(0, 7)} condition report${fileName ? ` (${fileName})` : ''}`,
-    });
+    // Every move is tracked as work: complete the open move if there is one,
+    // otherwise record a completed one.
+    const note = `Found in the ${latest.month?.slice(0, 7)} condition report${fileName ? ` (${fileName})` : ''}`;
+    const { rows: open } = await t.query(`select id from work_orders where asset_id = $1 and kind = 'relocation'
+                                            and status not in ('completed', 'cancelled')`, [m.from.id]);
+    let workId;
+    if (open[0]) {
+      workId = open[0].id;
+      await t.query(`update work_orders set status = 'completed', completed_on = $2, dest_facility_id = $3, dest_tag = $4 where id = $1`,
+        [workId, movedOn, facilityId, m.number]);
+      await t.query(`insert into work_updates (work_id, body, created_by) values ($1, $2, $3)`, [workId, `${note}: completed.`, userId]);
+    } else {
+      const { rows: [from] } = await t.query('select island_id from facilities where id = $1', [m.from.facility_id]);
+      const { rows: [here] } = await t.query(`select i.name, a.code from islands i join atolls a on a.id = i.atoll_id where i.id = $1`, [islandId]);
+      workId = (await t.query(`
+        insert into work_orders (island_id, facility_id, asset_id, kind, title, description, status, completed_on,
+                                 created_by, service, dest_facility_id, dest_tag)
+        values ($1, $2, $3, 'relocation', $4, $5, 'completed', $6, $7, 'electricity', $8, $9) returning id`,
+      [from.island_id, m.from.facility_id, m.from.id,
+        `Move Genset ${m.from.tag} from ${m.from.atoll_code}. ${m.from.island_name} to ${here.code}. ${here.name}`,
+        `${note}. Recorded automatically.`, movedOn, userId, facilityId, m.number])).rows[0].id;
+    }
+    await moveAsset(t, { assetId: m.from.id, facilityId, tag: m.number, movedOn, source: 'report', userId, workId, notes: note });
     const { rows } = await t.query('select id, tag, status, status_at, serial_no, serial_locked from assets where id = $1', [m.from.id]);
     byTag.set(m.number, rows[0]);
   }

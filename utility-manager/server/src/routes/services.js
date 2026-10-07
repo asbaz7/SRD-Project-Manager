@@ -79,7 +79,7 @@ export default async function serviceRoutes(app) {
           join atolls a on a.id = i.atoll_id
           left join assets s on s.id = w.asset_id
          where w.service = $1 and w.status not in ('completed', 'cancelled') and ${scope}
-         order by array_position(array['in_progress','awaiting_parts','on_hold','planned'], w.status), w.target_on nulls last
+         order by array_position(array['in_progress','dismantling','in_transit','installing','awaiting_parts','on_hold','planned'], w.status), w.target_on nulls last
          limit 50`, [svc, atoll]),
       db.query(`
         select x.id, 'INC-' || lpad(x.id::text, 6, '0') as ref, x.title, x.category, x.severity, x.started_at,

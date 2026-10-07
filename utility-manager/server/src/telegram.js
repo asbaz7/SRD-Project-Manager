@@ -28,10 +28,13 @@ const WORK_STATE_WORDS = {
   planned: 'planned', progress: 'in_progress', in_progress: 'in_progress', started: 'in_progress',
   parts: 'awaiting_parts', awaiting_parts: 'awaiting_parts', hold: 'on_hold', on_hold: 'on_hold',
   done: 'completed', completed: 'completed', complete: 'completed', cancelled: 'cancelled', canceled: 'cancelled',
+  // Genset moves
+  dismantling: 'dismantling', dismantle: 'dismantling', transit: 'in_transit', in_transit: 'in_transit', shipping: 'in_transit',
+  shipped: 'in_transit', installing: 'installing', install: 'installing', arrived: 'installing',
 };
 const WORK_STATE_LABEL = {
   planned: 'Planned', in_progress: 'In progress', awaiting_parts: 'Awaiting parts', on_hold: 'On hold',
-  completed: 'Completed', cancelled: 'Cancelled',
+  completed: 'Completed', cancelled: 'Cancelled', dismantling: 'Dismantling', in_transit: 'In transit', installing: 'Installing',
 };
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 
@@ -58,6 +61,7 @@ const HELP = `<b>SRD Utility Bot</b>
   <i>(service and severity are optional: electricity is assumed)</i>
 /update WO-12 seal arrived, fitting tomorrow
 /update WO-12 parts waiting for crankshaft
+/update WO-15 transit loaded on the vessel  <i>(genset moves: dismantling, transit, installing)</i>
 /done WO-12 engine back in service
 
 <b>Alerts</b>

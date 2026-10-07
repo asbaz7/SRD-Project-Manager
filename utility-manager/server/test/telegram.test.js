@@ -238,3 +238,15 @@ test('non-technical staff cannot use the technical bot commands', async () => {
   await say(4004, '/down Maafushi 1 broken');
   assert.match(repliesTo(4004), /needs technical access/);
 });
+
+test('genset move stages can be posted from Telegram', async () => {
+  const isl = (await call('GET', '/islands', { token: admin })).body;
+  const huraa = isl.find((i) => i.name === 'Huraa');
+  const ph = (await db.query(`select id from facilities where island_id = $1 and kind = 'powerhouse'`, [huraa.id])).rows[0].id;
+  const g5 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '5' and s.kind = 'genset'`, [maafushi.id])).rows[0].id;
+  const w = (await call('POST', '/work', { token: admin, body: { asset_id: g5, kind: 'relocation', title: 'Move G5', dest_facility_id: ph, dest_tag: '9' } })).body;
+  await say(ADMIN_TG, `/update WO-${w.id} transit loaded on the vessel`);
+  assert.match(repliesTo(ADMIN_TG), /Status: <b>In transit<\/b>/);
+  assert.equal((await db.query('select status from work_orders where id = $1', [w.id])).rows[0].status, 'in_transit');
+  assert.equal((await db.query('select status from assets where id = $1', [g5])).rows[0].status, 'maintenance');
+});

@@ -452,33 +452,56 @@ describe('work and maintenance history', () => {
     assert.equal(+dueAfter.overhaul_due, +dueBefore.overhaul_due - 1);
   });
 
-  test('a genset moved to another island keeps its history, and open work follows it', async () => {
+  test('a genset move is tracked as work: stages, out of service on the way, transferred on completion', async () => {
     const isl = (await call('GET', '/islands', { token: admin })).body;
     const guraidhoo = isl.find((i) => i.name === 'Guraidhoo');
     const ph = (await db.query(`select id from facilities where island_id = $1 and kind = 'powerhouse'`, [guraidhoo.id])).rows[0].id;
     const g1 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '1' and s.kind = 'genset'`, [maafushi.id])).rows[0].id;
     const before = (await call('GET', `/assets/${g1}`, { token: admin })).body;
-    const work = (await call('POST', '/work', { token: admin, body: { asset_id: g1, kind: 'repair', title: 'Fix before shipping' } })).body;
+    const repair = (await call('POST', '/work', { token: admin, body: { asset_id: g1, kind: 'repair', title: 'Fix before shipping' } })).body;
+    const move = (body) => call('POST', '/work', { token: admin, body: { asset_id: g1, kind: 'relocation', title: 'Move G1 to Guraidhoo', dest_facility_id: ph, ...body } });
 
-    // Guraidhoo already has a Genset 1: the number must be free.
-    const clash = await call('POST', `/assets/${g1}/move`, { token: admin, body: { facility_id: ph, moved_on: mvToday() } });
+    // The number must be free at the destination; only move stages are allowed.
+    const clash = await move({ dest_tag: '1' });
     assert.equal(clash.status, 409);
     assert.match(clash.body.error, /already has Genset 1/);
+    assert.equal((await move({ dest_tag: '7', status: 'awaiting_parts' })).status, 400);
+    // Managers can't move gensets to islands they can't change.
+    assert.equal((await call('POST', '/work', { token: manager, body: { asset_id: g1, kind: 'relocation', title: 'x', dest_facility_id: ph, dest_tag: '7' } })).status, 403);
 
-    const moved = await call('POST', `/assets/${g1}/move`, { token: admin, body: { facility_id: ph, tag: '7', moved_on: mvToday(), notes: 'Shipped on MV Example' } });
-    assert.equal(moved.status, 200, JSON.stringify(moved.body));
-    const after = (await call('GET', `/assets/${g1}`, { token: admin })).body;
-    assert.equal(after.island_name, 'Guraidhoo');
-    assert.equal(after.tag, '7');
-    assert.equal(after.maintenance.length, before.maintenance.length);
-    assert.equal(after.hours_log.length, before.hours_log.length);
-    assert.equal(after.moves[0].from_island, 'Maafushi');
-    assert.equal(after.moves[0].from_tag, '1');
-    assert.equal((await call('GET', `/work/${work.id}`, { token: admin })).body.island_name, 'Guraidhoo');
-    // Maafushi no longer counts it.
-    assert.ok(!(await call('GET', `/islands/${maafushi.id}`, { token: admin })).body.facilities.some((f) => f.assets.some((a) => a.id === g1)));
-    // Managers can't move gensets from islands they can't change.
-    assert.equal((await call('POST', `/assets/${g1}/move`, { token: manager, body: { facility_id: ph, tag: '8', moved_on: mvToday() } })).status, 403);
+    const w = (await move({ dest_tag: '7', assigned_to: 'Logistics' })).body;
+    assert.equal(w.status, 'planned');
+    assert.equal(w.dest_island_name, 'Guraidhoo');
+    assert.equal((await move({ dest_tag: '8' })).status, 409, 'one open move per genset');
+    // Shown on both islands' work lists.
+    assert.ok((await call('GET', `/work?island_id=${guraidhoo.id}`, { token: admin })).body.items.some((x) => x.id === w.id));
+
+    // Under way: out of service at Maafushi, still registered there.
+    await call('POST', `/work/${w.id}/updates`, { token: admin, body: { body: 'Dismantling started', status: 'dismantling' } });
+    let a = (await call('GET', `/assets/${g1}`, { token: admin })).body;
+    assert.equal(a.status, 'maintenance');
+    assert.match(a.status_note, /Being moved to K\. Guraidhoo .*dismantling/);
+    assert.equal(a.island_name, 'Maafushi');
+    await call('POST', `/work/${w.id}/updates`, { token: admin, body: { body: 'Loaded on MV Example', status: 'in_transit' } });
+    await call('PATCH', `/work/${w.id}`, { token: admin, body: { status: 'installing' } });
+    assert.equal((await call('POST', `/work/${w.id}/updates`, { token: admin, body: { body: 'x', status: 'awaiting_parts' } })).status, 400);
+
+    // Completed: transferred with its history; other open work follows; on standby there.
+    await call('POST', `/work/${w.id}/updates`, { token: admin, body: { body: 'Commissioned', status: 'completed' } });
+    a = (await call('GET', `/assets/${g1}`, { token: admin })).body;
+    assert.equal(a.island_name, 'Guraidhoo');
+    assert.equal(a.tag, '7');
+    assert.equal(a.status, 'standby');
+    assert.equal(a.maintenance.length, before.maintenance.length, 'history kept, and a move is not a maintenance event');
+    assert.equal(a.hours_log.length, before.hours_log.length);
+    assert.equal(a.moves[0].from_island, 'Maafushi');
+    assert.equal(a.moves[0].work_id, w.id);
+    assert.equal((await call('GET', `/work/${repair.id}`, { token: admin })).body.island_name, 'Guraidhoo');
+    assert.ok(!(await call('GET', `/islands/${maafushi.id}`, { token: admin })).body.facilities.some((f) => f.assets.some((x) => x.id === g1)));
+    // A finished move can't be reopened.
+    assert.equal((await call('PATCH', `/work/${w.id}`, { token: admin, body: { status: 'in_transit' } })).status, 400);
+    // Stages belong to moves only.
+    assert.equal((await call('PATCH', `/work/${repair.id}`, { token: admin, body: { status: 'in_transit' } })).status, 400);
   });
 
   test('a report listing a genset registered at another island moves it instead of adding a duplicate', async () => {
@@ -509,6 +532,9 @@ describe('work and maintenance history', () => {
     assert.equal(moved.island_name, 'Huraa');
     assert.equal(moved.tag, '9');
     assert.equal(moved.moves[0].source, 'report');
+    const tracked = (await call('GET', `/work/${moved.moves[0].work_id}`, { token: admin })).body;
+    assert.equal(tracked.kind, 'relocation');
+    assert.equal(tracked.status, 'completed');
     assert.ok(moved.maintenance.length > 0, 'history kept');
     const old = (await db.query('select active, tag, status from assets where id = $1', [huraaG1])).rows[0];
     assert.equal(old.active, false);

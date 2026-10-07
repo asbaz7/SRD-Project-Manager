@@ -32,7 +32,7 @@ export default function Work() {
             <thead><tr><th>Work</th><th>Status</th><th className="hide-sm">Latest update</th><th className="hide-sm">Target</th></tr></thead>
             <tbody>{page.items.map((w) => <tr key={w.id}>
               <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
-                <small className="muted"><Service value={w.service} short />{w.ref} · {WORK_KINDS[w.kind]} · {w.atoll_code} · {w.island_name}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.assigned_to && ` · ${w.assigned_to}`}</small></td>
+                <small className="muted"><Service value={w.service} short />{w.ref} · {WORK_KINDS[w.kind]} · {w.atoll_code} · {w.island_name}{w.kind === 'relocation' && ` → ${w.dest_atoll_code} · ${w.dest_island_name}`}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.assigned_to && ` · ${w.assigned_to}`}</small></td>
               <td><WorkState value={w.status} /></td>
               <td className="wrap hide-sm small">{w.last_update || <span className="muted">—</span>}{w.last_update_at && <><br /><span className="muted">{dateTime(w.last_update_at)}</span></>}</td>
               <td className={`nowrap hide-sm small ${w.overdue ? 'bad' : ''}`}>{date(w.target_on)}{w.overdue && ' ⚠'}</td>

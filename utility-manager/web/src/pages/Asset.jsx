@@ -36,9 +36,13 @@ export default function Asset() {
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
           {isEngine && <button className="btn" onClick={() => setModal('event')}>Add maintenance record</button>}
-          <button className="btn ghost" onClick={() => setModal('move')}>Move</button>
+          {!a.work.some((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status))
+            && <Link className="btn ghost" to={`/work/new?kind=relocation&asset_id=${a.id}`}>Move</Link>}
           <button className="btn ghost" onClick={() => setModal('edit')}>Edit details</button>
         </>}>
+        {a.work.filter((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status)).map((w) => (
+          <div key={w.id} className="notice">🚚 Being moved: <WorkState value={w.status} /> · <Link to={`/work/${w.id}`}>{w.ref} {w.title}</Link></div>
+        ))}
         <p className="muted">{a.make_model || '—'}{a.rated_capacity ? ` · ${num(a.rated_capacity)} ${a.capacity_unit || ''}` : ''}{a.serial_no ? ` · S/N ${a.serial_no}` : ''}</p>
       </PageHead>
 
@@ -51,7 +55,7 @@ export default function Asset() {
             const fromStatus = c?.condition_source === 'status';
             const why = fromStatus ? c.condition_note : c?.fault;
             return <dl className="facts condition-facts">
-              {why && <><dt>{fromStatus && a.status === 'running' ? 'Note' : 'Fault'}</dt><dd>{why}</dd></>}
+              {why && <><dt>{fromStatus && a.status !== 'down' ? 'Note' : 'Fault'}</dt><dd>{why}</dd></>}
               {fromStatus && <>
                 <dt>Source</dt><dd>Status update · {dateTime(c.condition_at)}{a.status_by_name && ` · ${a.status_by_name}`}</dd>
                 {c.report_month && <><dt>Last report</dt><dd className="muted">{month(c.report_month)}: <Condition value={c.report_condition} text={c.status_text} />{c.fault && ` · ${c.fault}`}</dd></>}
@@ -132,8 +136,8 @@ export default function Asset() {
         <table><tbody>{a.moves.map((m) => <tr key={m.id}>
           <td className="nowrap small">{date(m.moved_on)}</td>
           <td className="wrap"><strong>{m.from_atoll}. {m.from_island} · {ASSET_KINDS[a.kind]} {m.from_tag}</strong> → <strong>{m.to_atoll}. {m.to_island} · {ASSET_KINDS[a.kind]} {m.to_tag}</strong>
-            {m.notes && <><br /><small className="muted">{m.notes}</small></>}</td>
-          <td className="small muted nowrap">{m.source === 'report' ? 'From condition report' : m.moved_by_name}</td>
+            {m.notes && !/^WO-\d+$/.test(m.notes) && <><br /><small className="muted">{m.notes}</small></>}</td>
+          <td className="small muted nowrap">{m.work_id && <><Link to={`/work/${m.work_id}`}>WO-{String(m.work_id).padStart(4, '0')}</Link><br /></>}{m.source === 'report' ? 'From condition report' : m.moved_by_name}</td>
         </tr>)}</tbody></table>
       </Card>}
       {isEngine && <Card title="Maintenance history" actions={manage && <button className="btn small" onClick={() => setModal('event')}>Add record</button>}>
@@ -174,7 +178,6 @@ export default function Asset() {
       {modal === 'edit' && <AssetForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
       {modal === 'status' && <StatusForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
       {modal === 'event' && <EventForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
-      {modal === 'move' && <MoveForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
     </>;
   }}</Async>;
 }
@@ -192,45 +195,6 @@ function StatusForm({ asset, onClose, onSaved }) {
         options={Object.entries(ASSET_STATUS).filter(([k]) => k !== 'unknown').map(([k, x]) => [k, x.label])} /></Field>
       <Field label="Note"><input value={s.note} onChange={(e) => setS({ ...s, note: e.target.value })} placeholder="e.g. awaiting turbocharger" /></Field>
       <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>
-    </form>
-  </Modal>;
-}
-
-// Move to another island's powerhouse (or another plant of the same
-// service). Its history goes with it.
-function MoveForm({ asset, onClose, onSaved }) {
-  const { canWriteIsland } = useAuth();
-  const islands = useApi('/islands');
-  const [f, setF] = useState({ island_id: '', facility_id: '', tag: asset.tag, moved_on: localDate(0), notes: '', move_open_work: true });
-  const dest = useApi(f.island_id ? `/islands/${f.island_id}` : null);
-  const facilities = (dest.data?.facilities || []).filter((x) => x.active && x.service === asset.service && x.id !== asset.facility_id);
-  const taken = new Set(facilities.find((x) => x.id === f.facility_id)?.assets.filter((x) => x.kind === asset.kind).map((x) => x.tag) || []);
-  const { submit, busy, error } = useSubmit(async () => {
-    await api(`/assets/${asset.id}/move`, { method: 'POST', body: {
-      facility_id: f.facility_id, tag: f.tag, moved_on: f.moved_on, notes: f.notes || null, move_open_work: f.move_open_work } });
-    onSaved();
-  });
-  const label = asset.kind === 'genset' ? 'genset' : 'asset';
-  return <Modal title={`Move ${ASSET_KINDS[asset.kind]} ${asset.tag} from ${asset.island_name}`} onClose={onClose}>
-    <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      <ErrorBox error={error} />
-      <Field label="To island"><Select required value={f.island_id} placeholder="Choose island…"
-        onChange={(v) => setF({ ...f, island_id: v, facility_id: '' })}
-        options={(islands.data || []).filter(canWriteIsland).map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} /></Field>
-      <Field label={asset.service === 'electricity' ? 'Powerhouse' : 'Plant'}>
-        <Select required value={f.facility_id} placeholder={f.island_id ? (facilities.length ? 'Choose…' : 'None on this island') : '—'}
-          onChange={(v) => { const fac = facilities.find((x) => x.id === v); setF({ ...f, facility_id: v, facility: fac }); }}
-          options={facilities.map((x) => [x.id, x.name])} /></Field>
-      <Field label={`Number there`} hint={taken.size ? `In use there: ${[...taken].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(', ')}` : ''}>
-        <input required value={f.tag} onChange={(e) => setF({ ...f, tag: e.target.value })} />
-        {taken.has(f.tag.trim()) && <small className="bad">That number is taken there.</small>}</Field>
-      <Field label="Moved on"><input type="date" required max={localDate(0)} value={f.moved_on} onChange={(e) => setF({ ...f, moved_on: e.target.value })} /></Field>
-      <Field label="Notes" wide><textarea rows="2" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Reason, vessel, condition on arrival…" /></Field>
-      <label className="check wide"><input type="checkbox" checked={f.move_open_work} onChange={(e) => setF({ ...f, move_open_work: e.target.checked })} /> Move its ongoing work with it</label>
-      <p className="muted small wide">The {label}'s maintenance history, running hours and condition go with it, and the move is recorded.
-        If its powerhouse sends a condition report listing it, the move is also picked up automatically from the serial number.</p>
-      <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={busy || taken.has(f.tag.trim())}>Move {label}</button></div>
     </form>
   </Modal>;
 }
