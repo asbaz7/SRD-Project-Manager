@@ -12,6 +12,8 @@ import Asset from './pages/Asset.jsx';
 import Incidents from './pages/Incidents.jsx';
 import Incident from './pages/Incident.jsx';
 import Projects from './pages/Projects.jsx';
+import Documents from './pages/Documents.jsx';
+import Document from './pages/Document.jsx';
 import Project from './pages/Project.jsx';
 import Users from './pages/Users.jsx';
 import Audit from './pages/Audit.jsx';
@@ -57,6 +59,9 @@ createRoot(document.getElementById('root')).render(
             <Route path="projects" element={<Projects />} />
             <Route path="projects/new" element={<Project />} />
             <Route path="projects/:id" element={<Project />} />
+            <Route path="documents" element={<Documents />} />
+            <Route path="documents/new" element={<Document />} />
+            <Route path="documents/:id" element={<Document />} />
             <Route path="admin/users" element={<Users />} />
             <Route path="admin/audit" element={<Audit />} />
             <Route path="*" element={<NotFound />} />

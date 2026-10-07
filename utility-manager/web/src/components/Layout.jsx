@@ -15,6 +15,7 @@ const MORE = [
   { to: '/work', label: 'Work', icon: 'work' },
   { to: '/incidents', label: 'Incidents', icon: 'incident' },
   { to: '/projects', label: 'Projects', icon: 'project' },
+  { to: '/documents', label: 'Documents', icon: 'document' },
   { to: '/islands', label: 'Islands', icon: 'island' },
 ];
 const ADMIN = [
@@ -48,8 +49,8 @@ export default function Layout() {
   const admin = ADMIN.filter((n) => can(n.role));
   // Non-technical staff don't have the service sections (engines, assets,
   // plants); work, incidents and projects move up instead.
-  const main = technical ? MAIN : [MAIN[0], ...MORE.slice(0, 3)];
-  const more = technical ? MORE : MORE.slice(3);
+  const main = technical ? MAIN : [MAIN[0], ...MORE.slice(0, 4)];
+  const more = technical ? MORE : MORE.slice(4);
 
   return (
     <div className="shell">
@@ -75,7 +76,7 @@ export default function Layout() {
       </header>
       <main className="page"><Outlet /></main>
       <nav className="bottom-bar" aria-label="Main">
-        {main.map((n) => (
+        {main.slice(0, 4).map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>
             <Icon name={n.icon} size={22} />{n.label}
           </NavLink>
@@ -85,7 +86,7 @@ export default function Layout() {
       {sheet && <>
         <div className="sheet-backdrop" onClick={() => setSheet(false)} />
         <div className="sheet" role="menu">
-          {[...more, ...admin].map((n) => <Link key={n.to} item={n} />)}
+          {[...main.slice(4), ...more, ...admin].map((n) => <Link key={n.to} item={n} />)}
           <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
       </>}

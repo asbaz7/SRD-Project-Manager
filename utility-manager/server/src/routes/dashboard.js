@@ -136,8 +136,19 @@ export default async function dashboardRoutes(app) {
     for (const row of services.rows) Object.assign(byService[row.service], row);
     for (const row of open.rows) Object.assign(byService[row.service], { open_work: row.work, open_incidents: row.incidents });
 
+    // Documents waiting for this user's signature, and pending ones they sent.
+    const [waiting, sentPending] = await Promise.all([
+      db.query(`select d.id, d.ref, d.doc_type, d.sent_on, coalesce(su.full_name, d.sent_by_name) as sent_by_label
+                  from documents d left join users su on su.id = d.sent_by
+                 where d.status = 'pending' and exists (select 1 from document_signers s
+                         where s.document_id = d.id and s.user_id = $1 and s.signed_on is null)
+                 order by d.sent_on limit 20`, [req.user.id]),
+      db.query(`select count(*)::int as n from documents d where d.status = 'pending' and (d.sent_by = $1 or d.created_by = $1)`, [req.user.id]),
+    ]);
+
     return {
       technical,
+      documents: { waiting_for_me: waiting.rows, sent_pending: sentPending.rows[0].n },
       services: byService,
       incidents: {
         open: incidents.rows.reduce((n, r) => n + r.n, 0),

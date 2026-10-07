@@ -11,6 +11,7 @@ const paths = {
   users: 'M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7-6.5a3.5 3.5 0 0 1 0 6.5m3 8v-1.5a3.5 3.5 0 0 0-2.5-3.4',
   audit: 'M9 4h6m-7 2h8v14H8V6Zm2 5h4m-4 4h4',
   report: 'M7 3h7l4 4v14H7V3Zm7 0v4h4M10 12h5m-5 4h5',
+  document: 'M6 3h8l4 4v14H6V3Zm8 0v4h4M9 17l2-2 1.5 1.5L16 13',
   engine: 'M5 9h3V7h6v2h2l2 2h2v6h-2l-2 2H8l-3-3V9Zm-3 3h3',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   menu: 'M4 7h16M4 12h16M4 17h16',

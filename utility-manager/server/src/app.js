@@ -27,6 +27,7 @@ import engineRoutes from './routes/engines.js';
 import workRoutes from './routes/work.js';
 import serviceRoutes from './routes/services.js';
 import telegramRoutes from './routes/telegram.js';
+import documentRoutes from './routes/documents.js';
 
 const PREFIX = '/api/v1';
 const PUBLIC_ROUTES = new Set([`${PREFIX}/auth/login`, `${PREFIX}/health`, `${PREFIX}/telegram/webhook`]);
@@ -37,7 +38,7 @@ const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // administrators) may use these, whatever their role.
 const TECHNICAL_PREFIXES = ['/engines', '/maintenance', '/condition-reports', '/assets', '/facilities', '/services']
   .map((p) => PREFIX + p);
-const BODY_LIMIT = 5 * 1024 * 1024; // CSV imports
+const BODY_LIMIT = 15 * 1024 * 1024; // report imports and document files (base64)
 
 export const SECURITY_HEADERS = {
   contentSecurityPolicy: {
@@ -68,6 +69,7 @@ class Reply {
   toResponse(result) {
     const body = this.sent || result === this ? this.body : result;
     if (body === undefined) return new Response(null, { status: this.statusCode, headers: this.headers });
+    if (body instanceof Uint8Array) return new Response(body, { status: this.statusCode, headers: this.headers });
     if (typeof body === 'string') {
       if (!this.headers.has('content-type')) this.headers.set('content-type', 'text/plain; charset=utf-8');
       return new Response(body, { status: this.statusCode, headers: this.headers });
@@ -223,7 +225,7 @@ export async function buildApp({ db, config, logger = true }) {
     return { ok: true };
   });
   for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes,
-    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes]) {
+    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes, documentRoutes]) {
     await routes(api);
   }
   // Unknown API paths: still require sign-in, then 404.

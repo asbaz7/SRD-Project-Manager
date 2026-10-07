@@ -422,3 +422,20 @@ input:disabled, select:disabled { opacity: .7; }
 .stepper { padding: 0; }
 .move-route { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 600; margin: 0 0 8px; }
 .move-route .arrow { color: var(--muted); }
+
+/* Documents */
+.tabs button.tab { border: 0; background: transparent; cursor: pointer; font: inherit; font-weight: 600; font-size: .9rem; }
+.tabs button.tab.active { background: var(--glass-strong); color: var(--text); }
+.pill.doc-type { color: var(--text-2); background: var(--glass-hover); border: 1px solid var(--hairline); }
+.signers { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 2px; }
+.signers .chip { font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--glass-hover); color: var(--text-2); border: 1px solid var(--hairline); }
+.signers .chip.signed { color: var(--good); border-color: color-mix(in srgb, var(--good-fill) 40%, transparent); background: color-mix(in srgb, var(--good-fill) 10%, transparent); }
+.sign-list { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 8px; }
+.sign-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--glass-hover); }
+.sign-list li.next { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.sign-mark { display: inline-grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 50%; font-size: .8rem; font-weight: 700; background: var(--none-fill); color: #fff; }
+.sign-list li.signed .sign-mark { background: var(--good-fill); }
+.sign-list li.next .sign-mark { background: var(--accent); }
+.inline-date { max-width: 220px; }
+.file-pick { cursor: pointer; margin-top: 8px; display: inline-flex; }
+.table-scroll { overflow-x: auto; }

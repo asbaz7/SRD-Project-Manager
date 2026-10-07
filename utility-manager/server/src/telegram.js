@@ -122,6 +122,17 @@ export function createTelegram({ db, config, log }) {
     }
   }
 
+  // A direct message to one user, if they have linked Telegram. Never throws.
+  async function notifyUser(userId, text) {
+    if (!token || !userId) return;
+    try {
+      const { rows } = await db.query('select telegram_user_id from users where id = $1 and active and telegram_user_id is not null', [userId]);
+      if (rows[0]) await send(rows[0].telegram_user_id, text);
+    } catch (err) {
+      log.warn({ err: { message: err.message } }, 'telegram message failed');
+    }
+  }
+
   async function createLinkCode(userId) {
     const code = Array.from({ length: 8 }, () => CODE_LETTERS[randomInt(CODE_LETTERS.length)]).join('');
     await db.query('delete from telegram_link_codes where user_id = $1 or expires_at < now()', [userId]);
@@ -472,7 +483,7 @@ export function createTelegram({ db, config, log }) {
   }
 
   return {
-    enabled: !!token, alert, daily, summaryText, createLinkCode, connect, status, handleUpdate, verifyWebhook, botInfo,
+    enabled: !!token, alert, notifyUser, daily, summaryText, createLinkCode, connect, status, handleUpdate, verifyWebhook, botInfo,
     link, esc,
   };
 }

@@ -18,6 +18,12 @@ function attentionItems(d) {
   for (const x of d.incidents.list.filter((i) => ['critical', 'high'].includes(i.severity))) {
     items.push({ tone: 'bad', mark: '!', to: `/incidents/${x.id}`, text: x.title, sub: `${SERVICES[x.service]?.label} · ${x.atoll_code} ${x.island_name} · ${x.severity} · ${since(x.started_at)}` });
   }
+  const waiting = d.documents?.waiting_for_me || [];
+  if (waiting.length) {
+    items.push({ tone: 'info', mark: waiting.length, to: waiting.length === 1 ? `/documents/${waiting[0].id}` : '/documents?view=waiting',
+      text: `${waiting.length} document${waiting.length === 1 ? '' : 's'} waiting for your signature`,
+      sub: waiting.slice(0, 4).map((x) => `${x.doc_type} ${x.ref}`).join(' · ') + (waiting.length > 4 ? ' …' : '') });
+  }
   const e = d.engines || {};
   if (e.not_running) items.push({ tone: 'bad', mark: e.not_running, to: '/electricity/engines?condition=not_running', text: `${e.not_running} engine${e.not_running === 1 ? '' : 's'} not running`, sub: 'From the latest condition reports' });
   if (e.major_fault) items.push({ tone: 'serious', mark: e.major_fault, to: '/electricity/engines?condition=major_fault', text: `${e.major_fault} engine${e.major_fault === 1 ? '' : 's'} with a major fault`, sub: 'Still running — check before they fail' });

@@ -218,6 +218,38 @@ Electricity, Water and Sewerage sections.
   asset alerts and the full morning summary. Other chats get incidents, work
   and a summary without engine figures.
 
+## Documents for signature (Oct 2026)
+
+This replaces the admin staff's "E-sign status" Microsoft List (migration 014,
+`routes/documents.js`, pages `Documents.jsx` and `Document.jsx`).
+
+Each document has:
+- **ref:** their Agreement ID, unique ignoring case, in free format;
+- **doc_type:** suggestions plus anything they type;
+- **subject**, **sender** (a user, or a name for someone without a login) and
+  **sent date**;
+- **recipients in signing order** (`document_signers`): each is a user or a
+  typed name;
+- **files** (`document_files`, bytea, up to 10 MB each);
+- **notes** (`document_updates`).
+
+How it works:
+- **Signing:** recipients with a login sign their own entry; the sender, the
+  person who entered it, or an administrator records signatures for others.
+  An undo is available for corrections.
+- **Status:** pending, completed or cancelled. It completes when everyone has
+  signed and goes back to pending if a signature is undone or a recipient
+  added. Cancelled stays cancelled. "Completed by" and the last approval date
+  are derived, and `updated_at` moves with any change.
+- **Views:** all, waiting for me, sent by me. Filters by status and type,
+  search, and CSV export.
+- **Overview:** "N documents waiting for your signature".
+- **Telegram:** a direct message (`telegram.notifyUser`) goes to the next
+  recipient if they have linked Telegram, and to the sender when the document
+  is complete.
+- **Who sees it:** every signed-in user can see documents, as the shared list
+  allowed. Managers create them.
+
 ## Engine state: one answer (Oct 2026)
 
 A genset's state has two sources:
