@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { assertIslandWrite, requireRole } from '../auth.js';
+import { allowed, assertIslandWrite, canWriteIsland, hasRole, requireAllowed } from '../auth.js';
+import { forbidden } from '../errors.js';
 import { sendCsv } from '../csv.js';
 import { badRequest } from '../errors.js';
 import { esc } from '../telegram.js';
@@ -74,7 +75,11 @@ export default async function incidentRoutes(app) {
   const { db, telegram } = app;
   const SERIOUS = ['high', 'critical'];
   const SERVICE = { electricity: 'Electricity', water: 'Water', sewerage: 'Sewerage' };
-  const manager = { preHandler: requireRole('manager') };
+  // Managers report and edit incidents; staff allowed to report them can edit
+  // the ones they reported.
+  const reporter = { preHandler: requireAllowed('incidents', 'You are not allowed to report incidents. Ask an administrator.') };
+  const canEdit = (user, x) => (hasRole(user, 'manager') || (allowed(user, 'incidents') && x.reported_by === user.id))
+    && canWriteIsland(user, { id: x.island_id, atoll_id: x.atoll_id });
 
   app.get('/incidents', async (req, reply) => {
     const q = parse(listQuery, req.query);
@@ -104,10 +109,11 @@ export default async function incidentRoutes(app) {
     const { id: incidentId } = parse(serialParam, req.params);
     const row = one((await db.query(`${SELECT} where x.id = $1`, [incidentId])).rows, 'Incident');
     delete row.total_count;
+    row.can_edit = canEdit(req.user, row);
     return row;
   });
 
-  app.post('/incidents', manager, async (req, reply) => {
+  app.post('/incidents', reporter, async (req, reply) => {
     const body = parse(createBody, req.body);
     await assertIslandWrite(db, req.user, { islandId: body.island_id });
     await checkLinks(db, body.island_id, body);
@@ -127,10 +133,11 @@ export default async function incidentRoutes(app) {
     return x;
   });
 
-  app.patch('/incidents/:id', manager, async (req) => {
+  app.patch('/incidents/:id', reporter, async (req) => {
     const { id: incidentId } = parse(serialParam, req.params);
     const body = parse(patchBody, req.body);
-    const current = one((await db.query('select * from incidents where id = $1', [incidentId])).rows, 'Incident');
+    const current = one((await db.query('select x.*, i.atoll_id from incidents x join islands i on i.id = x.island_id where x.id = $1', [incidentId])).rows, 'Incident');
+    if (!canEdit(req.user, current)) throw forbidden('You can only edit incidents you reported');
     await assertIslandWrite(db, req.user, { islandId: current.island_id });
     await checkLinks(db, current.island_id, body);
 

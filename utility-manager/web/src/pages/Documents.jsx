@@ -24,7 +24,7 @@ export function Signers({ signers, compact }) {
 const VIEWS = [['all', 'All documents'], ['waiting', 'Waiting for me'], ['sent', 'Sent by me']];
 
 export default function Documents() {
-  const { can } = useAuth();
+  const { allowed } = useAuth();
   const [filters, setFilter] = useFilters({ view: 'all', status: 'all' });
   const types = useApi('/documents/types');
   const params = { view: filters.view, status: filters.status, type: filters.type, q: filters.q, offset: filters.offset };
@@ -34,7 +34,7 @@ export default function Documents() {
     <PageHead title="Documents" icon="document" subtitle="Documents sent for signature: who has signed, and what is still waiting"
       actions={<>
         <a className="btn ghost" href={csvUrl('/documents', { ...params, offset: undefined })}>Export CSV</a>
-        {can('manager') && <Link className="btn primary" to="/documents/new">New document</Link>}
+        {allowed('documents') && <Link className="btn primary" to="/documents/new">New document</Link>}
       </>} />
     <nav className="tabs glass" aria-label="Views">
       {VIEWS.map(([k, label]) => <button key={k} className={`tab ${filters.view === k ? 'active' : ''}`} onClick={() => setFilter({ view: k, offset: undefined })}>{label}</button>)}

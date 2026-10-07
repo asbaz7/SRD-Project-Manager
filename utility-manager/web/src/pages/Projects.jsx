@@ -6,7 +6,7 @@ import { PROJECT_STATES, SERVICES, date } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
 export default function Projects() {
-  const { can } = useAuth();
+  const { allowed } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
   const params = { status: filters.status, service: filters.service, atoll_id: filters.atoll_id, island_id: filters.island_id, q: filters.q, offset: filters.offset };
@@ -15,7 +15,7 @@ export default function Projects() {
   return <>
     <PageHead title="Projects" icon="project" actions={<>
       <a className="btn ghost" href={csvUrl('/projects', { ...params, offset: undefined })}>Export CSV</a>
-      {can('manager') && <Link className="btn primary" to={`/projects/new${qs({ island_id: filters.island_id })}`}>New project</Link>}
+      {allowed('projects') && <Link className="btn primary" to={`/projects/new${qs({ island_id: filters.island_id })}`}>New project</Link>}
     </>} />
     <div className="filters">
       <Select value={filters.status} onChange={(v) => setFilter('status', v)} placeholder="Any status" options={{ active: 'Active (not finished)', ...PROJECT_STATES }} aria-label="Status" />

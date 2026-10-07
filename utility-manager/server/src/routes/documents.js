@@ -4,7 +4,7 @@
 // who has signed. Signers with a login sign it off themselves; for others
 // the sender records it.
 import { z } from 'zod';
-import { requireRole } from '../auth.js';
+import { requireAllowed } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, text } from '../http.js';
@@ -64,7 +64,7 @@ const fixJson = (row) => {
 
 export default async function documentRoutes(app) {
   const { db, telegram } = app;
-  const manager = { preHandler: requireRole('manager') };
+  const sender = { preHandler: requireAllowed('documents', 'You are not allowed to send documents. Ask an administrator.') };
 
   // Editing (details, recipients, signing on someone's behalf, cancelling):
   // the sender, whoever entered it, and administrators.
@@ -187,7 +187,7 @@ export default async function documentRoutes(app) {
     return d;
   });
 
-  app.post('/documents', manager, async (req, reply) => {
+  app.post('/documents', sender, async (req, reply) => {
     const b = parse(body, req.body);
     if (!b.sent_by && !b.sent_by_name) b.sent_by = req.user.id;
     const { rows: dup } = await db.query('select id from documents where lower(ref) = lower($1)', [b.ref]);

@@ -58,7 +58,14 @@ export const month = (value) => (value ? new Date(`${value.slice(0, 7)}-15T00:00
   .toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—');
 
 export const ROLES = {
-  admin: 'Administrator', manager: 'Manager', viewer: 'Viewer (read-only)',
+  admin: 'Administrator', manager: 'Manager', staff: 'Staff', viewer: 'Viewer (read-only)',
+};
+// What a Staff user may do, ticked per person.
+export const PERMISSIONS = {
+  documents: ['Send documents', 'Create documents for signature and manage the ones they sent'],
+  incidents: ['Report incidents', 'Report incidents and edit the ones they reported'],
+  work: ['Update work', 'Post updates and move work along (not create, complete or cancel it)'],
+  projects: ['Create projects', 'Start projects and share them with chosen people'],
 };
 
 export function num(value, digits = 0) {

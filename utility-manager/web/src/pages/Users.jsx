@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { Async, Card, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
-import { ROLES, date } from '../format.js';
+import { PERMISSIONS, ROLES, date } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 export default function Users() {
@@ -11,7 +11,7 @@ export default function Users() {
     <PageHead title="Users" icon="users" actions={<button className="btn primary" onClick={() => setEditing({})}>Add user</button>} />
     <Card>
       <p className="muted small">
-        <strong>Managers</strong> make changes across all islands; <strong>viewers</strong> only look;
+        <strong>Managers</strong> make changes across all islands; <strong>staff</strong> do what is ticked for them (send documents, report incidents, update work, create projects); <strong>viewers</strong> only look;
         <strong> administrators</strong> manage everything, including users. The system is for head office staff. <strong>Technical</strong> staff also see engines,
         condition reports, assets and plants; <strong>non-technical</strong> staff see work, incidents and the projects shared with them.
       </p>
@@ -20,7 +20,7 @@ export default function Users() {
           <thead><tr><th>Name</th><th>Role</th><th>Staff type</th><th className="hide-sm">Last sign-in</th><th /></tr></thead>
           <tbody>{users.map((u) => <tr key={u.id} className={u.active ? '' : 'inactive'}>
             <td><strong>{u.full_name}</strong>{!u.active && ' (disabled)'}<br /><small className="muted">{u.email}{u.designation && ` · ${u.designation}`}</small></td>
-            <td>{ROLES[u.role]}</td>
+            <td>{ROLES[u.role]}{u.role === 'staff' && <><br /><small className="muted">{u.permissions?.length ? u.permissions.map((p) => PERMISSIONS[p]?.[0]).join(', ') : 'View only'}</small></>}</td>
             <td>{u.role === 'admin' ? <span className="muted">All</span> : u.technical ? 'Technical' : 'Non-technical'}</td>
             <td className="hide-sm small">{u.last_login_at ? date(u.last_login_at) : <span className="muted">never</span>}</td>
             <td><button className="btn small ghost" onClick={() => setEditing(u)}>Edit</button></td>
@@ -36,13 +36,15 @@ function UserForm({ user, onClose, onSaved }) {
   const [f, setF] = useState({
     email: user?.email || '', full_name: user?.full_name || '', designation: user?.designation || '', phone: user?.phone || '',
     role: user?.role || 'manager', technical: user?.technical ?? true, active: user?.active ?? true, password: '',
+    permissions: user?.permissions || [],
   });
   const set = (k) => (v) => setF({ ...f, [k]: v?.target ? v.target.value : v });
 
   const { submit, busy, error } = useSubmit(async () => {
     // Head office staff only: everyone covers the whole region.
     const scopes = [{ region: true }];
-    const body = { full_name: f.full_name, designation: f.designation || null, phone: f.phone || null, role: f.role, technical: f.technical, scopes };
+    const body = { full_name: f.full_name, designation: f.designation || null, phone: f.phone || null, role: f.role, technical: f.technical, scopes,
+      permissions: f.role === 'staff' ? f.permissions : [] };
     if (user) await api(`/users/${user.id}`, { method: 'PATCH', body: { ...body, active: f.active, ...(f.password ? { password: f.password } : {}) } });
     else await api('/users', { method: 'POST', body: { ...body, email: f.email, password: f.password } });
     onSaved();
@@ -57,7 +59,16 @@ function UserForm({ user, onClose, onSaved }) {
         <Field label="Designation"><input value={f.designation} onChange={set('designation')} /></Field>
         <Field label="Phone"><input value={f.phone} onChange={set('phone')} /></Field>
         <Field label="Role"><Select value={f.role} onChange={set('role')} options={ROLES} /></Field>
-        {f.role !== 'admin' && <Field label="Staff type" hint={f.technical ? 'Sees engines, condition reports, assets and plants, and runs work.' : 'Sees work, incidents and the projects shared with them; can comment on work they are added to.'}>
+        {f.role === 'staff' && <fieldset className="wide scopes">
+          <legend>This person may also</legend>
+          {Object.entries(PERMISSIONS).map(([k, [label, hint]]) => (
+            <label key={k} className="check"><input type="checkbox" checked={f.permissions.includes(k)}
+              onChange={(e) => setF({ ...f, permissions: e.target.checked ? [...f.permissions, k] : f.permissions.filter((p) => p !== k) })} />
+              <span><strong>{label}</strong><br /><small className="muted">{hint}</small></span></label>
+          ))}
+          <p className="muted small">Otherwise staff can view, sign documents sent to them and comment on work they are added to.</p>
+        </fieldset>}
+        {f.role !== 'admin' && <Field label="Staff type" hint={f.technical ? `Sees engines, condition reports, assets and plants${f.role === 'manager' ? ', and runs work' : ''}.` : 'Sees work, incidents and the projects shared with them; can comment on work they are added to.'}>
           <Select value={f.technical ? 'technical' : 'non'} onChange={(v) => setF({ ...f, technical: v === 'technical' })}
             options={[['technical', 'Technical'], ['non', 'Non-technical']]} /></Field>}
         <Field label={user ? 'Reset password (optional)' : 'Temporary password'} hint="At least 10 characters with letters and numbers. They must change it at first sign-in.">

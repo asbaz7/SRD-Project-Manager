@@ -16,7 +16,7 @@ export default function Incident() {
 function IncidentView({ incident: x, reload }) {
   const { canWriteIsland, technical } = useAuth();
   const [editing, setEditing] = useState(false);
-  const writable = canWriteIsland({ id: x.island_id, atoll_id: x.atoll_id });
+  const writable = x.can_edit;
   const [resolution, setResolution] = useState({ resolved_at: toLocalInput(new Date().toISOString()), resolution: '' });
   const { submit, busy, error } = useSubmit(async (body) => { await api(`/incidents/${x.id}`, { method: 'PATCH', body }); reload(); });
 

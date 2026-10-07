@@ -23,7 +23,7 @@ const SUBTITLE = {
 
 export default function Service({ svc }) {
   const { tab = '' } = useParams();
-  const { can, technical } = useAuth();
+  const { can, allowed, technical } = useAuth();
   if (!technical) return <>
     <PageHead title={SERVICES[svc].label} icon={svc} tone={svc} />
     <Card><p>This section holds technical information (engines, condition reports, assets and plants) and is available to technical staff.</p>
@@ -31,9 +31,9 @@ export default function Service({ svc }) {
   </>;
   return <>
     <PageHead title={SERVICES[svc].label} subtitle={SUBTITLE[svc]} icon={svc} tone={svc}
-      actions={can('manager') && <>
-        <Link className="btn" to={`/work/new?service=${svc}`}>Log work</Link>
-        <Link className="btn" to={`/incidents/new?service=${svc}`}>Report incident</Link>
+      actions={<>
+        {can('manager') && <Link className="btn" to={`/work/new?service=${svc}`}>Log work</Link>}
+        {allowed('incidents') && <Link className="btn" to={`/incidents/new?service=${svc}`}>Report incident</Link>}
       </>} />
     <nav className="tabs glass" aria-label={`${SERVICES[svc].label} sections`}>
       {TABS[svc].map(([key, label]) => (

@@ -185,6 +185,19 @@ There are three settings per user:
 - **Islands:** where they can change it.
 - **Staff type:** what they can see (migration 008, `users.technical`).
 
+**Roles:** administrator, manager, **staff** and viewer. A staff user can view
+like a viewer, plus whatever an administrator ticks for them
+(`users.permissions`, migration 015):
+- `documents`: send documents for signature;
+- `incidents`: report incidents and edit the ones they reported;
+- `work`: post updates and move work along, but not create, complete or
+  cancel it;
+- `projects`: create projects.
+
+`allowed(user, permission)` is true for managers and admins, and for staff
+with that permission. It guards those routes (`requireAllowed`), and the
+web app mirrors it with `useAuth().allowed`.
+
 **Technical information:** engines, condition reports, assets, plants and the
 Electricity, Water and Sewerage sections.
 - Only technical staff and administrators can see it.

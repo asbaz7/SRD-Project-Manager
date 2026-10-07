@@ -54,18 +54,18 @@ function WorkView({ work: w, reload }) {
         {w.kind === 'relocation' && w.status === 'completed' && <p className="muted small">✓ Transferred to {w.dest_island_name}, with its history.</p>}
         {w.kind === 'relocation' && ['dismantling', 'in_transit', 'installing'].includes(w.status) && <p className="muted small">It shows as out of service until the move is completed.</p>}
       </Card>
-      {writable && <Card title="Post an update">
+      {(writable || w.can_update) && <Card title="Post an update">
         <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <ErrorBox error={error} />
           <Field label="What's happening"><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} placeholder="e.g. Parts arrived, fitting tomorrow" /></Field>
-          <Field label={w.kind === 'relocation' ? 'Move to stage' : 'Change status to'}><Select value={u.status} onChange={(v) => setU({ ...u, status: v })} placeholder="(no change)" options={statesFor(w.kind)} /></Field>
+          <Field label={w.kind === 'relocation' ? 'Move to stage' : 'Change status to'}><Select value={u.status} onChange={(v) => setU({ ...u, status: v })} placeholder="(no change)" options={Object.fromEntries(Object.entries(statesFor(w.kind)).filter(([k]) => writable || !['completed', 'cancelled'].includes(k)))} /></Field>
           <div className="form-actions">
-            {open && <button type="button" className="btn" disabled={busy || !u.body} onClick={() => submit('completed')}>{w.kind === 'relocation' ? 'Post & mark installed' : 'Post & mark completed'}</button>}
+            {open && writable && <button type="button" className="btn" disabled={busy || !u.body} onClick={() => submit('completed')}>{w.kind === 'relocation' ? 'Post & mark installed' : 'Post & mark completed'}</button>}
             <button className="btn primary" disabled={busy}>Post update</button>
           </div>
         </form>
       </Card>}
-      {!writable && w.can_comment && <Card title="Add a comment">
+      {!writable && !w.can_update && w.can_comment && <Card title="Add a comment">
         <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <ErrorBox error={error} />
           <Field label="Comment" hint="Everyone who can see this work will see your comment."><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} /></Field>

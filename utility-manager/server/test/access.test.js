@@ -171,3 +171,50 @@ test('the audit trail hides technical changes from non-technical staff, and priv
   assert.ok(!theirs.some((l) => l.entity_id === String(p.id)));
   assert.ok((await call('GET', '/audit?entity=projects&limit=500', T.admin)).body.items.some((l) => l.entity_id === String(p.id)));
 });
+
+test('staff: permissions chosen per user', async () => {
+  // One staff member allowed to send documents and report incidents; one with nothing extra.
+  const mk = async (email, permissions, technical = false) => {
+    const res = await call('POST', '/users', T.admin, { email, full_name: email, role: 'staff', technical, permissions, password: 'temporary1234' });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    assert.deepEqual(res.body.permissions.sort(), [...permissions].sort());
+    await db.query('update users set must_change_password = false where id = $1', [res.body.id]);
+    return { id: res.body.id, token: (await call('POST', '/auth/login', null, { email, password: 'temporary1234' })).body.token };
+  };
+  const clerk = await mk('docs@srd.mv', ['documents', 'incidents']);
+  const plain = await mk('plain@srd.mv', []);
+  const fitter = await mk('fitter@srd.mv', ['work'], true);
+  assert.deepEqual((await call('GET', '/auth/me', clerk.token)).body.permissions.sort(), ['documents', 'incidents']);
+
+  // Documents
+  const doc = { ref: 'S-1', doc_type: 'Letter', sent_on: '2026-10-01', signers: [{ name: 'Someone' }] };
+  assert.equal((await call('POST', '/documents', clerk.token, doc)).status, 201);
+  assert.equal((await call('POST', '/documents', plain.token, { ...doc, ref: 'S-2' })).status, 403);
+
+  // Incidents: report, and edit only their own
+  const inc = { service: 'electricity', island_id: maafushi.id, category: 'outage', severity: 'low', title: 'Street light feeder trip', started_at: new Date().toISOString() };
+  const mine = await call('POST', '/incidents', clerk.token, inc);
+  assert.equal(mine.status, 201);
+  assert.equal((await call('POST', '/incidents', plain.token, inc)).status, 403);
+  assert.equal((await call('PATCH', `/incidents/${mine.body.id}`, clerk.token, { severity: 'medium' })).status, 200);
+  const theirs = (await call('POST', '/incidents', T.tech, inc)).body;
+  assert.equal((await call('GET', `/incidents/${theirs.id}`, clerk.token)).body.can_edit, false);
+  assert.equal((await call('PATCH', `/incidents/${theirs.id}`, clerk.token, { severity: 'high' })).status, 403);
+
+  // Projects: not allowed for these two
+  assert.equal((await call('POST', '/projects', clerk.token, { service: 'water', title: 'x', island_id: maafushi.id })).status, 403);
+
+  // Work: the fitter can post updates and move it along, not create, complete or cancel it
+  const w = (await call('POST', '/work', T.tech, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Replace AVR' })).body;
+  assert.equal((await call('POST', '/work', fitter.token, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'x' })).status, 403);
+  assert.equal((await call('GET', `/work/${w.id}`, fitter.token)).body.can_update, true);
+  assert.equal((await call('POST', `/work/${w.id}/updates`, fitter.token, { body: 'AVR on order', status: 'awaiting_parts' })).status, 201);
+  assert.equal((await call('POST', `/work/${w.id}/updates`, fitter.token, { body: 'done', status: 'completed' })).status, 403);
+  assert.equal((await call('PATCH', `/work/${w.id}`, fitter.token, { title: 'changed' })).status, 403);
+  assert.equal((await call('POST', `/work/${w.id}/updates`, plain.token, { body: 'hi' })).status, 403);
+
+  // Changing a manager to staff keeps only what's ticked; other roles have none.
+  const promoted = await call('PATCH', `/users/${fitter.id}`, T.admin, { role: 'manager' });
+  assert.deepEqual(promoted.body.permissions, []);
+  assert.equal((await call('PATCH', `/users/${plain.id}`, T.admin, { permissions: ['bogus'] })).status, 400);
+});

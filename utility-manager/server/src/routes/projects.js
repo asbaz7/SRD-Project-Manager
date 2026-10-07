@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { assertIslandWrite, requireRole } from '../auth.js';
+import { assertIslandWrite, requireAllowed } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
@@ -150,7 +150,7 @@ export default async function projectRoutes(app) {
     return project;
   });
 
-  app.post('/projects', { preHandler: requireRole('manager') }, async (req, reply) => {
+  app.post('/projects', { preHandler: requireAllowed('projects', 'You are not allowed to create projects. Ask an administrator.') }, async (req, reply) => {
     const b = parse(body, req.body);
     await assertProjectCreate(db, req.user, b.island_id);
     const rows = await db.tx(req.user.id, async (t) => {

@@ -9,7 +9,7 @@ import { useApi } from '../hooks.js';
 export default function Island() {
   const { id } = useParams();
   const state = useApi(`/islands/${id}`);
-  const { can } = useAuth();
+  const { can, allowed } = useAuth();
   const [modal, setModal] = useState(null);
   const saved = () => { setModal(null); state.reload(); };
 
@@ -19,7 +19,7 @@ export default function Island() {
       <PageHead title={island.name}
         crumbs={[{ to: '/islands', label: 'Islands' }, { to: `/islands?atoll_id=${island.atoll_id}`, label: `${island.atoll_code} · ${island.atoll_name}` }, { label: island.name }]}
         actions={<>
-          {island.can_edit && <Link className="btn" to={`/incidents/new?island_id=${island.id}`}>Report incident</Link>}
+          {allowed('incidents') && <Link className="btn" to={`/incidents/new?island_id=${island.id}`}>Report incident</Link>}
           {island.can_edit && island.technical && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
           {manage && island.technical && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
         </>} />

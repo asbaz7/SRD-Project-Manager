@@ -3,7 +3,8 @@ import { hashPassword, passwordProblem, requireRole } from '../auth.js';
 import { badRequest } from '../errors.js';
 import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
 
-const role = z.enum(['admin', 'manager', 'viewer']);
+const role = z.enum(['admin', 'manager', 'staff', 'viewer']);
+const PERMISSIONS = ['documents', 'incidents', 'work', 'projects'];
 // A scope is one island, one atoll, or { region: true }.
 const scope = z.union([
   z.object({ island_id: id }),
@@ -19,6 +20,8 @@ const create = z.object({
   role,
   // Technical staff see engines, condition reports, assets and plants.
   technical: z.boolean().default(true),
+  // Staff only: what this person may do (managers and admins may do all).
+  permissions: z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length).default([]),
   password: z.string().max(200),
   // Head office staff cover the whole region; island-level scopes remain
   // supported by the API but are not offered in the app.
@@ -30,7 +33,7 @@ const patch = create.omit({ email: true, password: true }).partial().extend({
 });
 
 const LIST_SQL = `
-  select u.id, u.email, u.full_name, u.designation, u.phone, u.role, u.technical, u.active,
+  select u.id, u.email, u.full_name, u.designation, u.phone, u.role, u.technical, u.permissions, u.active,
          u.must_change_password, u.last_login_at, u.created_at,
          coalesce(json_agg(json_build_object(
            'atoll_id', s.atoll_id, 'island_id', s.island_id,
@@ -72,9 +75,10 @@ export default async function userRoutes(app) {
     const hash = await hashPassword(body.password);
     const user = await db.tx(req.user.id, async (t) => {
       const { rows } = await t.query(
-        `insert into users (email, full_name, designation, phone, role, technical, password_hash, must_change_password)
-         values ($1, $2, $3, $4, $5, $6, $7, true) returning id`,
-        [body.email, body.full_name, body.designation, body.phone, body.role, body.technical, hash],
+        `insert into users (email, full_name, designation, phone, role, technical, permissions, password_hash, must_change_password)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, true) returning id`,
+        [body.email, body.full_name, body.designation, body.phone, body.role, body.technical,
+          body.role === 'staff' ? [...new Set(body.permissions)] : [], hash],
       );
       await writeScopes(t, rows[0].id, body.scopes);
       return rows[0];
@@ -98,9 +102,11 @@ export default async function userRoutes(app) {
       fields.password_hash = await hashPassword(body.password);
       fields.must_change_password = true;
     }
-    const before = one((await db.query('select role, technical from users where id = $1', [userId])).rows, 'User');
+    const before = one((await db.query('select role, technical, permissions from users where id = $1', [userId])).rows, 'User');
     await db.tx(req.user.id, async (t) => {
-      const cols = ['full_name', 'designation', 'phone', 'role', 'technical', 'active', 'password_hash', 'must_change_password'];
+      if (fields.permissions) fields.permissions = [...new Set(fields.permissions)];
+      if (fields.role && fields.role !== 'staff') fields.permissions = [];
+      const cols = ['full_name', 'designation', 'phone', 'role', 'technical', 'permissions', 'active', 'password_hash', 'must_change_password'];
       if (Object.keys(fields).some((k) => cols.includes(k))) {
         const set = updateSet(fields, cols);
         one((await t.query(`update users set ${set.sql} where id = $1 returning id`, [userId, ...set.values])).rows, 'User');
@@ -108,7 +114,8 @@ export default async function userRoutes(app) {
       if (body.scopes) await writeScopes(t, userId, body.scopes);
       // Deactivated users, role changes and password resets end existing sessions.
       if (body.active === false || (body.role && body.role !== before.role)
-        || (body.technical !== undefined && body.technical !== before.technical) || body.password !== undefined) {
+        || (body.technical !== undefined && body.technical !== before.technical) || body.password !== undefined
+        || (body.permissions && [...new Set(body.permissions)].sort().join() !== [...(before.permissions || [])].sort().join())) {
         await t.query('delete from sessions where user_id = $1', [userId]);
       }
     });

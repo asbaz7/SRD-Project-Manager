@@ -64,7 +64,7 @@ export async function destroySession(db, token) {
 export async function loadSession(db, token) {
   if (!token || token.length > 100) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical,
+    `select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical, u.permissions,
             s.last_seen_at, s.expires_at,
             coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
                      filter (where sc.id is not null), '[]') as scopes
@@ -89,6 +89,8 @@ export async function loadSession(db, token) {
     role: row.role,
     // Technical information (engines, condition reports, assets, plants).
     technical: row.role === 'admin' || row.technical,
+    // Staff: what this person may do beyond viewing (see allowed()).
+    permissions: typeof row.permissions === 'string' ? row.permissions.replace(/[{}]/g, '').split(',').filter(Boolean) : (row.permissions || []),
     mustChangePassword: row.must_change_password,
     scope: {
       region: scopes.some((s) => !s.atoll_id && !s.island_id),
@@ -109,10 +111,26 @@ export async function purgeExpiredSessions(db) {
 //              project updates, island details (all within assigned islands); audit
 //   admin    – everything, users, atolls; not limited by scope
 // ---------------------------------------------------------------------------
-const RANK = { viewer: 0, manager: 1, admin: 2 };
+// staff ranks with viewers; what else they may do is per user (allowed()).
+const RANK = { viewer: 0, staff: 0, manager: 1, admin: 2 };
 
 export function hasRole(user, minimum) {
   return !!user && RANK[user.role] >= RANK[minimum];
+}
+
+// Managers and administrators may do everything of a kind; staff only what
+// their permissions list (documents, incidents, work, projects).
+export function allowed(user, permission) {
+  if (!user) return false;
+  if (hasRole(user, 'manager')) return true;
+  return user.role === 'staff' && user.permissions.includes(permission);
+}
+
+export function requireAllowed(permission, message) {
+  return async (req) => {
+    if (!req.user) throw unauthorized();
+    if (!allowed(req.user, permission)) throw forbidden(message || 'You are not allowed to do this. Ask an administrator.');
+  };
 }
 
 export function requireRole(minimum) {
@@ -132,7 +150,7 @@ export function requireTechnical() {
 export function canWriteIsland(user, island) {
   if (!user) return false;
   if (user.role === 'admin') return true;
-  if (user.role === 'viewer') return false;
+  if (user.role === 'viewer') return false;   // staff: by scope, like managers; their permissions limit what
   const { scope } = user;
   return scope.region || scope.atollIds.includes(island.atoll_id) || scope.islandIds.includes(island.id);
 }

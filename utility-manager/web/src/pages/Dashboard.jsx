@@ -40,7 +40,7 @@ function attentionItems(d) {
 }
 
 export default function Dashboard() {
-  const { user, can, technical } = useAuth();
+  const { user, can, allowed, technical } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
   const state = useApi(`/dashboard${qs({ atoll_id: filters.atoll_id })}`);
@@ -98,7 +98,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid-2">
-          <Card title={`Open incidents (${d.incidents.open})`} actions={can('manager') && <Link to="/incidents/new" className="btn small">Report incident</Link>}>
+          <Card title={`Open incidents (${d.incidents.open})`} actions={allowed('incidents') && <Link to="/incidents/new" className="btn small">Report incident</Link>}>
             {d.incidents.list.length === 0 ? <Empty>No open incidents.</Empty> :
               <table><tbody>{d.incidents.list.map((x) => <tr key={x.id}>
                 <td><Severity value={x.severity} /></td>

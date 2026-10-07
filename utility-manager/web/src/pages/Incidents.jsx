@@ -6,7 +6,7 @@ import { INCIDENT_CATEGORIES, SERVICES, SEVERITIES, dateTime, duration } from '.
 import { useApi, useFilters } from '../hooks.js';
 
 export default function Incidents() {
-  const { can } = useAuth();
+  const { allowed } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
   const params = {
@@ -18,7 +18,7 @@ export default function Incidents() {
   return <>
     <PageHead title="Incidents" icon="incident" actions={<>
       <a className="btn ghost" href={csvUrl('/incidents', { ...params, offset: undefined })}>Export CSV</a>
-      {can('manager') && <Link className="btn primary" to={`/incidents/new${qs({ island_id: filters.island_id })}`}>Report incident</Link>}
+      {allowed('incidents') && <Link className="btn primary" to={`/incidents/new${qs({ island_id: filters.island_id })}`}>Report incident</Link>}
     </>} />
     <div className="filters">
       <Select value={filters.status} onChange={(v) => setFilter('status', v)} placeholder="Any status" options={{ open: 'Open', resolved: 'Resolved', closed: 'Closed' }} aria-label="Status" />

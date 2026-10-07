@@ -400,7 +400,7 @@ export function createTelegram({ db, config, log }) {
   }
 
   async function cmdAlerts(user, words, chat) {
-    if (user.role === 'viewer') return 'Only managers and administrators can turn alerts on or off.';
+    if (!['manager', 'admin'].includes(user.role)) return 'Only managers and administrators can turn alerts on or off.';
     const on = !/^(off|stop|no)$/i.test(words[0] || 'on');
     const title = chat.title || [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || null;
     const { rows } = await db.tx(user.id, (t) => t.query(

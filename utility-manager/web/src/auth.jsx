@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { api, setUnauthorizedHandler } from './api.js';
 
 const AuthContext = createContext(null);
-const RANK = { viewer: 0, manager: 1, admin: 2 };
+const RANK = { viewer: 0, staff: 0, manager: 1, admin: 2 };
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined); // undefined = loading, null = signed out
@@ -24,6 +24,9 @@ export function AuthProvider({ children }) {
   };
 
   const can = (minimumRole) => !!user && RANK[user.role] >= RANK[minimumRole];
+  // Managers may do everything of a kind; staff only what was ticked for them
+  // (documents, incidents, work, projects). Mirrors allowed() on the server.
+  const allowed = (permission) => !!user && (can('manager') || (user.role === 'staff' && (user.permissions || []).includes(permission)));
   // Mirrors the server rule; the server always has the final say.
   const canWriteIsland = (island) => {
     if (!user || !island) return false;
@@ -34,7 +37,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, refresh, can, canWriteIsland, technical: !!user?.technical }}>
+    <AuthContext.Provider value={{ user, login, logout, refresh, can, allowed, canWriteIsland, technical: !!user?.technical }}>
       {children}
     </AuthContext.Provider>
   );
