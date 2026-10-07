@@ -247,8 +247,10 @@ How it works:
 - **Telegram:** a direct message (`telegram.notifyUser`) goes to the next
   recipient if they have linked Telegram, and to the sender when the document
   is complete.
-- **Who sees it:** every signed-in user can see documents, as the shared list
-  allowed. Managers create them.
+- **Who sees it:** each document is visible only to its sender, whoever
+  entered it, its recipients (so they can sign) and administrators
+  (`documentVisible()`, applied to lists, details, files, CSV and the audit
+  trail). Others get "not found". Managers create documents.
 
 ## Engine state: one answer (Oct 2026)
 

@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
-import { badRequest, conflict, forbidden } from '../errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, text } from '../http.js';
 import { esc } from '../telegram.js';
 
@@ -46,6 +46,17 @@ const SELECT = `
     left join users su on su.id = d.sent_by
     left join users cu on cu.id = d.created_by`;
 
+// Who may see a document: its sender, whoever entered it, its recipients
+// (to sign it) and administrators. SQL condition on alias d; values from $n.
+export function documentVisible(user, n) {
+  if (user.role === 'admin') return { sql: 'true', values: [] };
+  return {
+    sql: `(d.sent_by = $${n} or d.created_by = $${n}
+           or exists (select 1 from document_signers vs where vs.document_id = d.id and vs.user_id = $${n}))`,
+    values: [user.id],
+  };
+}
+
 const fixJson = (row) => {
   if (typeof row.signers === 'string') row.signers = JSON.parse(row.signers);
   return row;
@@ -64,6 +75,8 @@ export default async function documentRoutes(app) {
         from documents d where d.id = $1`, [docId, user.id]);
     const d = one(rows, 'Document');
     const edit = user.role === 'admin' || d.sent_by === user.id || d.created_by === user.id;
+    // Not theirs to see: answer as if it didn't exist.
+    if (!edit && !d.my_signer) throw notFound('Document');
     return { ...d, edit };
   }
 
@@ -118,14 +131,16 @@ export default async function documentRoutes(app) {
     }
   }
 
-  app.get('/documents/types', async () => {
-    const { rows } = await db.query('select distinct doc_type from documents');
+  app.get('/documents/types', async (req) => {
+    const vis = documentVisible(req.user, 1);
+    const { rows } = await db.query(`select distinct d.doc_type from documents d where ${vis.sql}`, vis.values);
     return [...new Set([...DEFAULT_TYPES, ...rows.map((r) => r.doc_type)])].sort((a, b) => a.localeCompare(b));
   });
 
   app.get('/documents', async (req, reply) => {
     const q = parse(listQuery, req.query);
-    const w = new Where().add('d.doc_type = ?', q.type)
+    const vis = documentVisible(req.user, 1);
+    const w = new Where(vis.values).raw(vis.sql).add('d.doc_type = ?', q.type)
       .add(`(d.ref ilike ? or d.title ilike ? or d.doc_type ilike ? or d.sent_by_name ilike ? or su.full_name ilike ?
              or exists (select 1 from document_signers s where s.document_id = d.id and s.name ilike ?))`, q.q && `%${q.q}%`);
     if (q.status !== 'all') w.add('d.status = ?', q.status);

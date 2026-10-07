@@ -168,7 +168,8 @@ function DocumentForm({ doc, onDone }) {
             <button type="button" className="btn ghost small" disabled={signers.length === 1} onClick={() => setSigners(signers.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
           </div>)}
           <button type="button" className="btn small" onClick={() => setSigners([...signers, { pick: '', name: '' }])}>+ Add recipient</button>
-          <p className="muted small">Recipients with a login sign it off themselves (and are told on Telegram if linked). For others, you record their signature.</p>
+          <p className="muted small">Recipients with a login sign it off themselves (and are told on Telegram if linked). For others, you record their signature.
+            Only the sender, whoever enters it, its recipients and administrators can see this document.</p>
         </fieldset>
         <Field label="Notes" wide><textarea rows="3" value={f.notes} onChange={set('notes')} /></Field>
         <div className="form-actions">

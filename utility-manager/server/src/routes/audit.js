@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { requireRole } from '../auth.js';
 import { Where, id, pageOf, paging, parse } from '../http.js';
 import { projectVisible } from './projects.js';
+import { documentVisible } from './documents.js';
 
 // Changes to these are technical information (see TECHNICAL_PREFIXES in app.js).
 const TECHNICAL_ENTITIES = ['assets', 'facilities', 'asset_status_log', 'engine_conditions', 'powerhouse_reports',
@@ -18,6 +19,15 @@ export default async function auditRoutes(app) {
     }), req.query);
     const w = new Where().add('l.entity = ?', q.entity).add('l.entity_id = ?', q.entity_id).add('l.user_id = ?', q.user_id);
     if (!req.user.technical) w.raw(`l.entity not in (${TECHNICAL_ENTITIES.map((e) => `'${e}'`).join(', ')})`);
+    // Document changes only for documents the user can see.
+    if (req.user.role !== 'admin') {
+      const vis = documentVisible(req.user, w.values.length + 1);
+      w.values.push(...vis.values);
+      w.raw(`(l.entity not in ('documents', 'document_signers') or exists (
+        select 1 from documents d
+         where d.id::text = case when l.entity = 'document_signers' then l.changes->>'document_id' else l.entity_id end
+           and ${vis.sql}))`);
+    }
     // Project changes only for projects the user can see.
     if (req.user.role !== 'admin') {
       const vis = projectVisible(req.user, w.values.length + 1);

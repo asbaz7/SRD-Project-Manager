@@ -81,7 +81,7 @@ test('a document is entered with its recipients in order; status follows the sig
   const last = await call('POST', `/documents/${tender.id}/signers/${azwar.id}/sign`, T.nashmee, { signed_on: '2026-04-08' });
   assert.equal(last.body.status, 'completed');
 
-  const done = (await call('GET', `/documents/${tender.id}`, T.eng)).body;
+  const done = (await call('GET', `/documents/${tender.id}`, T.admin)).body;
   assert.equal(done.status, 'completed');
   assert.equal(done.last_approval_on, '2026-04-08');
   assert.equal(done.signed_count, 4);
@@ -112,13 +112,13 @@ test('filters, search and CSV export like the old list', async () => {
     signers: [{ name: 'Aminath Jaleela' }, { name: 'Hassan Azim' }] });
   await call('POST', '/documents', T.nashmee, { ref: 'D-010-2026', doc_type: 'Allowance form', sent_by_name: 'Fathmath Zimna Zaheer', sent_on: '2026-03-31',
     signers: [{ name: 'Sameeha Musthafa' }] });
-  const pending = (await call('GET', '/documents?status=pending', T.eng)).body.items;
+  const pending = (await call('GET', '/documents?status=pending', T.nashmee)).body.items;
   assert.deepEqual(pending.map((d) => d.ref).sort(), ['ADM/2026/001', 'D-010-2026']);
-  assert.deepEqual((await call('GET', '/documents?type=Allowance%20form', T.eng)).body.items.map((d) => d.sent_by_label), ['Fathmath Zimna Zaheer']);
-  assert.deepEqual((await call('GET', '/documents?q=Hassan', T.eng)).body.items.map((d) => d.ref), ['ADM/2026/001']);
-  const types = (await call('GET', '/documents/types', T.eng)).body;
+  assert.deepEqual((await call('GET', '/documents?type=Allowance%20form', T.nashmee)).body.items.map((d) => d.sent_by_label), ['Fathmath Zimna Zaheer']);
+  assert.deepEqual((await call('GET', '/documents?q=Hassan', T.nashmee)).body.items.map((d) => d.ref), ['ADM/2026/001']);
+  const types = (await call('GET', '/documents/types', T.nashmee)).body;
   assert.ok(types.includes('Meal form') && types.includes('Tender'));
-  const csv = await call('GET', '/documents?format=csv', T.eng);
+  const csv = await call('GET', '/documents?format=csv', T.nashmee);
   assert.equal(csv.status, 200);
   assert.match(csv.raw.body, /Agreement ID,Document type/);
   assert.match(csv.raw.body, /Aminath Jaleela; Hassan Azim/);
@@ -128,14 +128,27 @@ test('files are attached and downloaded; notes are posted by the sender and reci
   const pdf = Buffer.from('%PDF-1.4 test file');
   const up = await call('POST', `/documents/${tender.id}/files`, T.nashmee, { file_name: 'RPT-2026-22 signed.pdf', content_type: 'application/pdf', data: pdf.toString('base64') });
   assert.equal(up.status, 201);
-  const down = await call('GET', `/documents/${tender.id}/files/${up.body.id}`, T.eng);
+  const down = await call('GET', `/documents/${tender.id}/files/${up.body.id}`, T.yasir);
   assert.equal(down.status, 200);
   assert.equal(down.raw.headers['content-type'], 'application/pdf');
   assert.match(down.raw.headers['content-disposition'], /RPT-2026-22 signed\.pdf/);
   assert.equal(down.raw.body, pdf.toString());
-  assert.equal((await call('POST', `/documents/${tender.id}/files`, T.eng, { file_name: 'x.pdf', data: pdf.toString('base64') })).status, 403);
+  assert.equal((await call('POST', `/documents/${tender.id}/files`, T.eng, { file_name: 'x.pdf', data: pdf.toString('base64') })).status, 404);
   assert.equal((await call('POST', `/documents/${tender.id}/updates`, T.yasir, { body: 'Signed copy sent back' })).status, 201);
-  assert.equal((await call('POST', `/documents/${tender.id}/updates`, T.eng, { body: 'hi' })).status, 403);
+  assert.equal((await call('POST', `/documents/${tender.id}/updates`, T.eng, { body: 'hi' })).status, 404);
   assert.equal((await call('DELETE', `/documents/${tender.id}/files/${up.body.id}`, T.yasir)).status, 403);
   assert.equal((await call('DELETE', `/documents/${tender.id}/files/${up.body.id}`, T.nashmee)).status, 200);
+});
+
+test('a document is visible only to its sender, whoever entered it, its recipients and administrators', async () => {
+  const d = (await call('POST', '/documents', T.nashmee, { ref: 'D-099-2026', doc_type: 'Allowance form', sent_on: '2026-10-01',
+    signers: [{ user_id: U.yasir }, { name: 'Sameeha Musthafa' }] })).body;
+  // Someone else (an engineer, not involved) can't see it anywhere.
+  assert.ok(!(await call('GET', '/documents', T.eng)).body.items.some((x) => x.id === d.id));
+  assert.equal((await call('GET', `/documents/${d.id}`, T.eng)).status, 404);
+  assert.ok(!(await call('GET', '/documents?format=csv', T.eng)).raw.body.includes('D-099-2026'));
+  assert.ok(!(await call('GET', '/audit?limit=500', T.eng)).body.items.some((l) => l.entity === 'documents' && l.entity_id === String(d.id)));
+  // The sender, the recipient and an administrator can.
+  for (const who of ['nashmee', 'yasir', 'admin']) assert.equal((await call('GET', `/documents/${d.id}`, T[who])).status, 200, who);
+  assert.ok((await call('GET', '/audit?entity=documents&limit=500', T.nashmee)).body.items.some((l) => l.entity_id === String(d.id)));
 });
