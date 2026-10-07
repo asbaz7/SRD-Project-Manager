@@ -429,13 +429,14 @@ describe('work and maintenance history', () => {
     assert.equal((await engine(g9)).overhaul_due, true);
     const dueBefore = (await call('GET', '/dashboard', { token: admin })).body.engines;
 
-    // A service dated before the report does not clear it.
-    await call('POST', `/assets/${g2}/maintenance`, { token: manager, body: { kind: 'alternator_service', done_on: shift(PREVIOUS, -1) } });
+    // The report says G2's last alternator service was 15.06.2026. A service
+    // recorded as older than that doesn't clear it...
+    await call('POST', `/assets/${g2}/maintenance`, { token: manager, body: { kind: 'alternator_service', done_on: '2026-01-20' } });
     assert.equal((await engine(g2)).alt_service_due, true);
 
-    // Done after the report (by hand): cleared everywhere.
-    const today = mvToday();
-    await call('POST', `/assets/${g2}/maintenance`, { token: manager, body: { kind: 'alternator_service', done_on: today, notes: 'bearing replaced' } });
+    // ...but a newer one does, even when backdated to before the report
+    // (head office correcting a wrong report).
+    await call('POST', `/assets/${g2}/maintenance`, { token: manager, body: { kind: 'alternator_service', done_on: '2026-06-20', notes: 'bearing replaced' } });
     const e2 = await engine(g2);
     assert.equal(e2.alt_service_due, false);
     assert.equal(e2.alt_needs_service, false);

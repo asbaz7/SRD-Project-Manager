@@ -232,10 +232,13 @@ evidence wins:
   not_running gives `ok` ("Back in service").
 - Otherwise the report's condition applies.
 
-The report's "needs overhaul" and "alternator needs service" flags work the
-same way (migration 009). They clear once that work is recorded on or after
-the report's date, either by hand or by completing a work order of that
-kind. The original flags remain as `report_needs_overhaul` and
+The report's "needs overhaul" and "alternator needs service" flags rest on
+the last service the report knew about (migration 012, replacing 009's rule
+of "on or after the report date"). They clear when a service of that kind
+is recorded by hand or by a completed work order (not taken from a report)
+with a date newer than the report's own last-service date, or any such
+service if the report gives none. This lets head office correct wrong
+reports with backdated records. The original flags remain as `report_needs_overhaul` and
 `report_alt_needs_service`.
 
 Every page, count, filter and the bot read `engine_current`, so a genset can
