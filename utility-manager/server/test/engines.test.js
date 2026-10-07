@@ -418,4 +418,35 @@ describe('work and maintenance history', () => {
     assert.ok(preview.warnings.some((w) => w.includes(`Could not read sheet "${sheetName(EXPECTED, 2)}"`)), preview.warnings.join(' | '));
     assert.ok(preview.warnings.some((w) => /will still show as missing/.test(w)), preview.warnings.join(' | '));
   });
+
+  test("a report's 'needs service / overhaul' clears once the work is recorded after the report", async () => {
+    const tagId = async (tag) => (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.kind = 'genset' and s.tag = $2`, [maafushi.id, tag])).rows[0].id;
+    const g2 = await tagId('2');   // the report says its alternator needs service
+    const g9 = await tagId('9');   // the report says it needs an overhaul
+    const engine = async (id) => (await call('GET', '/engines', { token: admin })).body.engines.find((e) => e.id === id);
+    assert.equal((await engine(g2)).alt_service_due, true);
+    assert.equal((await engine(g9)).overhaul_due, true);
+    const dueBefore = (await call('GET', '/dashboard', { token: admin })).body.engines;
+
+    // A service dated before the report does not clear it.
+    await call('POST', `/assets/${g2}/maintenance`, { token: manager, body: { kind: 'alternator_service', done_on: shift(PREVIOUS, -1) } });
+    assert.equal((await engine(g2)).alt_service_due, true);
+
+    // Done after the report (by hand): cleared everywhere.
+    const today = mvToday();
+    await call('POST', `/assets/${g2}/maintenance`, { token: manager, body: { kind: 'alternator_service', done_on: today, notes: 'bearing replaced' } });
+    const e2 = await engine(g2);
+    assert.equal(e2.alt_service_due, false);
+    assert.equal(e2.alt_needs_service, false);
+    assert.equal((await call('GET', `/assets/${g2}`, { token: admin })).body.condition.report_alt_needs_service, true);
+
+    // Done after the report through a completed work order: cleared too.
+    const w = (await call('POST', '/work', { token: manager, body: { asset_id: g9, kind: 'overhaul', title: 'Major overhaul G9' } })).body;
+    await call('PATCH', `/work/${w.id}`, { token: manager, body: { status: 'completed' } });
+    assert.equal((await engine(g9)).overhaul_due, false);
+
+    const dueAfter = (await call('GET', '/dashboard', { token: admin })).body.engines;
+    assert.equal(+dueAfter.alt_service_due, +dueBefore.alt_service_due - 1);
+    assert.equal(+dueAfter.overhaul_due, +dueBefore.overhaul_due - 1);
+  });
 });

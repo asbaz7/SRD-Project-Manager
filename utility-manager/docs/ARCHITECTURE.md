@@ -232,6 +232,12 @@ evidence wins:
   not_running gives `ok` ("Back in service").
 - Otherwise the report's condition applies.
 
+The report's "needs overhaul" and "alternator needs service" flags work the
+same way (migration 009). They clear once that work is recorded on or after
+the report's date, either by hand or by completing a work order of that
+kind. The original flags remain as `report_needs_overhaul` and
+`report_alt_needs_service`.
+
 Every page, count, filter and the bot read `engine_current`, so a genset can
 never show "OK" and "Down" at once. Its columns `condition_source`
 ('report' | 'status'), `condition_note`, `condition_at` and
