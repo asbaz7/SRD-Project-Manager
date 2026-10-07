@@ -244,6 +244,24 @@ never show "OK" and "Down" at once. Its columns `condition_source`
 `report_condition` say where the answer came from. A newer report takes over
 again: the import also moves the live status when the report is newer.
 
+## Moving gensets between islands (Oct 2026)
+
+A move keeps the asset's identity (the same `assets.id`), so its maintenance
+history, running hours, condition and status log go with it. Each move is
+recorded in `asset_moves` (migration 010). Logic is in `src/assetMoves.js`.
+
+- **By hand:** `POST /assets/:id/move` with the destination facility (same
+  service), the number there (must be free), the date and notes. Ongoing
+  work on it follows by default; finished work stays where it happened. A
+  technical Telegram alert is sent.
+- **From a report:** if a report lists a genset whose serial number matches
+  exactly one active genset at another powerhouse, the preview says so and
+  the import moves it instead of adding a duplicate. Serials are compared on
+  letters and digits only, and only from 5 characters up. If it takes a
+  number already used here by a different engine, that record is kept but
+  marked not in use and decommissioned ("N (removed YYYY-MM)"). A changed
+  serial with no match elsewhere is only flagged.
+
 ## Condition report parsing safeguards
 
 - **Missing "GENSET NO." label:** if the label was typed over, the genset

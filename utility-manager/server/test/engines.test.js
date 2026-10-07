@@ -39,22 +39,23 @@ const PREVIOUS = shift(EXPECTED, -1);
 const MONTH_NAMES = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
 const sheetName = (month, i) => `${i}. ${MONTH_NAMES[+month.slice(5, 7) - 1]} ${month.slice(0, 4)}`;
 
-function maafushiReport({ months = [PREVIOUS, EXPECTED], powerhouse = 'K. MAAFUSHI' } = {}) {
+// serial: a suffix so another island's report has its own engines.
+function maafushiReport({ months = [PREVIOUS, EXPECTED], powerhouse = 'K. MAAFUSHI', serial = '' } = {}) {
   const sheets = months.map((month, i) => reportSheet({
     name: sheetName(month, i + 1),
     powerhouse,
     updated: shift(month, 1),
     peak: '3686 KW 29/08/2026 14:37',
     gensets: [
-      { number: 1, make: 'CATERPILLAR', model: '3516B', kw: 1600, serial: 'YBT00586', altMake: 'STAMFORD', altKw: 1600,
+      { number: 1, make: 'CATERPILLAR', model: '3516B', kw: 1600, serial: `YBT00586${serial}`, altMake: 'STAMFORD', altKw: 1600,
         status: 'RUNNING; OK', fault: 'No Fault', overhaul: { date: '2025-06-01' }, sinceOverhaul: { hours: 3457.3 + i * 500 },
         total: { hours: 37057 + i * 500 }, altService: '24/9/2024', valve: '31/05/2025', capable: '1300 KW', maxLoad: '1047 KW',
         needsOverhaul: 'NO', altNeedsService: 'NO', connected: 'YES' },
-      { number: 2, make: 'CUMMINS', model: 'KTA 50-G3', kw: 1000, serial: '41374910', status: 'RUNNING; MINOR FAULT',
+      { number: 2, make: 'CUMMINS', model: 'KTA 50-G3', kw: 1000, serial: `41374910${serial}`, status: 'RUNNING; MINOR FAULT',
         fault: 'Oil Leaking (Front & Back Seal)', total: '10603:00', altService: i ? '15.06.2026' : '-',
         needsOverhaul: 'NO', altNeedsService: 'YES' },
       // A genset the register does not have yet (Maafushi has 8 in the seed; use 9).
-      { number: 9, make: 'CUMMINS', model: 'QSK 60-G4', kw: 1600, serial: 'NEW-9', status: 'NOT RUNNING; MAJOR FAULT',
+      { number: 9, make: 'CUMMINS', model: 'QSK 60-G4', kw: 1600, serial: `NEW-9${serial}`, status: 'NOT RUNNING; MAJOR FAULT',
         fault: 'Crankshaft damage', overhaul: '09.05.2025', sinceOverhaul: '879:30', total: '63226:30',
         needsOverhaul: 'YES', altNeedsService: 'No' },
     ],
@@ -304,7 +305,7 @@ describe('work and maintenance history', () => {
   });
 
   test('powerhouses whose latest report is before 2024 are not chased', async () => {
-    const data = maafushiReport({ powerhouse: 'K. DHIFFUSHI', months: ['2023-11-01', '2023-12-01'] });
+    const data = maafushiReport({ powerhouse: 'K. DHIFFUSHI', months: ['2023-11-01', '2023-12-01'], serial: 'DH' });
     const islands = (await call('GET', '/islands', { token: admin })).body;
     const dhiffushi = islands.find((i) => i.name === 'Dhiffushi');
     const res = await call('POST', '/condition-reports/import', { token: admin, body: { data, island_id: dhiffushi.id } });
@@ -448,5 +449,69 @@ describe('work and maintenance history', () => {
     const dueAfter = (await call('GET', '/dashboard', { token: admin })).body.engines;
     assert.equal(+dueAfter.alt_service_due, +dueBefore.alt_service_due - 1);
     assert.equal(+dueAfter.overhaul_due, +dueBefore.overhaul_due - 1);
+  });
+
+  test('a genset moved to another island keeps its history, and open work follows it', async () => {
+    const isl = (await call('GET', '/islands', { token: admin })).body;
+    const guraidhoo = isl.find((i) => i.name === 'Guraidhoo');
+    const ph = (await db.query(`select id from facilities where island_id = $1 and kind = 'powerhouse'`, [guraidhoo.id])).rows[0].id;
+    const g1 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '1' and s.kind = 'genset'`, [maafushi.id])).rows[0].id;
+    const before = (await call('GET', `/assets/${g1}`, { token: admin })).body;
+    const work = (await call('POST', '/work', { token: admin, body: { asset_id: g1, kind: 'repair', title: 'Fix before shipping' } })).body;
+
+    // Guraidhoo already has a Genset 1: the number must be free.
+    const clash = await call('POST', `/assets/${g1}/move`, { token: admin, body: { facility_id: ph, moved_on: mvToday() } });
+    assert.equal(clash.status, 409);
+    assert.match(clash.body.error, /already has Genset 1/);
+
+    const moved = await call('POST', `/assets/${g1}/move`, { token: admin, body: { facility_id: ph, tag: '7', moved_on: mvToday(), notes: 'Shipped on MV Example' } });
+    assert.equal(moved.status, 200, JSON.stringify(moved.body));
+    const after = (await call('GET', `/assets/${g1}`, { token: admin })).body;
+    assert.equal(after.island_name, 'Guraidhoo');
+    assert.equal(after.tag, '7');
+    assert.equal(after.maintenance.length, before.maintenance.length);
+    assert.equal(after.hours_log.length, before.hours_log.length);
+    assert.equal(after.moves[0].from_island, 'Maafushi');
+    assert.equal(after.moves[0].from_tag, '1');
+    assert.equal((await call('GET', `/work/${work.id}`, { token: admin })).body.island_name, 'Guraidhoo');
+    // Maafushi no longer counts it.
+    assert.ok(!(await call('GET', `/islands/${maafushi.id}`, { token: admin })).body.facilities.some((f) => f.assets.some((a) => a.id === g1)));
+    // Managers can't move gensets from islands they can't change.
+    assert.equal((await call('POST', `/assets/${g1}/move`, { token: manager, body: { facility_id: ph, tag: '8', moved_on: mvToday() } })).status, 403);
+  });
+
+  test('a report listing a genset registered at another island moves it instead of adding a duplicate', async () => {
+    const isl = (await call('GET', '/islands', { token: admin })).body;
+    const huraa = isl.find((i) => i.name === 'Huraa');
+    // Maafushi's G2 (S/N 41374910) turns up in Huraa's report as Genset 9;
+    // and Huraa's Genset 1 has been replaced by Maafushi's G9 (S/N NEW-9).
+    const g2 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '2' and s.kind = 'genset'`, [maafushi.id])).rows[0].id;
+    const huraaG1 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '1' and s.kind = 'genset'`, [huraa.id])).rows[0].id;
+    await db.query(`update assets set serial_no = 'OLD-HURAA-1' where id = $1`, [huraaG1]);
+    await db.query(`update assets s set serial_no = '6600-NEW9' from facilities f where f.id = s.facility_id and f.island_id = $1 and s.tag = '9'`, [maafushi.id]);
+    const sheet = reportSheet({ name: sheetName(EXPECTED, 1), powerhouse: 'K. HURAA', updated: shift(EXPECTED, 1), gensets: [
+      { number: 1, make: 'CUMMINS', model: 'QSK 60-G4', kw: 1600, serial: '6600 NEW9', status: 'RUNNING; OK', total: { hours: 63500 } },
+      { number: 9, make: 'CUMMINS', model: 'KTA 50-G3', kw: 1000, serial: '41374910', status: 'RUNNING; OK', total: { hours: 11000 } },
+    ] });
+    const data = Buffer.from(makeXlsx([sheet])).toString('base64');
+    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'huraa.xlsx', data } })).body;
+    assert.equal(preview.moves.length, 2, JSON.stringify(preview.warnings));
+    assert.ok(preview.warnings.some((w) => /Genset 9 \(S\/N 41374910\) is registered at K\. Maafushi as Genset 2/.test(w)), preview.warnings.join(' | '));
+    assert.ok(preview.warnings.some((w) => /previously registered here as Genset 1 .* marked as removed/.test(w)), preview.warnings.join(' | '));
+    assert.ok(!preview.warnings.some((w) => /will be added to the register/.test(w)));
+
+    const res = await call('POST', '/condition-reports/import', { token: admin, body: { file_name: 'huraa.xlsx', data, island_id: huraa.id } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.gensets_moved, 2);
+    assert.equal(res.body.gensets_added, 0);
+    const moved = (await call('GET', `/assets/${g2}`, { token: admin })).body;
+    assert.equal(moved.island_name, 'Huraa');
+    assert.equal(moved.tag, '9');
+    assert.equal(moved.moves[0].source, 'report');
+    assert.ok(moved.maintenance.length > 0, 'history kept');
+    const old = (await db.query('select active, tag, status from assets where id = $1', [huraaG1])).rows[0];
+    assert.equal(old.active, false);
+    assert.match(old.tag, /^1 \(removed/);
+    assert.equal(old.status, 'decommissioned');
   });
 });

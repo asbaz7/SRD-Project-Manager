@@ -113,15 +113,36 @@ async function powerhouseOf(t, islandId) {
 /**
  * What an upload would change, without changing anything.
  */
+import { gensetBySerial, moveAsset, normSerial } from './assetMoves.js';
+
+const NO_FACILITY = '00000000-0000-0000-0000-000000000000';
+
+// Gensets in the report that are registered at another powerhouse (same
+// serial number): moved here. Either under a number this powerhouse doesn't
+// have, or replacing the genset registered under that number.
+async function detectMoves(db, gensets, byTag, facilityId) {
+  const moves = [];
+  const serialChanges = [];
+  for (const g of gensets) {
+    const here = byTag.get(g.number);
+    const reportSerial = normSerial(g.serial_no);
+    if (here && (!reportSerial || normSerial(here.serial_no) === reportSerial)) continue;
+    const from = await gensetBySerial(db, g.serial_no, facilityId || NO_FACILITY);
+    if (from) moves.push({ number: g.number, serial: g.serial_no, from, replaces: here || null });
+    else if (here && normSerial(here.serial_no)) serialChanges.push({ number: g.number, was: here.serial_no, now: g.serial_no });
+  }
+  return { moves, serialChanges };
+}
+
 const monthLabel = (m) => new Date(`${m}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 export async function planImport(db, parsed, islandId) {
   const facilityId = await powerhouseOf(db, islandId);
   const [{ rows: assets }, { rows: current }] = await Promise.all([
     facilityId
-      ? db.query(`select a.id, a.tag, a.make_model, c.report_month
+      ? db.query(`select a.id, a.tag, a.make_model, a.serial_no, c.report_month
                     from assets a left join engine_conditions c on c.asset_id = a.id
-                   where a.facility_id = $1 and a.kind = 'genset'`, [facilityId])
+                   where a.facility_id = $1 and a.kind = 'genset' and a.active`, [facilityId])
       : { rows: [] },
     facilityId ? db.query('select report_month from powerhouse_reports where facility_id = $1', [facilityId]) : { rows: [] },
   ]);
@@ -157,7 +178,16 @@ export async function planImport(db, parsed, islandId) {
   if (latest.month && latest.month < expected && (!currentMonth || latest.month >= currentMonth)) {
     warnings.push(`The newest report in this file is ${monthLabel(latest.month)}; ${monthLabel(expected)} will still show as missing.`);
   }
-  const newGensets = latest.gensets.filter((g) => !byTag.has(g.number)).map((g) => g.number);
+  const { moves, serialChanges } = await detectMoves(db, latest.gensets, byTag, facilityId);
+  const moved = new Map(moves.map((m) => [m.number, m]));
+  for (const m of moves) {
+    warnings.push(`Genset ${m.number} (S/N ${m.serial}) is registered at ${m.from.atoll_code}. ${m.from.island_name} as Genset ${m.from.tag}: it will be moved here with its history${
+      m.replaces ? `, and the genset previously registered here as Genset ${m.number} (S/N ${m.replaces.serial_no}) will be marked as removed` : ''}.`);
+  }
+  for (const c of serialChanges) {
+    warnings.push(`Genset ${c.number}'s serial number changed from ${c.was} to ${c.now}. If the engine was replaced, record the old one's move or removal on its page.`);
+  }
+  const newGensets = latest.gensets.filter((g) => !byTag.has(g.number) && !moved.has(g.number)).map((g) => g.number);
   if (newGensets.length) warnings.push(`Genset${newGensets.length > 1 ? 's' : ''} ${newGensets.join(', ')} will be added to the register.`);
 
   return {
@@ -169,9 +199,11 @@ export async function planImport(db, parsed, islandId) {
     new_events: events.length,
     events_by_kind: events.reduce((acc, e) => ({ ...acc, [e.kind]: (acc[e.kind] || 0) + 1 }), {}),
     warnings,
+    moves: moves.map((m) => ({ number: m.number, from: `${m.from.atoll_code}. ${m.from.island_name} G${m.from.tag}` })),
     gensets: latest.gensets.map((g) => ({
       number: g.number,
       exists: byTag.has(g.number),
+      moved_from: moved.has(g.number) ? `${moved.get(g.number).from.atoll_code}. ${moved.get(g.number).from.island_name} G${moved.get(g.number).from.tag}` : null,
       make_model: [g.make, g.model].filter(Boolean).join(' ') || byTag.get(g.number)?.make_model || null,
       status_text: g.status_text || null,
       condition: g.condition || null,
@@ -199,9 +231,30 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
   }
   const latest = parsed.latest;
   const { rows: existing } = await t.query(
-    "select id, tag, status, status_at from assets where facility_id = $1 and kind = 'genset'", [facilityId]);
+    "select id, tag, status, status_at, serial_no from assets where facility_id = $1 and kind = 'genset' and active", [facilityId]);
   const byTag = new Map(existing.map((a) => [a.tag, a]));
   let created = 0;
+
+  // Gensets moved here from another powerhouse keep their record and history.
+  const { moves } = await detectMoves(t, latest.gensets, byTag, facilityId);
+  const movedOn = latest.updated_on || addMonths(latest.month, 1);
+  for (const m of moves) {
+    if (m.replaces) {
+      // The genset registered here under this number has gone (where to is
+      // not in this report): keep its record, out of use, under a free tag.
+      const oldTag = `${m.number} (removed ${movedOn.slice(0, 7)})`;
+      await t.query("update assets set active = false, tag = $2 where id = $1", [m.replaces.id, oldTag]);
+      await t.query(`insert into asset_status_log (asset_id, status, note, reported_at, reported_by)
+                     values ($1, 'decommissioned', $2, now(), $3)`,
+      [m.replaces.id, `Replaced by S/N ${m.serial} (moved from ${m.from.atoll_code}. ${m.from.island_name}) per the ${latest.month?.slice(0, 7)} report. Record where it went if known.`, userId]);
+    }
+    await moveAsset(t, {
+      assetId: m.from.id, facilityId, tag: m.number, movedOn, source: 'report', userId,
+      notes: `Found in the ${latest.month?.slice(0, 7)} condition report${fileName ? ` (${fileName})` : ''}`,
+    });
+    const { rows } = await t.query('select id, tag, status, status_at, serial_no from assets where id = $1', [m.from.id]);
+    byTag.set(m.number, rows[0]);
+  }
 
   // Register: every genset in the latest report, with what the report knows.
   for (const g of latest.gensets) {
@@ -307,7 +360,7 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
     [facilityId, latest.month, latest.updated_on, latest.peak_load_record, latest.peak_load_month,
       latest.gensets.length, fileName?.slice(0, 200) || null, userId]);
   }
-  return { gensets_updated: updated, gensets_added: created, events_added: events };
+  return { gensets_updated: updated, gensets_added: created, gensets_moved: moves.length, events_added: events };
 }
 
 // Powerhouses whose latest report is older than this are not chased as

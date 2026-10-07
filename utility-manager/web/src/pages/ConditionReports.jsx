@@ -145,7 +145,7 @@ function UploadItem({ item, onIsland, onImport }) {
         <div className="table-scroll"><table>
           <thead><tr><th>Genset</th><th>Condition</th><th className="num">Total h</th><th className="num">Since overhaul</th><th className="hide-sm">Fault</th></tr></thead>
           <tbody>{p.gensets.map((g) => <tr key={g.number}>
-            <td>G{g.number}{!g.exists && <span className="flag info"> new</span>}<br /><small className="muted">{g.make_model}</small></td>
+            <td>G{g.number}{g.moved_from ? <span className="flag info"> moved from {g.moved_from}</span> : !g.exists && <span className="flag info"> new</span>}<br /><small className="muted">{g.make_model}</small></td>
             <td><Condition value={g.condition} text={g.status_text} />
               {g.needs_overhaul && <><br /><span className="flag bad">Needs overhaul</span></>}
               {g.alt_needs_service && <><br /><span className="flag warn">Alternator service</span></>}</td>
