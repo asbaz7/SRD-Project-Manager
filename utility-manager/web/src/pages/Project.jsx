@@ -56,6 +56,7 @@ function ProjectView({ project: p, reload }) {
         </form>
       </Card>}
     </div>
+    <ProjectFiles project={p} reload={reload} />
     <Card title="Who has access">
       <p className="small">{p.visibility === 'everyone' ? 'Everyone can view this project.' : 'Only the people below can see this project.'}
         {' '}<span className="muted">Its creator{p.owner_name ? `, owner (${p.owner_name})` : ''} and administrators can always edit it.</span></p>
@@ -73,6 +74,51 @@ function ProjectView({ project: p, reload }) {
         </li>)}</ol>}
     </Card>
   </>;
+}
+
+const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+// Files are kept only while the project is open: once it is completed or
+// cancelled they can be downloaded (or deleted at once) until the date shown,
+// then the system deletes them.
+function ProjectFiles({ project: p, reload }) {
+  const closed = ['completed', 'cancelled'].includes(p.status);
+  const upload = useSubmit(async (file) => {
+    if (file.size > 10 * 1024 * 1024) throw new Error('Files can be up to 10 MB');
+    const data = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1]);
+      r.onerror = () => reject(new Error('Could not read the file'));
+      r.readAsDataURL(file);
+    });
+    await api(`/projects/${p.id}/files`, { method: 'POST', body: { file_name: file.name, content_type: file.type || undefined, data } });
+    reload();
+  });
+  const remove = useSubmit(async (fileId) => { await api(`/projects/${p.id}/files/${fileId}`, { method: 'DELETE' }); reload(); });
+  const removeAll = useSubmit(async () => {
+    if (!window.confirm(`Delete all ${p.files.length} files of ${p.ref} now? Download them first if you need them. This can't be undone.`)) return;
+    await api(`/projects/${p.id}/files`, { method: 'DELETE' });
+    reload();
+  });
+  if (closed && p.files.length === 0) return null;
+  const deleteOn = p.files_delete_after && new Date(`${String(p.files_delete_after).slice(0, 10)}T00:00:00Z`)
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return <Card title={`Files${p.files.length ? ` (${p.files.length} · ${size(p.files_total_bytes)})` : ''}`}
+    actions={p.files.length > 1 && <a className="btn small" href={`/api/v1/projects/${p.id}/zip`}>Download all (ZIP)</a>}>
+    <ErrorBox error={upload.error || remove.error || removeAll.error} />
+    {closed
+      ? <div className="notice">This project is {p.status}. Its files will be <strong>deleted on {deleteOn}</strong>. Download them before then
+          {p.can_edit && <>, or <button className="link" onClick={removeAll.submit} disabled={removeAll.busy}>delete them now</button></>}.</div>
+      : <p className="muted small">Files are kept while the project is open. When it is completed they can be downloaded for 30 days, then they are deleted.</p>}
+    {p.files.length === 0 ? <Empty>No files yet.</Empty> :
+      <ul className="people">{p.files.map((f) => <li key={f.id}>
+        <span><a href={`/api/v1/projects/${p.id}/files/${f.id}`}><strong>{f.file_name}</strong></a><br />
+          <small className="muted">{size(f.size_bytes)} · {dateTime(f.uploaded_at)}{f.uploaded_by_name && ` · ${f.uploaded_by_name}`}</small></span>
+        {p.can_edit && <button className="btn ghost small" disabled={remove.busy} onClick={() => remove.submit(f.id)}>Remove</button>}
+      </li>)}</ul>}
+    {!closed && p.can_edit && <label className="btn small file-pick">{upload.busy ? 'Uploading…' : 'Attach a file'}
+      <input type="file" hidden disabled={upload.busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload.submit(f); }} /></label>}
+  </Card>;
 }
 
 function ProjectForm({ project, onDone }) {

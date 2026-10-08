@@ -218,3 +218,61 @@ test('staff: permissions chosen per user', async () => {
   assert.deepEqual(promoted.body.permissions, []);
   assert.equal((await call('PATCH', `/users/${plain.id}`, T.admin, { permissions: ['bogus'] })).status, 400);
 });
+
+test('project files: kept while open, downloadable after, deleted 30 days after closing', async () => {
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const p = (await call('POST', '/projects', T.tech, { service: 'water', island_id: maafushi.id, title: 'RO plant upgrade',
+    visibility: 'members', members: [{ user_id: U.clerk, access: 'view' }] })).body;
+  const add = (token, name, text) => call('POST', `/projects/${p.id}/files`, token, { file_name: name, content_type: 'application/pdf', data: Buffer.from(text).toString('base64') });
+  assert.equal((await add(T.tech, 'BOQ.pdf', 'boq')).status, 201);
+  assert.equal((await add(T.tech, 'BOQ.pdf', 'boq v2')).status, 201);
+  assert.equal((await add(T.clerk, 'x.pdf', 'x')).status, 403, 'viewers of the project cannot add');
+  assert.equal((await add(T.tech2, 'x.pdf', 'x')).status, 404, 'not shared with tech2');
+
+  let d = (await call('GET', `/projects/${p.id}`, T.clerk)).body;
+  assert.equal(d.files.length, 2);
+  assert.equal(d.files_delete_after, null);
+  const one = await app.inject({ method: 'GET', url: `/api/v1/projects/${p.id}/files/${d.files[0].id}`, headers: { authorization: `Bearer ${T.clerk}` } });
+  assert.equal(one.body, 'boq');
+
+  // Completed: no new files; the countdown starts; everything downloads as a ZIP.
+  await call('POST', `/projects/${p.id}/updates`, T.tech, { body: 'Handed over', status: 'completed' });
+  d = (await call('GET', `/projects/${p.id}`, T.tech)).body;
+  const in30 = new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Indian/Maldives' });
+  assert.ok([in30, new Date(Date.now() + 29 * 86400000).toISOString().slice(0, 10), new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)].includes(String(d.files_delete_after).slice(0, 10)), String(d.files_delete_after));
+  assert.equal((await add(T.tech, 'late.pdf', 'late')).status, 400);
+  const zipRes = await fetchZip(p.id);
+  const files = unzipSync(zipRes);
+  assert.deepEqual(Object.keys(files).sort(), ['BOQ (2).pdf', 'BOQ.pdf']);
+  assert.equal(strFromU8(files['BOQ (2).pdf']), 'boq v2');
+
+  // Reopening cancels the countdown; closing again restarts it.
+  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'ongoing' });
+  assert.equal((await call('GET', `/projects/${p.id}`, T.tech)).body.files_delete_after, null);
+  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'completed' });
+
+  // The daily job deletes them once the date has passed; the project stays.
+  await db.query(`update projects set files_delete_after = current_date - 1 where id = $1`, [p.id]);
+  await app.daily();
+  d = (await call('GET', `/projects/${p.id}`, T.tech)).body;
+  assert.equal(d.files.length, 0);
+  assert.equal(d.title, 'RO plant upgrade');
+  assert.ok(d.updates.length > 0);
+
+  async function fetchZip(id) {
+    const r = await app.inject({ method: 'GET', url: `/api/v1/projects/${id}/zip`, headers: { authorization: `Bearer ${T.clerk}` } });
+    assert.equal(r.statusCode, 200);
+    assert.equal(r.headers['content-type'], 'application/zip');
+    const res = await app.fetch(new Request(`http://x/api/v1/projects/${id}/zip`, { headers: { authorization: `Bearer ${T.clerk}` } }));
+    return new Uint8Array(await res.arrayBuffer());
+  }
+});
+
+test('deleting a closed project\'s files at once', async () => {
+  const p = (await call('POST', '/projects', T.tech, { service: 'water', island_id: maafushi.id, title: 'Short job' })).body;
+  await call('POST', `/projects/${p.id}/files`, T.tech, { file_name: 'a.pdf', data: Buffer.from('a').toString('base64') });
+  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'completed' });
+  assert.equal((await call('DELETE', `/projects/${p.id}/files`, T.tech2)).status, 404);
+  const res = await call('DELETE', `/projects/${p.id}/files`, T.tech);
+  assert.equal(res.body.deleted, 1);
+});

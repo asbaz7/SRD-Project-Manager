@@ -19,7 +19,7 @@ import userRoutes from './routes/users.js';
 import locationRoutes from './routes/locations.js';
 import assetRoutes from './routes/assets.js';
 import incidentRoutes from './routes/incidents.js';
-import projectRoutes from './routes/projects.js';
+import projectRoutes, { purgeProjectFiles } from './routes/projects.js';
 import dashboardRoutes from './routes/dashboard.js';
 import auditRoutes from './routes/audit.js';
 import conditionReportRoutes from './routes/conditionReports.js';
@@ -234,8 +234,13 @@ export async function buildApp({ db, config, logger = true }) {
   return {
     log,
     telegram,
-    // Daily Telegram summary (Cloudflare cron trigger, see worker.js).
-    daily: () => telegram.daily(asUser),
+    // Daily jobs (Cloudflare cron trigger, see worker.js): delete files of
+    // projects closed over 30 days ago, then the Telegram summary.
+    daily: async () => {
+      const purged = await purgeProjectFiles(db);
+      if (purged) log.info({ purged }, 'project files deleted');
+      await telegram.daily(asUser);
+    },
     fetch: (request, env, ctx) => hono.fetch(request, env, ctx),
     // Test helper: run a request in-process (used by the API tests).
     async inject({ method = 'GET', url, headers = {}, payload }) {

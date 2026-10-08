@@ -223,6 +223,19 @@ Electricity, Water and Sewerage sections.
 - `projectVisible()` filters every list, count and overview, and the audit
   trail.
 
+**Project files** (migration 016) are kept only while the project is open:
+- Added by people who can edit the project, up to 10 MB each, while the
+  project is planned, ongoing or on hold.
+- When it is completed or cancelled, a trigger sets `files_delete_after` to
+  30 days later. Files can still be downloaded, one by one or all as a ZIP
+  (`GET /projects/:id/zip`), or deleted at once. The creator and owner get a
+  Telegram message with the date. Reopening clears the date.
+- The daily cron job (`purgeProjectFiles`) deletes the files once the date has
+  passed. The project and its history stay.
+
+Files (project and document) are stored in Postgres; the whole database was
+14 MB in Oct 2026.
+
 **Incidents:** unchanged; visible to everyone.
 
 **Telegram**

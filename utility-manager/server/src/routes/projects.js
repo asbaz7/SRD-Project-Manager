@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { assertIslandWrite, requireAllowed } from '../auth.js';
 import { sendCsv } from '../csv.js';
-import { forbidden, notFound } from '../errors.js';
+import { zipSync } from 'fflate';
+import { badRequest, forbidden, notFound } from '../errors.js';
+import { esc } from '../telegram.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
 
 const STATES = ['planned', 'ongoing', 'on_hold', 'completed', 'cancelled'];
@@ -104,8 +106,33 @@ async function writeMembers(t, projectId, members, addedBy) {
   }
 }
 
+const MAX_FILE = 10 * 1024 * 1024;
+const CLOSED = ['completed', 'cancelled'];
+
+// Daily: delete files of projects closed more than 30 days ago.
+export async function purgeProjectFiles(db) {
+  const { rowCount } = await db.query(`
+    delete from project_files f using projects p
+     where p.id = f.project_id and p.files_delete_after is not null and p.files_delete_after <= current_date`);
+  return rowCount;
+}
+
 export default async function projectRoutes(app) {
-  const { db } = app;
+  const { db, telegram } = app;
+
+  // When a project with files closes, tell its creator and owner when the
+  // files will be deleted.
+  async function announceFileDeletion(projectId, before) {
+    if (CLOSED.includes(before)) return;
+    const { rows: [p] } = await db.query(`
+      select p.id, 'PRJ-' || lpad(p.id::text, 4, '0') as ref, p.title, p.status, p.files_delete_after, p.created_by, p.owner_id,
+             (select count(*)::int from project_files f where f.project_id = p.id) as files
+        from projects p where p.id = $1`, [projectId]);
+    if (!p || !CLOSED.includes(p.status) || !p.files) return;
+    const when = new Date(`${String(p.files_delete_after).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const text = `📁 <b>${esc(p.ref)} ${esc(p.title)}</b> is ${p.status}. Its ${p.files} file${p.files === 1 ? '' : 's'} will be deleted on ${when}: download them before then.\n${telegram.link(`/projects/${p.id}`, 'Open')}`;
+    for (const userId of new Set([p.created_by, p.owner_id].filter(Boolean))) await telegram.notifyUser(userId, text);
+  }
 
   app.get('/projects', async (req, reply) => {
     const q = parse(listQuery, req.query);
@@ -140,6 +167,10 @@ export default async function projectRoutes(app) {
     project.access = access;
     project.can_edit = access === 'edit' || access === 'manage';
     project.can_manage = access === 'manage';
+    project.files = (await db.query(`
+      select f.id, f.file_name, f.content_type, f.size_bytes, f.uploaded_at, u.full_name as uploaded_by_name
+        from project_files f left join users u on u.id = f.uploaded_by where f.project_id = $1 order by f.uploaded_at`, [projectId])).rows;
+    project.files_total_bytes = project.files.reduce((n, f) => n + Number(f.size_bytes), 0);
     project.members = (await db.query(`
       select m.user_id, m.access, u.full_name, u.designation from project_members m join users u on u.id = m.user_id
        where m.project_id = $1 order by m.access desc, u.full_name`, [projectId])).rows;
@@ -173,6 +204,7 @@ export default async function projectRoutes(app) {
     // Only fields actually sent are updated; defaults from the create schema don't apply.
     const patch = parse(body.omit({ island_id: true }).partial(), req.body);
     for (const k of Object.keys(patch)) if (!(k in (req.body || {}))) delete patch[k];
+    const before = one((await db.query('select status from projects where id = $1', [projectId])).rows, 'Project').status;
     const sharing = patch.visibility !== undefined || patch.members !== undefined || patch.owner_id !== undefined;
     await assertAccess(db, req.user, projectId, sharing ? 'manage' : 'edit');
     const members = patch.members;
@@ -186,6 +218,7 @@ export default async function projectRoutes(app) {
     });
     const row = one((await db.query(`${SELECT} where p.id = $1`, [projectId])).rows);
     delete row.total_count;
+    if (patch.status) await announceFileDeletion(projectId, before);
     return row;
   });
 
@@ -194,11 +227,73 @@ export default async function projectRoutes(app) {
     const { id: projectId } = parse(serialParam, req.params);
     const b = parse(updateBody, req.body);
     await assertAccess(db, req.user, projectId, 'edit');
+    const before = one((await db.query('select status from projects where id = $1', [projectId])).rows, 'Project').status;
     const { rows } = await db.tx(req.user.id, (t) => t.query(`
       insert into project_updates (project_id, body, progress_pct, status, created_by)
       values ($1, $2, $3, $4, $5) returning *`,
     [projectId, b.body, b.progress_pct ?? null, b.status ?? null, req.user.id]));
+    if (b.status) await announceFileDeletion(projectId, before);
     reply.code(201);
     return rows[0];
+  });
+
+  // --- Files: kept while the project is open --------------------------------
+  const fileParams = z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() });
+
+  app.post('/projects/:id/files', async (req, reply) => {
+    const { id: projectId } = parse(serialParam, req.params);
+    const b = parse(z.object({ file_name: z.string().trim().min(1).max(200), content_type: z.string().max(100).optional(), data: z.string().min(1) }), req.body);
+    await assertAccess(db, req.user, projectId, 'edit');
+    const { rows: [p] } = await db.query('select status from projects where id = $1', [projectId]);
+    if (CLOSED.includes(p.status)) throw badRequest('This project is closed: files can no longer be added');
+    const bytes = Buffer.from(b.data, 'base64');
+    if (!bytes.length) throw badRequest('The file is empty');
+    if (bytes.length > MAX_FILE) throw badRequest('Files can be up to 10 MB');
+    const { rows } = await db.query(`insert into project_files (project_id, file_name, content_type, size_bytes, data, uploaded_by)
+      values ($1, $2, $3, $4, $5, $6) returning id, file_name, size_bytes`,
+    [projectId, b.file_name, b.content_type || 'application/octet-stream', bytes.length, bytes, req.user.id]);
+    reply.code(201);
+    return rows[0];
+  });
+
+  app.get('/projects/:id/files/:fileId', async (req, reply) => {
+    const { id: projectId, fileId } = parse(fileParams, req.params);
+    await assertAccess(db, req.user, projectId, 'view');
+    const f = one((await db.query('select file_name, content_type, data from project_files where id = $1 and project_id = $2', [fileId, projectId])).rows, 'File');
+    reply.header('content-type', f.content_type);
+    reply.header('content-disposition', `attachment; filename="${f.file_name.replace(/["\\\r\n]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.file_name)}`);
+    return reply.send(f.data instanceof Uint8Array ? f.data : new Uint8Array(f.data));
+  });
+
+  // Every file in one ZIP (stored, not recompressed: they're mostly PDFs).
+  app.get('/projects/:id/zip', async (req, reply) => {
+    const { id: projectId } = parse(serialParam, req.params);
+    await assertAccess(db, req.user, projectId, 'view');
+    const { rows } = await db.query('select file_name, data from project_files where project_id = $1 order by uploaded_at', [projectId]);
+    if (!rows.length) throw notFound('Files');
+    const entries = {};
+    for (const r of rows) {
+      let name = r.file_name.replace(/[\\/:*?"<>|]/g, '_');
+      for (let n = 2; entries[name]; n++) name = r.file_name.replace(/(\.[^.]*)?$/, (ext) => ` (${n})${ext || ''}`);
+      entries[name] = [r.data instanceof Uint8Array ? r.data : new Uint8Array(r.data), { level: 0 }];
+    }
+    const zip = zipSync(entries);
+    reply.header('content-type', 'application/zip');
+    reply.header('content-disposition', `attachment; filename="PRJ-${String(projectId).padStart(4, '0')} files.zip"`);
+    return reply.send(zip);
+  });
+
+  app.delete('/projects/:id/files/:fileId', async (req) => {
+    const { id: projectId, fileId } = parse(fileParams, req.params);
+    await assertAccess(db, req.user, projectId, 'edit');
+    await db.query('delete from project_files where id = $1 and project_id = $2', [fileId, projectId]);
+    return { ok: true };
+  });
+
+  app.delete('/projects/:id/files', async (req) => {
+    const { id: projectId } = parse(serialParam, req.params);
+    await assertAccess(db, req.user, projectId, 'edit');
+    const { rowCount } = await db.query('delete from project_files where project_id = $1', [projectId]);
+    return { ok: true, deleted: rowCount };
   });
 }
