@@ -621,8 +621,10 @@ describe('work and maintenance history', () => {
     const w = (await call('POST', '/work', { token: manager, body: { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Check AVR', status: 'planned' } })).body;
     const post = async (text, status) => (await call('POST', `/work/${w.id}/updates`, { token: manager, body: { body: text, status } })).body;
     const statusNow = async () => (await call('GET', `/work/${w.id}`, { token: admin })).body.status;
+    assert.equal((await call('GET', `/work/${w.id}`, { token: admin })).body.started_on, null);
     assert.equal((await post('status ongoing')).auto_status, 'in_progress');
     assert.equal(await statusNow(), 'in_progress');
+    assert.ok((await call('GET', `/work/${w.id}`, { token: admin })).body.started_on, 'start date stamped');
     await post('Waiting for spares from Malé');
     assert.equal(await statusNow(), 'awaiting_parts');
     await post('Spares received');
