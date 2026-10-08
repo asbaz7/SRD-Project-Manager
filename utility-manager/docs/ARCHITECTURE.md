@@ -288,6 +288,21 @@ How it works:
   (`documentVisible()`, applied to lists, details, files, CSV and the audit
   trail). Others get "not found". Managers create documents.
 
+## Work status follows updates (Oct 2026)
+
+When someone running or updating the work posts an update without choosing a
+status (website or Telegram `/update`), `inferStatus` in `routes/work.js`
+sets one:
+- Planned work becomes in progress.
+- "waiting for parts", "parts ordered" and similar set awaiting parts.
+- "parts arrived" or "spares received", while awaiting parts, set in
+  progress.
+- "on hold" sets on hold.
+
+It never completes or cancels, and never touches moves (they have their own
+stages). The response carries `auto_status`, and the page and the bot say
+what changed.
+
 ## Genset down opens work (Oct 2026)
 
 Trigger `open_work_when_down` (migration 017) runs whenever a genset's status

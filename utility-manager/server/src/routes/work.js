@@ -14,6 +14,23 @@ export const WORK_STATES = ['planned', 'in_progress', 'awaiting_parts', 'on_hold
 const MOVE_STATES = ['planned', ...MOVE_STAGES, 'on_hold', 'completed', 'cancelled'];
 const STAGE_LABEL = { planned: 'Planned', dismantling: 'Dismantling', in_transit: 'In transit', installing: 'Installing',
   on_hold: 'On hold', completed: 'Completed', cancelled: 'Cancelled' };
+// When an update is posted without choosing a status, the status follows it:
+// planned work that gets an update is under way; mentions of waiting for parts,
+// parts arriving or being on hold move it accordingly. Never completes or
+// cancels on its own (that is always chosen).
+export function inferStatus(current, text, kind) {
+  if (kind === 'relocation') return null;
+  const t = String(text).toLowerCase();
+  const waiting = /\b(await(ing)?|wait(ing)?\s+(for|on))\b[^.]*\b(parts?|spares?)\b|\b(parts?|spares?)\s+(ordered|on order|requested|not (yet )?(arrived|received))\b/.test(t);
+  const arrived = /\b(parts?|spares?)\b[^.]*\b(arrived|received|delivered|came|reached)\b/.test(t) && !/\bnot (yet )?(arrived|received|delivered)\b/.test(t);
+  const hold = /\bon[\s-]hold\b/.test(t);
+  if (hold && current !== 'on_hold') return 'on_hold';
+  if (waiting && current !== 'awaiting_parts') return 'awaiting_parts';
+  if (arrived && current === 'awaiting_parts') return 'in_progress';
+  if (current === 'planned') return 'in_progress';
+  return null;
+}
+
 function checkStatus(kind, status) {
   if (!status) return;
   if (kind === 'relocation' && !MOVE_STATES.includes(status)) throw badRequest(`A move's stages are: ${MOVE_STATES.map((s) => STAGE_LABEL[s]).join(', ')}`);
@@ -290,6 +307,12 @@ export default async function workRoutes(app) {
     }
     const { rows: [k] } = await db.query('select kind from work_orders where id = $1', [workId]);
     checkStatus(k.kind, b.status);
+    // No status chosen: follow the update (people running or updating the work only).
+    let auto = null;
+    if (!b.status && current.update) {
+      auto = inferStatus(current.status, b.body, k.kind);
+      if (auto) b.status = auto;
+    }
     if (k.kind === 'relocation' && b.status && ['completed', 'cancelled'].includes(current.status) && b.status !== current.status) {
       throw badRequest('This move is finished. Start a new move if it is going somewhere else.');
     }
@@ -304,7 +327,7 @@ export default async function workRoutes(app) {
     reply.code(201);
     if (move) await moveAlert(move, req.user, b.body);
     else if (b.status === 'completed' && current.status !== 'completed') await completedAlert(workId, req.user, b.body);
-    return rows[0];
+    return { ...rows[0], auto_status: auto };
   });
 
   // People (usually non-technical staff) allowed to comment on one work item.

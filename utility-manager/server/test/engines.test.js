@@ -8,6 +8,7 @@ import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
 import { expectedMonth, matchIsland } from '../src/reportImport.js';
+import { inferStatus } from '../src/routes/work.js';
 import { seedRegister } from '../scripts/seed.js';
 import { makeXlsx, reportSheet } from './xlsxFixture.js';
 
@@ -604,5 +605,30 @@ describe('work and maintenance history', () => {
     work = await openWork();
     assert.equal(work.length, 1);
     assert.equal(work[0].title, 'Genset 6 down');
+  });
+
+  test('work status follows updates posted without a status', async () => {
+    assert.equal(inferStatus('planned', 'ongoing troubleshooting'), 'in_progress');
+    assert.equal(inferStatus('in_progress', 'AVR replaced no change'), null);
+    assert.equal(inferStatus('in_progress', 'Waiting for parts from Male'), 'awaiting_parts');
+    assert.equal(inferStatus('planned', 'spares ordered, ETA 2 weeks'), 'awaiting_parts');
+    assert.equal(inferStatus('awaiting_parts', 'parts arrived today, fitting tomorrow'), 'in_progress');
+    assert.equal(inferStatus('awaiting_parts', 'parts not yet arrived'), null);
+    assert.equal(inferStatus('in_progress', 'Work on hold until the vessel arrives'), 'on_hold');
+    assert.equal(inferStatus('in_progress', 'All done, back in service'), null, 'never completes by itself');
+    assert.equal(inferStatus('planned', 'Dismantling started', 'relocation'), null, 'moves have their own stages');
+
+    const w = (await call('POST', '/work', { token: manager, body: { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Check AVR', status: 'planned' } })).body;
+    const post = async (text, status) => (await call('POST', `/work/${w.id}/updates`, { token: manager, body: { body: text, status } })).body;
+    const statusNow = async () => (await call('GET', `/work/${w.id}`, { token: admin })).body.status;
+    assert.equal((await post('status ongoing')).auto_status, 'in_progress');
+    assert.equal(await statusNow(), 'in_progress');
+    await post('Waiting for spares from Malé');
+    assert.equal(await statusNow(), 'awaiting_parts');
+    await post('Spares received');
+    assert.equal(await statusNow(), 'in_progress');
+    // A status chosen by hand wins.
+    await post('Waiting for parts but parking it', 'on_hold');
+    assert.equal(await statusNow(), 'on_hold');
   });
 });

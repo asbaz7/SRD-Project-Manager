@@ -20,8 +20,10 @@ function WorkView({ work: w, reload }) {
   // people added to it may comment.
   const writable = w.can_run;
   const [u, setU] = useState({ body: '', status: '' });
+  const [autoNote, setAutoNote] = useState(null);
   const { submit, busy, error } = useSubmit(async (status) => {
-    await api(`/work/${w.id}/updates`, { method: 'POST', body: { body: u.body, status: (typeof status === 'string' ? status : u.status) || null } });
+    const res = await api(`/work/${w.id}/updates`, { method: 'POST', body: { body: u.body, status: (typeof status === 'string' ? status : u.status) || null } });
+    setAutoNote(res.auto_status ? WORK_STATES[res.auto_status] : null);
     setU({ body: '', status: '' });
     reload();
   });
@@ -58,7 +60,9 @@ function WorkView({ work: w, reload }) {
         <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <ErrorBox error={error} />
           <Field label="What's happening"><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} placeholder="e.g. Parts arrived, fitting tomorrow" /></Field>
-          <Field label={w.kind === 'relocation' ? 'Move to stage' : 'Change status to'}><Select value={u.status} onChange={(v) => setU({ ...u, status: v })} placeholder="(no change)" options={Object.fromEntries(Object.entries(statesFor(w.kind)).filter(([k]) => writable || !['completed', 'cancelled'].includes(k)))} /></Field>
+          {autoNote && <div className="success small">Status changed to <strong>{autoNote}</strong> from your update.</div>}
+          <Field label={w.kind === 'relocation' ? 'Move to stage' : 'Change status to'}
+            hint={w.kind === 'relocation' ? '' : 'Or leave it: an update moves Planned work to In progress, and "waiting for parts", "parts arrived" or "on hold" set the status. Completing is always chosen.'}><Select value={u.status} onChange={(v) => setU({ ...u, status: v })} placeholder="(no change)" options={Object.fromEntries(Object.entries(statesFor(w.kind)).filter(([k]) => writable || !['completed', 'cancelled'].includes(k)))} /></Field>
           <div className="form-actions">
             {open && writable && <button type="button" className="btn" disabled={busy || !u.body} onClick={() => submit('completed')}>{w.kind === 'relocation' ? 'Post & mark installed' : 'Post & mark completed'}</button>}
             <button className="btn primary" disabled={busy}>Post update</button>

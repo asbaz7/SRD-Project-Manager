@@ -383,6 +383,7 @@ export function createTelegram({ db, config, log }) {
     const body = rest.join(' ').trim() || (status ? WORK_STATE_LABEL[status] : '');
     if (!body) return 'Add the update text after the work number.';
     const res = await asUser(user.id, 'POST', `/work/${m[1]}/updates`, { body: body.slice(0, 5000), status });
+    if (res.status === 201 && res.body?.auto_status) status = res.body.auto_status;
     if (res.status === 404) return `There's no work order WO-${m[1].padStart(4, '0')}.`;
     if (res.status !== 201) return apiError(res);
     const w = await asUser(user.id, 'GET', `/work/${m[1]}`);
