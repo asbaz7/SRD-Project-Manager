@@ -250,3 +250,11 @@ test('genset move stages can be posted from Telegram', async () => {
   assert.equal((await db.query('select status from work_orders where id = $1', [w.id])).rows[0].status, 'in_transit');
   assert.equal((await db.query('select status from assets where id = $1', [g5])).rows[0].status, 'maintenance');
 });
+
+test('/status shows each genset once: one state, the reason once, work by reference', async () => {
+  await say(ADMIN_TG, '/down Maafushi 7 voltage issue');
+  await say(ADMIN_TG, '/status Maafushi');
+  const line = repliesTo(ADMIN_TG).split('\n').find((l) => l.includes('Genset 7:'));
+  assert.match(line, /^🔴 Genset 7: down: voltage issue · 🔧 WO-\d{4} \(Planned\)$/);
+  assert.doesNotMatch(line, /not running/);
+});
