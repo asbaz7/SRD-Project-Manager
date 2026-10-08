@@ -188,6 +188,19 @@ export function createTelegram({ db, config, log }) {
   }
 
   // ---- Daily summary ------------------------------------------------------
+  // Ongoing work, each with its status and latest update: what matters most
+  // in the morning summary.
+  const shortWhen = (t) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: config.timezone });
+  function workLines(work = []) {
+    if (!work.length) return [];
+    const shown = work.slice(0, 12);
+    return ['', `<b>Ongoing work</b> (${work.length})`, ...shown.map((w) => {
+      const what = `${esc(w.atoll_code)}. ${esc(w.island_name)}${w.asset_tag ? ` ${esc(assetName({ kind: w.asset_kind, tag: w.asset_tag }))}` : ''}`;
+      const head = `• ${link(`/work/${w.id}`, w.ref)} ${what}: ${esc(w.title)} · <b>${WORK_STATE_LABEL[w.status] || w.status}</b>${w.overdue ? ' · ⚠ overdue' : ''}`;
+      return w.last_update ? `${head}\n   ↳ ${esc(String(w.last_update).replace(/\s+/g, ' ').slice(0, 120))}${w.last_update_at ? ` (${shortWhen(w.last_update_at)})` : ''}` : head;
+    }), ...(work.length > shown.length ? [`…and ${work.length - shown.length} more`] : [])];
+  }
+
   async function summaryText(asUser, { technical = true } = {}) {
     const { rows } = await db.query(`select id from users where role = 'admin' and active order by created_at limit 1`);
     if (!rows[0]) return null;
@@ -203,8 +216,7 @@ export function createTelegram({ db, config, log }) {
       lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open incidents`);
       const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
       if (inc.length) lines.push('', '<b>Serious incidents</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
-      const overdue = d.work.filter((w) => w.overdue).slice(0, 5);
-      if (overdue.length) lines.push('', '<b>Overdue work</b>', ...overdue.map((w) => `• ${esc(w.ref)} ${esc(w.title)} (${esc(w.atoll_code)}. ${esc(w.island_name)})`));
+      lines.push(...workLines(d.work));
       lines.push('', link('/', 'Open the dashboard'));
       return lines.join('\n');
     }
@@ -217,8 +229,7 @@ export function createTelegram({ db, config, log }) {
       if (v.assets) lines.push(`${SERVICE_ICON[s]} ${v.running}/${v.assets} ${SERVICE_LABEL[s].toLowerCase()} assets running${v.down ? ` · ${v.down} out of service` : ''}`);
     }
     lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open incidents`);
-    const down = (d.assets_down || []).slice(0, 10);
-    if (down.length) lines.push('', '<b>Out of service</b>', ...down.map((a) => `• ${esc(where(a))} ${esc(assetName(a))}${a.status_note ? `: ${esc(a.status_note.slice(0, 80))}` : ''}`));
+    lines.push(...workLines(d.work));
     const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
     if (inc.length) lines.push('', '<b>Serious incidents</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
     const missing = d.reports?.missing || [];

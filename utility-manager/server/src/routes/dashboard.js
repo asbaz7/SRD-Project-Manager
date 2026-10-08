@@ -112,7 +112,8 @@ export default async function dashboardRoutes(app) {
         select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.service, w.kind, w.title, w.status, w.target_on,
                (w.target_on < current_date) as overdue, i.id as island_id, i.name as island_name, a.code as atoll_code,
                s.id as asset_id, s.tag as asset_tag, s.kind as asset_kind,
-               (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update
+               (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update,
+               (select max(u.created_at) from work_updates u where u.work_id = w.id) as last_update_at
           from work_orders w
           join islands i on i.id = w.island_id
           join atolls a on a.id = i.atoll_id

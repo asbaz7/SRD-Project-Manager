@@ -198,6 +198,7 @@ test('the daily summary goes to alert chats', async () => {
   assert.match(text, /gensets running/);
   assert.match(text, /Serious incidents/);
   assert.match(text, /and \d+ more/);
+  assert.doesNotMatch(text, /Out of service/);
 });
 
 test('administrators see the bot settings and alert chats; others do not', async () => {
@@ -265,4 +266,13 @@ test('/status shows the latest update under each ongoing work item', async () =>
   await say(ADMIN_TG, '/status Maafushi');
   const text = repliesTo(ADMIN_TG);
   assert.match(text, new RegExp(`• WO-${String(w.id).padStart(4, '0')} .*\\(In progress\\)\\n   ↳ AVR replaced, testing tomorrow · \\d+ \\w+, \\d\\d:\\d\\d · Admin`));
+});
+
+test('the morning summary lists ongoing work with its status and latest update', async () => {
+  sent = [];
+  await call('PATCH', `/telegram/chats/${GROUP}`, { token: admin, body: { alerts: true, technical: true } });
+  await app.daily();
+  const text = repliesTo(GROUP);
+  assert.match(text, /<b>Ongoing work<\/b> \(\d+\)/);
+  assert.match(text, /WO-\d{4}<\/a> K\. Maafushi Genset 7: Genset 7 down: voltage issue · <b>In progress<\/b>\n   ↳ AVR replaced, testing tomorrow \(\d+ \w+\)/);
 });
