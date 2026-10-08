@@ -308,3 +308,62 @@ test('projects: type, task breakdown and progress calculated from the tasks', as
   assert.ok(!(await call('GET', '/projects?type=store', T.tech)).body.items.some((x) => x.id === p.body.id));
   assert.equal((await call('POST', '/projects', T.tech, { title: 'x', island_id: maafushi.id, project_type: 'powerhouse' })).status, 400);
 });
+
+test('surveys: templates, answers kept to the template, technical types hidden from non-technical staff', async () => {
+  const types = (await call('GET', '/survey-templates', T.tech)).body;
+  assert.deepEqual(types.map((t) => t.key), ['island_assessment', 'general']);
+  assert.deepEqual((await call('GET', '/survey-templates', T.office)).body.map((t) => t.key), ['general']);
+
+  // A powerhouse takeover survey for a place not in the register.
+  const res = await call('POST', '/surveys', T.tech, {
+    template: 'island_assessment', location_name: 'Dh. Bandidhoo', surveyed_on: '2026-10-08',
+    answers: {
+      powerhouse: { name: 'Dh. Bandidhoo', installed_kw: '1356', bogus: 'x' },
+      gensets: [
+        { engine_brand: 'Cummins', engine_model: 'NT-855-G4', engine_serial: '23219921', genset_kw: 160, condition: 'Running; OK', connected: 'yes' },
+        { engine_brand: 'Cummins', engine_model: 'QSG12-G1', engine_serial: '76669969', genset_kw: '356', condition: 'Sort of', last_overhaul: '2025-02-30x' },
+        {}, {},
+      ],
+      nonsense: { a: 1 },
+    },
+  });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  const s = res.body;
+  assert.equal(s.ref, `SRV-${String(s.id).padStart(4, '0')}`);
+  assert.equal(s.title, 'Island Assessment - Dh. Bandidhoo');
+  assert.equal(s.status, 'draft');
+  assert.deepEqual(s.answers.powerhouse, { name: 'Dh. Bandidhoo', installed_kw: 1356 });
+  assert.equal(s.answers.gensets.length, 2, 'trailing empty gensets dropped');
+  assert.equal(s.answers.gensets[1].genset_kw, 356);
+  assert.equal(s.answers.gensets[1].condition, undefined, 'unknown choice dropped');
+  assert.equal(s.answers.gensets[1].last_overhaul, undefined, 'bad date dropped');
+  assert.equal(s.answers.nonsense, undefined);
+
+  // Non-technical staff can't see it; a general survey they can.
+  assert.equal((await call('GET', `/surveys/${s.id}`, T.office)).status, 404);
+  assert.ok(!(await call('GET', '/surveys', T.office)).body.items.some((x) => x.id === s.id));
+  const g = await call('POST', '/surveys', T.office, { template: 'general', island_id: maafushi.id, answers: { survey: { purpose: 'Office space check' } } });
+  assert.equal(g.status, 201);
+  assert.equal(g.body.title, 'General site survey - K. Maafushi');
+  assert.equal((await call('POST', '/surveys', T.office, { template: 'island_assessment', island_id: maafushi.id })).status, 400);
+
+  // Editing and completing; others can view but not edit; viewers can't start one.
+  assert.equal((await call('POST', '/surveys', T.clerk, { template: 'general', island_id: maafushi.id })).status, 403);
+  const done = await call('PATCH', `/surveys/${s.id}`, T.tech, { status: 'completed', answers: { ...s.answers, summary: { findings: 'Gen 1 needs overhaul' } } });
+  assert.equal(done.status, 200);
+  assert.equal(done.body.status, 'completed');
+  assert.ok(done.body.completed_at);
+  assert.equal(done.body.answers.summary.findings, 'Gen 1 needs overhaul');
+  assert.equal((await call('GET', `/surveys/${s.id}`, T.tech2)).body.can_edit, true, 'managers can edit');
+
+  // CSV of the answers, and a photo.
+  const csv = await app.inject({ method: 'GET', url: `/api/v1/surveys/${s.id}/csv`, headers: { authorization: `Bearer ${T.tech}` } });
+  assert.match(csv.body, /Genset details,Gen 2,Engine serial number,76669969/);
+  const up = await call('POST', `/surveys/${s.id}/files`, T.tech, { file_name: 'engine room.jpg', content_type: 'image/jpeg', data: Buffer.from('jpg').toString('base64') });
+  assert.equal(up.status, 201);
+  assert.equal((await call('GET', `/surveys/${s.id}`, T.tech)).body.files.length, 1);
+
+  // Only admins (or the starter, while a draft) can delete.
+  assert.equal((await call('DELETE', `/surveys/${s.id}`, T.tech)).status, 403, 'completed: starter cannot delete');
+  assert.equal((await call('DELETE', `/surveys/${g.body.id}`, T.office)).status, 200, 'own draft');
+});
