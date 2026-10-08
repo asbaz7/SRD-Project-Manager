@@ -8,14 +8,20 @@ import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, serv
 
 const STATES = ['planned', 'ongoing', 'on_hold', 'completed', 'cancelled'];
 
+export const PROJECT_TYPES = ['mechanical', 'electrical', 'infrastructure', 'office_cs', 'maintenance', 'store', 'workshop', 'staff_area'];
+const task = z.object({ name: z.string().trim().min(1).max(200), progress: z.number().min(0).max(100).default(0) });
+
 const body = z.object({
-  service,
+  service: service.nullish(),
+  project_type: z.enum(PROJECT_TYPES).nullish(),
+  // Task breakdown: overall progress is their average (trigger, migration 018).
+  tasks: z.array(task).max(100).optional(),
   island_id: id.nullish(),
   facility_id: id.nullish(),
   title: text(200),
   description: optText(5000),
   status: z.enum(STATES).default('planned'),
-  progress_pct: z.number().int().min(0).max(100).default(0),
+  progress_pct: z.number().min(0).max(100).default(0),
   budget: z.number().nonnegative().nullish(),
   contractor: optText(200),
   start_date: date.nullish(),
@@ -27,17 +33,18 @@ const body = z.object({
   visibility: z.enum(['everyone', 'members']).optional(),
   members: z.array(z.object({ user_id: id, access: z.enum(['view', 'edit']) })).max(200).optional(),
 });
-const COLS = ['service', 'facility_id', 'title', 'description', 'status', 'progress_pct', 'budget',
+const COLS = ['service', 'project_type', 'facility_id', 'title', 'description', 'status', 'progress_pct', 'budget',
   'contractor', 'start_date', 'target_date', 'completed_on', 'owner_id', 'visibility'];
 const updateBody = z.object({
   body: text(5000),
-  progress_pct: z.number().int().min(0).max(100).nullish(),
+  progress_pct: z.number().min(0).max(100).nullish(),
   status: z.enum(STATES).nullish(),
 });
 
 const listQuery = paging.extend({
   status: z.enum([...STATES, 'active']).optional(), // active = planned, ongoing or on hold
   service: service.optional(),
+  type: z.enum(PROJECT_TYPES).optional(),
   island_id: id.optional(),
   atoll_id: id.optional(),
   q: z.string().max(100).optional(),
@@ -98,6 +105,15 @@ async function assertAccess(db, user, projectId, needed) {
   return access;
 }
 
+async function writeTasks(t, projectId, tasks) {
+  await t.query('delete from project_tasks where project_id = $1', [projectId]);
+  let position = 0;
+  for (const k of tasks) {
+    await t.query('insert into project_tasks (project_id, position, name, progress) values ($1, $2, $3, $4)',
+      [projectId, ++position, k.name, Math.round(k.progress * 10) / 10]);
+  }
+}
+
 async function writeMembers(t, projectId, members, addedBy) {
   await t.query('delete from project_members where project_id = $1', [projectId]);
   for (const m of members) {
@@ -139,7 +155,7 @@ export default async function projectRoutes(app) {
     const vis = projectVisible(req.user, 1);
     const w = new Where(vis.values)
       .raw(vis.sql)
-      .add('p.service = ?', q.service).add('p.island_id = ?', q.island_id).add('i.atoll_id = ?', q.atoll_id)
+      .add('p.service = ?', q.service).add('p.project_type = ?', q.type).add('p.island_id = ?', q.island_id).add('i.atoll_id = ?', q.atoll_id)
       .add('(p.title ilike ? or p.contractor ilike ? or i.name ilike ?)', q.q && `%${q.q}%`);
     if (q.status === 'active') w.raw("p.status in ('planned', 'ongoing', 'on_hold')");
     else w.add('p.status = ?', q.status);
@@ -150,7 +166,7 @@ export default async function projectRoutes(app) {
       limit ${csv ? 20000 : q.limit} offset ${csv ? 0 : q.offset}`, w.values);
     if (csv) {
       return sendCsv(reply, 'projects.csv', rows, [
-        ['Ref', 'ref'], ['Atoll', 'atoll_code'], ['Island', 'island_name'], ['Service', 'service'],
+        ['Ref', 'ref'], ['Atoll', 'atoll_code'], ['Island', 'island_name'], ['Type', 'project_type'], ['Service', 'service'],
         ['Title', 'title'], ['Status', 'status'], ['Progress %', 'progress_pct'], ['Budget', 'budget'],
         ['Contractor', 'contractor'], ['Start', 'start_date'], ['Target', 'target_date'],
         ['Completed', 'completed_on'], ['Owner', 'owner_name'], ['Description', 'description'],
@@ -167,6 +183,7 @@ export default async function projectRoutes(app) {
     project.access = access;
     project.can_edit = access === 'edit' || access === 'manage';
     project.can_manage = access === 'manage';
+    project.tasks = (await db.query('select id, position, name, progress from project_tasks where project_id = $1 order by position', [projectId])).rows;
     project.files = (await db.query(`
       select f.id, f.file_name, f.content_type, f.size_bytes, f.uploaded_at, u.full_name as uploaded_by_name
         from project_files f left join users u on u.id = f.uploaded_by where f.project_id = $1 order by f.uploaded_at`, [projectId])).rows;
@@ -187,12 +204,13 @@ export default async function projectRoutes(app) {
     const rows = await db.tx(req.user.id, async (t) => {
       const res = await t.query(`
         insert into projects (service, island_id, facility_id, title, description, status, progress_pct, budget,
-                              contractor, start_date, target_date, completed_on, owner_id, created_by, visibility)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) returning id`,
-      [b.service, b.island_id ?? null, b.facility_id ?? null, b.title, b.description, b.status, b.progress_pct,
+                              contractor, start_date, target_date, completed_on, owner_id, created_by, visibility, project_type)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning id`,
+      [b.service ?? null, b.island_id ?? null, b.facility_id ?? null, b.title, b.description, b.status, b.progress_pct,
         b.budget ?? null, b.contractor, b.start_date ?? null, b.target_date ?? null, b.completed_on ?? null,
-        b.owner_id ?? null, req.user.id, b.visibility ?? 'members']);
+        b.owner_id ?? null, req.user.id, b.visibility ?? 'members', b.project_type ?? null]);
       await writeMembers(t, res.rows[0].id, (b.members || []).filter((m) => m.user_id !== req.user.id), req.user.id);
+      if (b.tasks?.length) await writeTasks(t, res.rows[0].id, b.tasks);
       return res.rows;
     });
     reply.code(201);
@@ -209,12 +227,18 @@ export default async function projectRoutes(app) {
     await assertAccess(db, req.user, projectId, sharing ? 'manage' : 'edit');
     const members = patch.members;
     delete patch.members;
+    const tasks = patch.tasks;
+    delete patch.tasks;
+    // With tasks, overall progress is calculated from them.
+    const { rows: [{ n: taskCount }] } = await db.query('select count(*)::int as n from project_tasks where project_id = $1', [projectId]);
+    if ((tasks ? tasks.length : taskCount) > 0) delete patch.progress_pct;
     await db.tx(req.user.id, async (t) => {
       if (Object.keys(patch).length) {
         const set = updateSet(patch, COLS);
         await t.query(`update projects set ${set.sql} where id = $1`, [projectId, ...set.values]);
       }
       if (members) await writeMembers(t, projectId, members, req.user.id);
+      if (tasks) await writeTasks(t, projectId, tasks);
     });
     const row = one((await db.query(`${SELECT} where p.id = $1`, [projectId])).rows);
     delete row.total_count;
@@ -228,6 +252,8 @@ export default async function projectRoutes(app) {
     const b = parse(updateBody, req.body);
     await assertAccess(db, req.user, projectId, 'edit');
     const before = one((await db.query('select status from projects where id = $1', [projectId])).rows, 'Project').status;
+    const { rows: [{ n: taskCount }] } = await db.query('select count(*)::int as n from project_tasks where project_id = $1', [projectId]);
+    if (taskCount && b.progress_pct != null) throw badRequest('Progress is calculated from the tasks: update the task breakdown instead');
     const { rows } = await db.tx(req.user.id, (t) => t.query(`
       insert into project_updates (project_id, body, progress_pct, status, created_by)
       values ($1, $2, $3, $4, $5) returning *`,

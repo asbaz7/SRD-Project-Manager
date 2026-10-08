@@ -439,3 +439,35 @@ input:disabled, select:disabled { opacity: .7; }
 .inline-date { max-width: 220px; }
 .file-pick { cursor: pointer; margin-top: 8px; display: inline-flex; }
 .table-scroll { overflow-x: auto; }
+
+/* Project form (department layout) */
+.project-form { display: grid; gap: 14px; }
+.project-form .row5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.project-form .field.wide { grid-column: auto; }
+.project-form textarea { width: 100%; }
+.form-section { margin: 8px 0 -6px; font-size: 1rem; }
+.task-table { display: grid; gap: 8px; }
+.task-head, .task-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 120px 44px; gap: 10px; align-items: center; }
+.task-head { padding: 10px 12px; border-radius: 10px; background: var(--glass-strong); font-size: .8rem; font-weight: 700; color: var(--text-2); }
+.task-row { padding: 0 12px; }
+.task-row input[type=number] { text-align: center; }
+.overall { display: flex; gap: 18px; align-items: center; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--accent) 7%, var(--glass)); }
+.overall-track { display: block; height: 8px; border-radius: 999px; background: var(--none-fill); overflow: hidden; margin-top: 8px; }
+.overall-track > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.overall-track.small { width: 140px; margin: 0; flex: none; }
+.overall-figure { text-align: right; display: grid; }
+.overall-figure b { font-size: 1.8rem; color: var(--accent); line-height: 1.1; }
+.sharing-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--hairline); }
+.task-progress { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; }
+.task-progress li { display: flex; gap: 12px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--hairline); }
+.task-progress li b { width: 56px; text-align: right; font-size: .9rem; }
+.task-progress li.done .overall-track > span { background: var(--good-fill); }
+@media (max-width: 900px) {
+  .project-form .row5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .task-head, .task-row { grid-template-columns: 28px minmax(0, 1fr) 80px 40px; gap: 6px; padding: 0 4px; }
+  .overall-track.small { width: 70px; }
+}
+.overall > .grow { flex: 1; min-width: 0; }
+.project-form > .btn { justify-self: start; }
+.task-progress .grow { flex: 1; min-width: 0; }

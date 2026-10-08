@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Progress, ProjectState, Select, Service } from '../components/ui.jsx';
-import { PROJECT_STATES, SERVICES, date, dateTime, num } from '../format.js';
+import { PROJECT_STATES, PROJECT_TYPES, date, dateTime, num, pct } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 export default function Project() {
@@ -34,8 +34,9 @@ function ProjectView({ project: p, reload }) {
       <Card title="Details">
         <dl className="facts">
           <dt>Status</dt><dd><ProjectState value={p.status} /></dd>
-          <dt>Progress</dt><dd><Progress value={p.progress_pct} /></dd>
-          <dt>Service</dt><dd><Service value={p.service} /></dd>
+          <dt>Progress</dt><dd><Progress value={p.progress_pct} />{p.tasks.length > 0 && <span className="muted small"> · from {p.tasks.length} tasks</span>}</dd>
+          <dt>Type</dt><dd>{PROJECT_TYPES[p.project_type] || '—'}</dd>
+          {p.service && <><dt>Service</dt><dd><Service value={p.service} /></dd></>}
           <dt>Location</dt><dd>{p.island_id ? <Link to={`/islands/${p.island_id}`}>{p.atoll_code} · {p.island_name}</Link> : 'Regional'}{p.facility_name && ` · ${p.facility_name}`}</dd>
           <dt>Owner</dt><dd>{p.owner_name || '—'}</dd>
           <dt>Contractor</dt><dd>{p.contractor || '—'}</dd>
@@ -44,18 +45,29 @@ function ProjectView({ project: p, reload }) {
           <dt>Target</dt><dd className={p.overdue ? 'bad' : ''}>{date(p.target_date)}{p.overdue && ' · overdue'}</dd>
           {p.completed_on && <><dt>Completed</dt><dd>{date(p.completed_on)}</dd></>}
         </dl>
-        {p.description && <p className="pre">{p.description}</p>}
       </Card>
       {writable && <Card title="Post an update">
         <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <ErrorBox error={error} />
           <Field label="What happened"><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} /></Field>
-          <Field label="Progress now (%)"><input type="number" min="0" max="100" value={u.progress_pct} onChange={(e) => setU({ ...u, progress_pct: e.target.value })} placeholder={String(p.progress_pct)} /></Field>
+          {p.tasks.length === 0 && <Field label="Progress now (%)"><input type="number" min="0" max="100" step="0.1" value={u.progress_pct} onChange={(e) => setU({ ...u, progress_pct: e.target.value })} placeholder={String(p.progress_pct)} /></Field>}
           <Field label="Change status to"><Select value={u.status} onChange={(v) => setU({ ...u, status: v })} placeholder="(no change)" options={PROJECT_STATES} /></Field>
           <button className="btn primary" disabled={busy}>Post update</button>
         </form>
       </Card>}
     </div>
+    {p.description && <Card title="Scope of Project"><p className="pre">{p.description}</p></Card>}
+    {p.tasks.length > 0 && <Card title="Task Breakdown" actions={writable && <button className="btn small" onClick={() => setEditing(true)}>Update tasks</button>}>
+      <ol className="task-progress">{p.tasks.map((t) => <li key={t.id} className={Number(t.progress) >= 100 ? 'done' : ''}>
+        <span className="muted">{t.position}</span><span className="grow">{t.name}</span>
+        <span className="overall-track small"><span style={{ width: `${t.progress}%` }} /></span><b>{pct(t.progress)}</b>
+      </li>)}</ol>
+      <div className="overall">
+        <div className="grow"><strong>Overall Project Progress</strong><div className="muted small">{p.tasks.length} tasks · Equal weighting</div>
+          <div className="overall-track"><span style={{ width: `${p.progress_pct}%` }} /></div></div>
+        <div className="overall-figure"><b>{pct(p.progress_pct)}</b><small className="muted">Automatically calculated</small></div>
+      </div>
+    </Card>}
     <ProjectFiles project={p} reload={reload} />
     <Card title="Who has access">
       <p className="small">{p.visibility === 'everyone' ? 'Everyone can view this project.' : 'Only the people below can see this project.'}
@@ -129,10 +141,16 @@ function ProjectForm({ project, onDone }) {
   const people = useApi('/users/directory');
   const mine = useMemo(() => (islands.data || []).filter(canWriteIsland), [islands.data, canWriteIsland]);
   const [f, setF] = useState(project || {
-    service: 'electricity', island_id: params.get('island_id') || '', title: '', description: '', status: 'planned',
+    island_id: params.get('island_id') || '', project_type: '', title: '', description: '', status: 'planned',
     progress_pct: 0, budget: '', contractor: '', start_date: '', target_date: '', owner_id: '',
     visibility: 'members', members: [],
   });
+  // Task breakdown: overall progress is the average (equal weighting).
+  const [tasks, setTasks] = useState(() => (project?.tasks || []).map(({ name, progress }) => ({ name, progress: String(progress) })));
+  const filled = tasks.filter((t) => t.name.trim());
+  const auto = filled.length > 0;
+  const overall = auto ? Math.round((filled.reduce((n, t) => n + (Number(t.progress) || 0), 0) / filled.length) * 10) / 10 : Number(f.progress_pct) || 0;
+  const setTask = (i, change) => setTasks(tasks.map((t, j) => (j === i ? { ...t, ...change } : t)));
   // Sharing is set by whoever creates the project, then by its creator,
   // owner or an administrator.
   const sharing = !project || project.can_manage;
@@ -140,8 +158,10 @@ function ProjectForm({ project, onDone }) {
   const set = (k) => (v) => setF({ ...f, [k]: v?.target ? v.target.value : v });
   const { submit, busy, error } = useSubmit(async () => {
     const body = {
-      service: f.service, title: f.title, description: f.description || null, status: f.status,
-      progress_pct: Number(f.progress_pct) || 0, budget: f.budget === '' || f.budget == null ? null : Number(f.budget),
+      title: f.title, project_type: f.project_type || null, description: f.description || null, status: f.status,
+      ...(auto ? {} : { progress_pct: Number(f.progress_pct) || 0 }),
+      tasks: filled.map((t) => ({ name: t.name.trim(), progress: Math.min(100, Math.max(0, Number(t.progress) || 0)) })),
+      budget: f.budget === '' || f.budget == null ? null : Number(f.budget),
       contractor: f.contractor || null, start_date: f.start_date || null, target_date: f.target_date || null,
       ...(sharing ? { owner_id: f.owner_id || null, visibility: f.visibility, members: members.filter((m) => m.user_id) } : {}),
     };
@@ -158,27 +178,63 @@ function ProjectForm({ project, onDone }) {
   return <>
     <PageHead title={project ? `Edit ${project.ref}` : 'New project'} crumbs={[{ to: '/projects', label: 'Projects' }, { label: project ? project.ref : 'New' }]} />
     <Card>
-      <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <form className="project-form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <ErrorBox error={error} />
         <Field label="Title" wide><input required maxLength="200" value={f.title} onChange={set('title')} /></Field>
-        <Field label="Island"><Select disabled={!!project} value={f.island_id || ''} onChange={set('island_id')}
-          placeholder={regional ? 'Regional (no single island)' : 'Choose island…'} required={!regional}
-          options={(project ? islands.data || [] : mine).map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} /></Field>
-        <Field label="Service"><Select value={f.service} onChange={set('service')} options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} /></Field>
-        <Field label="Status"><Select value={f.status} onChange={set('status')} options={PROJECT_STATES} /></Field>
-        <Field label="Progress (%)"><input type="number" min="0" max="100" value={f.progress_pct} onChange={set('progress_pct')} /></Field>
-        {sharing && <Field label="Owner"><Select value={f.owner_id || ''} onChange={set('owner_id')} placeholder="—" options={(people.data || []).map((p) => [p.id, p.full_name])} /></Field>}
-        <Field label="Contractor"><input value={f.contractor || ''} onChange={set('contractor')} /></Field>
-        <Field label="Budget (MVR)"><input type="number" min="0" step="any" value={f.budget ?? ''} onChange={set('budget')} /></Field>
-        <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={set('start_date')} /></Field>
-        <Field label="Target date"><input type="date" value={f.target_date || ''} onChange={set('target_date')} /></Field>
-        {project && <Field label="Completed on"><input type="date" value={f.completed_on || ''} onChange={set('completed_on')} /></Field>}
-        <Field label="Description" wide><textarea rows="4" value={f.description || ''} onChange={set('description')} /></Field>
-        {sharing && <fieldset className="wide sharing">
-          <legend>Who can see and edit this project</legend>
-          <label className="check"><input type="radio" name="visibility" checked={f.visibility === 'everyone'} onChange={() => set('visibility')('everyone')} /> <strong>Everyone</strong> can view it</label>
-          <label className="check"><input type="radio" name="visibility" checked={f.visibility !== 'everyone'} onChange={() => set('visibility')('members')} /> <strong>Only the people I choose</strong></label>
-          <p className="muted small">{project ? 'Its creator' : 'You'}{f.owner_id ? ', the owner' : ''} and administrators can always edit it. Add people below to let them view or edit it.</p>
+        <div className="row5">
+          <Field label="Island"><Select disabled={!!project} value={f.island_id || ''} onChange={set('island_id')}
+            placeholder={regional ? 'Regional (no single island)' : 'Choose island…'} required={!regional}
+            options={(project ? islands.data || [] : mine).map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} /></Field>
+          <Field label="Type"><Select value={f.project_type || ''} onChange={set('project_type')} placeholder="Choose…" options={PROJECT_TYPES} /></Field>
+          <Field label="Status"><Select value={f.status} onChange={set('status')} options={PROJECT_STATES} /></Field>
+          <Field label={auto ? 'Progress (%) · Auto' : 'Progress (%)'}>
+            {auto ? <input readOnly value={pct(overall)} title="Calculated from the task breakdown" />
+              : <input type="number" min="0" max="100" step="0.1" value={f.progress_pct} onChange={set('progress_pct')} />}</Field>
+          {sharing ? <Field label="Owner"><Select value={f.owner_id || ''} onChange={set('owner_id')} placeholder="—" options={(people.data || []).map((p) => [p.id, p.full_name])} /></Field>
+            : <Field label="Owner"><input readOnly value={project?.owner_name || '—'} /></Field>}
+        </div>
+        <div className="row5">
+          <Field label="Contractor"><input value={f.contractor || ''} onChange={set('contractor')} /></Field>
+          <Field label="Budget (MVR)"><input type="number" min="0" step="any" value={f.budget ?? ''} onChange={set('budget')} /></Field>
+          <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={set('start_date')} /></Field>
+          <Field label="Target date"><input type="date" value={f.target_date || ''} onChange={set('target_date')} /></Field>
+          <Field label="Completed on"><input type="date" value={f.completed_on || ''} onChange={set('completed_on')} disabled={!project} /></Field>
+        </div>
+
+        <h3 className="form-section">Scope of Project</h3>
+        <textarea rows="4" value={f.description || ''} onChange={set('description')} aria-label="Scope of project"
+          placeholder="What the project covers" />
+
+        <h3 className="form-section">Task Breakdown</h3>
+        <p className="muted small">Edit task names and percentages, add new tasks, or remove tasks as required.</p>
+        <div className="task-table">
+          <div className="task-head"><span>No.</span><span>Task / Stage</span><span>Progress (%)</span><span /></div>
+          {tasks.map((t, i) => <div className="task-row" key={i}>
+            <span className="muted">{i + 1}</span>
+            <input value={t.name} onChange={(e) => setTask(i, { name: e.target.value })} placeholder="Task name" aria-label={`Task ${i + 1}`} maxLength="200" />
+            <input type="number" min="0" max="100" step="0.1" value={t.progress} onChange={(e) => setTask(i, { progress: e.target.value })} aria-label={`Task ${i + 1} progress`} />
+            <button type="button" className="btn ghost small" onClick={() => setTasks(tasks.filter((_, j) => j !== i))} aria-label={`Remove task ${i + 1}`}>✕</button>
+          </div>)}
+        </div>
+        <button type="button" className="btn small" onClick={() => setTasks([...tasks, { name: '', progress: '0' }])}>+ Add Task</button>
+
+        <div className="overall">
+          <div className="grow">
+            <strong>Overall Project Progress</strong>
+            <div className="muted small">{auto ? `${filled.length} task${filled.length === 1 ? '' : 's'} · Equal weighting` : 'No tasks: progress is entered by hand'}</div>
+            <div className="overall-track"><span style={{ width: `${overall}%` }} /></div>
+          </div>
+          <div className="overall-figure"><b>{pct(overall)}</b><small className="muted">{auto ? 'Automatically calculated' : 'Entered by hand'}</small></div>
+        </div>
+
+        {sharing && <div className="sharing-row">
+          <span>Who can see and edit this project</span>
+          <label className="check"><input type="radio" name="visibility" checked={f.visibility === 'everyone'} onChange={() => set('visibility')('everyone')} /> Everyone can view it</label>
+          <label className="check"><input type="radio" name="visibility" checked={f.visibility !== 'everyone'} onChange={() => set('visibility')('members')} /> Only the people I choose</label>
+        </div>}
+        {sharing && (f.visibility !== 'everyone' || members.length > 0) && <fieldset className="sharing">
+          <legend>People with access</legend>
+          <p className="muted small">{project ? 'Its creator' : 'You'}{f.owner_id ? ', the owner' : ''} and administrators can always edit it.</p>
           {members.map((m, i) => <div className="member-row" key={i}>
             <Select value={m.user_id} onChange={(v) => setMembers(members.map((x, j) => (j === i ? { ...x, user_id: v } : x)))} placeholder="Choose person…"
               options={(people.data || []).filter((p) => p.id !== user.id && (p.id === m.user_id || !members.some((x) => x.user_id === p.id)))

@@ -60,6 +60,14 @@ export const month = (value) => (value ? new Date(`${value.slice(0, 7)}-15T00:00
 export const ROLES = {
   admin: 'Administrator', manager: 'Manager', staff: 'Staff', viewer: 'Viewer (read-only)',
 };
+// Project types (the department's list).
+export const PROJECT_TYPES = {
+  mechanical: 'Mechanical', electrical: 'Electrical', infrastructure: 'Infrastructure', office_cs: 'Office/CS',
+  maintenance: 'Maintenance', store: 'Store', workshop: 'Workshop', staff_area: 'Staff area',
+};
+// One decimal, like the department's form ("8.6%").
+export const pct = (v) => `${Math.round(Number(v || 0) * 10) / 10}%`;
+
 // What a Staff user may do, ticked per person.
 export const PERMISSIONS = {
   documents: ['Send documents', 'Create documents for signature and manage the ones they sent'],

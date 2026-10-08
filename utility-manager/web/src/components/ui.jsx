@@ -86,7 +86,7 @@ export function Progress({ value }) {
   return (
     <span className="progress" title={`${value}%`}>
       <span className="progress-track"><span className="progress-bar" style={{ width: `${value}%` }} /></span>
-      <span>{value}%</span>
+      <span>{Math.round(Number(value || 0) * 10) / 10}%</span>
     </span>
   );
 }

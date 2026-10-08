@@ -223,6 +223,16 @@ Electricity, Water and Sewerage sections.
 - `projectVisible()` filters every list, count and overview, and the audit
   trail.
 
+**Project form** (migration 018), following the department's layout:
+- **Type:** mechanical, electrical, infrastructure, office/CS, maintenance,
+  store, workshop or staff area. Service is now optional and no longer on
+  the form.
+- **Scope of project:** stored in the description.
+- **Task breakdown** (`project_tasks`): name and progress per task.
+  `progress_pct` (numeric, one decimal) is their average with equal
+  weighting, kept up to date by the `project_tasks_progress` trigger. While a
+  project has tasks, hand-entered progress is ignored or refused.
+
 **Project files** (migration 016) are kept only while the project is open:
 - Added by people who can edit the project, up to 10 MB each, while the
   project is planned, ongoing or on hold.

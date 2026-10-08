@@ -276,3 +276,35 @@ test('deleting a closed project\'s files at once', async () => {
   const res = await call('DELETE', `/projects/${p.id}/files`, T.tech);
   assert.equal(res.body.deleted, 1);
 });
+
+test('projects: type, task breakdown and progress calculated from the tasks', async () => {
+  const p = await call('POST', '/projects', T.tech, {
+    title: 'ADh. Dhidhdhoo PH Upgrade', island_id: maafushi.id, project_type: 'infrastructure', status: 'ongoing',
+    description: 'Upgrade and expansion of the existing powerhouse engine room',
+    tasks: ['Planning & Design', 'Material Purchase and Logistics', 'Site Preparation', 'Demolition Works', 'Foundation Works',
+      'Genset Bed Construction', 'Engine Room Extension', 'Air Chamber Modification', 'Roof Height & Structural Works',
+      'Roofing Works', 'Access & Door Works', 'Control Room Modification', 'Workshop Construction', 'Inspection & Completion']
+      .map((name, i) => ({ name, progress: i === 0 ? 100 : i === 1 ? 20 : 0 })),
+  });
+  assert.equal(p.status, 201, JSON.stringify(p.body));
+  let d = (await call('GET', `/projects/${p.body.id}`, T.tech)).body;
+  assert.equal(d.project_type, 'infrastructure');
+  assert.equal(d.service, null, 'service is optional now');
+  assert.equal(d.tasks.length, 14);
+  assert.equal(d.progress_pct, 8.6);    // (100 + 20) / 14
+
+  // Editing tasks recalculates; a manual progress value is ignored while there are tasks.
+  const tasks = d.tasks.map((t) => ({ name: t.name, progress: t.position <= 3 ? 100 : t.progress }));
+  tasks.push({ name: 'Handover', progress: 0 });
+  assert.equal((await call('PATCH', `/projects/${p.body.id}`, T.tech, { tasks, progress_pct: 99 })).status, 200);
+  d = (await call('GET', `/projects/${p.body.id}`, T.tech)).body;
+  assert.equal(d.tasks.length, 15);
+  assert.equal(d.progress_pct, 20);     // 300 / 15
+  assert.equal((await call('POST', `/projects/${p.body.id}/updates`, T.tech, { body: 'x', progress_pct: 50 })).status, 400);
+  assert.equal((await call('POST', `/projects/${p.body.id}/updates`, T.tech, { body: 'Foundation started', status: 'ongoing' })).status, 201);
+
+  // Filter by type; unknown types are refused.
+  assert.ok((await call('GET', '/projects?type=infrastructure', T.tech)).body.items.some((x) => x.id === p.body.id));
+  assert.ok(!(await call('GET', '/projects?type=store', T.tech)).body.items.some((x) => x.id === p.body.id));
+  assert.equal((await call('POST', '/projects', T.tech, { title: 'x', island_id: maafushi.id, project_type: 'powerhouse' })).status, 400);
+});

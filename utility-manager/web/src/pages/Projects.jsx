@@ -2,14 +2,14 @@ import { Link } from 'react-router-dom';
 import { csvUrl, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, PageHead, Pager, Progress, ProjectState, Select, Service } from '../components/ui.jsx';
-import { PROJECT_STATES, SERVICES, date } from '../format.js';
+import { PROJECT_STATES, PROJECT_TYPES, date } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
 export default function Projects() {
   const { allowed } = useAuth();
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
-  const params = { status: filters.status, service: filters.service, atoll_id: filters.atoll_id, island_id: filters.island_id, q: filters.q, offset: filters.offset };
+  const params = { status: filters.status, service: filters.service, type: filters.type, atoll_id: filters.atoll_id, island_id: filters.island_id, q: filters.q, offset: filters.offset };
   const state = useApi(`/projects${qs(params)}`);
 
   return <>
@@ -19,7 +19,7 @@ export default function Projects() {
     </>} />
     <div className="filters">
       <Select value={filters.status} onChange={(v) => setFilter('status', v)} placeholder="Any status" options={{ active: 'Active (not finished)', ...PROJECT_STATES }} aria-label="Status" />
-      <Select value={filters.service} onChange={(v) => setFilter('service', v)} placeholder="All services" options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} aria-label="Service" />
+      <Select value={filters.type} onChange={(v) => setFilter('type', v)} placeholder="All types" options={PROJECT_TYPES} aria-label="Type" />
       <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls" options={(atolls.data || []).map((a) => [a.id, a.code])} aria-label="Atoll" />
       <input type="search" placeholder="Search…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
       {filters.island_id && <button className="btn ghost small" onClick={() => setFilter('island_id', '')}>✕ island filter</button>}
@@ -31,7 +31,7 @@ export default function Projects() {
             <thead><tr><th>Project</th><th>Status</th><th>Progress</th><th className="hide-sm">Target</th><th className="hide-sm">Last update</th></tr></thead>
             <tbody>{page.items.map((p) => <tr key={p.id}>
               <td className="wrap"><Link to={`/projects/${p.id}`}><strong>{p.title}</strong></Link><br />
-                <small className="muted">{p.ref} · <Service value={p.service} short /> {p.island_name ? `${p.atoll_code} · ${p.island_name}` : 'Regional'}{p.contractor && ` · ${p.contractor}`}</small></td>
+                <small className="muted">{p.ref} · {PROJECT_TYPES[p.project_type] ? `${PROJECT_TYPES[p.project_type]} · ` : ''}<Service value={p.service} short /> {p.island_name ? `${p.atoll_code} · ${p.island_name}` : 'Regional'}{p.contractor && ` · ${p.contractor}`}</small></td>
               <td><ProjectState value={p.status} /></td>
               <td><Progress value={p.progress_pct} /></td>
               <td className={`nowrap hide-sm ${p.overdue ? 'bad' : ''}`}>{date(p.target_date)}{p.overdue && ' ⚠'}</td>
