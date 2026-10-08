@@ -105,8 +105,11 @@ export default async function locationRoutes(app) {
                  where f.island_id = $1`, [islandId]),
       db.query(`select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.kind, w.title, w.status, w.target_on, w.started_on,
                        s.tag as asset_tag, s.kind as asset_kind,
-                       (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update
+                       lu.body as last_update, lu.created_at as last_update_at, lu.by_name as last_update_by
                   from work_orders w left join assets s on s.id = w.asset_id
+                  left join lateral (select u.body, u.created_at, uu.full_name as by_name from work_updates u
+                                       left join users uu on uu.id = u.created_by
+                                      where u.work_id = w.id order by u.created_at desc limit 1) lu on true
                  where w.island_id = $1 and w.status not in ('completed', 'cancelled')
                  order by w.created_at desc`, [islandId]),
     ]);

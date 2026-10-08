@@ -314,7 +314,11 @@ export function createTelegram({ db, config, log }) {
       }
     }
     const work = isl.open_work || [];
-    if (work.length) lines.push('', '<b>Ongoing work</b>', ...work.slice(0, 8).map((w) => `• ${esc(w.ref)} ${esc(w.title)} (${WORK_STATE_LABEL[w.status]})`));
+    const when = (t) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: config.timezone });
+    if (work.length) {
+      lines.push('', '<b>Ongoing work</b>', ...work.slice(0, 8).map((w) => `• ${esc(w.ref)} ${esc(w.title)} (${WORK_STATE_LABEL[w.status]})${w.last_update
+        ? `\n   ↳ ${esc(String(w.last_update).replace(/\s+/g, ' ').slice(0, 160))} · ${when(w.last_update_at)}${w.last_update_by ? ` · ${esc(w.last_update_by)}` : ''}` : ''}`));
+    }
     const month = isl.reports?.[0]?.report_month;
     if (month) lines.push('', `Latest condition report: ${new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}`);
     lines.push('', link(`/islands/${r.island.id}`, 'Open on the website'));

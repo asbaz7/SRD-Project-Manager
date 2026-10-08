@@ -258,3 +258,11 @@ test('/status shows each genset once: one state, the reason once, work by refere
   assert.match(line, /^🔴 Genset 7: down: voltage issue · 🔧 WO-\d{4} \(Planned\)$/);
   assert.doesNotMatch(line, /not running/);
 });
+
+test('/status shows the latest update under each ongoing work item', async () => {
+  const w = (await call('GET', `/work?asset_id=${(await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '7' and s.kind = 'genset'`, [maafushi.id])).rows[0].id}`, { token: admin })).body.items[0];
+  await call('POST', `/work/${w.id}/updates`, { token: admin, body: { body: 'AVR replaced, testing tomorrow', status: 'in_progress' } });
+  await say(ADMIN_TG, '/status Maafushi');
+  const text = repliesTo(ADMIN_TG);
+  assert.match(text, new RegExp(`• WO-${String(w.id).padStart(4, '0')} .*\\(In progress\\)\\n   ↳ AVR replaced, testing tomorrow · \\d+ \\w+, \\d\\d:\\d\\d · Admin`));
+});
