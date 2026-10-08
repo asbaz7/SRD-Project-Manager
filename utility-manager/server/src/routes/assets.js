@@ -273,17 +273,25 @@ export default async function assetRoutes(app) {
           [item.asset_id, item.status, item.note, item.running_hours ?? null, reportedAt, req.user.id]);
       }
     });
+    // A genset set down has open work (created or updated by a trigger,
+    // migration 017): say which, in the reply and the alert.
+    const work = {};
+    for (const item of body.items.filter((i) => i.status === 'down')) {
+      const { rows: [w] } = await db.query(`select id, 'WO-' || lpad(id::text, 4, '0') as ref, title from work_orders
+        where asset_id = $1 and kind <> 'relocation' and status not in ('completed', 'cancelled') order by created_at desc limit 1`, [item.asset_id]);
+      if (w) work[item.asset_id] = w;
+    }
     // Telegram: something going out of service, or coming back.
     const lines = [];
     for (const item of body.items) {
       const a = before.find((x) => x.id === item.asset_id);
       if (!a || a.status === item.status) continue;
       const name = `${a.atoll_code}. ${a.island_name} ${assetName(a)}`;
-      if (item.status === 'down') lines.push(`🔴 <b>${esc(name)} is down</b>${item.note ? `: ${esc(item.note)}` : ''}`);
+      if (item.status === 'down') lines.push(`🔴 <b>${esc(name)} is down</b>${item.note ? `: ${esc(item.note)}` : ''}${work[item.asset_id] ? ` · 🔧 ${telegram.link(`/work/${work[item.asset_id].id}`, work[item.asset_id].ref)}` : ''}`);
       else if (item.status === 'running' && ['down', 'maintenance'].includes(a.status)) lines.push(`🟢 <b>${esc(name)} is running again</b>${item.note ? `: ${esc(item.note)}` : ''}`);
     }
     if (lines.length) await telegram.alert(`${lines.join('\n')}\n<i>${esc(req.user.fullName)}</i>${lines.length === 1 ? ` · ${telegram.link(`/assets/${body.items[0].asset_id}`, 'Open')}` : ''}`, { technical: true });
-    return { ok: true, count: body.items.length };
+    return { ok: true, count: body.items.length, work: Object.entries(work).map(([assetId, w]) => ({ asset_id: assetId, ...w })) };
   });
 
 }

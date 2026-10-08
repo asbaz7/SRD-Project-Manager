@@ -331,7 +331,8 @@ export function createTelegram({ db, config, log }) {
     if (status === 'down' && !note) return `Say what's wrong, e.g. <code>/down ${esc(r.island.name)} ${esc(a.asset.tag)} radiator leak</code>`;
     const res = await asUser(user.id, 'POST', '/assets/status', { items: [{ asset_id: a.asset.id, status, note }] });
     if (res.status !== 200) return apiError(res);
-    return `${STATUS_ICON[status]} ${esc(r.island.atoll_code)}. ${esc(r.island.name)} ${esc(assetName(a.asset))} is now <b>${status}</b>${note ? `: ${esc(note)}` : ''}\n${link(`/assets/${a.asset.id}`, 'Open')}`;
+    const w = res.body.work?.[0];
+    return `${STATUS_ICON[status]} ${esc(r.island.atoll_code)}. ${esc(r.island.name)} ${esc(assetName(a.asset))} is now <b>${status}</b>${note ? `: ${esc(note)}` : ''}\n${link(`/assets/${a.asset.id}`, 'Open')}${w ? ` · 🔧 Work ${link(`/work/${w.id}`, w.ref)}: ${esc(w.title)}` : ''}`;
   }
 
   async function cmdIncident(user, words, asUser) {

@@ -260,11 +260,13 @@ describe('work and maintenance history', () => {
     const parts = await call('POST', `/work/${created.body.id}/updates`, { token: manager, body: { body: 'Seals ordered from Malé', status: 'awaiting_parts' } });
     assert.equal(parts.status, 201);
     const engines = (await call('GET', '/engines?flag=work', { token: admin })).body;
-    assert.deepEqual(engines.engines.map((e) => e.tag), ['2']);
+    // G9 too: the report says it is not running, which opened work for it.
+    assert.deepEqual(engines.engines.map((e) => e.tag), ['2', '9']);
     assert.equal(engines.engines[0].open_work[0].status, 'awaiting_parts');
+    assert.match(engines.engines[1].open_work[0].title, /^Genset 9 down/);
     const dash = (await call('GET', '/dashboard', { token: admin })).body;
-    assert.equal(dash.work[0].title, 'Replace front and rear crank seals');
-    assert.equal(dash.work[0].last_update, 'Seals ordered from Malé');
+    const seals = dash.work.find((w) => w.title === 'Replace front and rear crank seals');
+    assert.equal(seals.last_update, 'Seals ordered from Malé');
 
     await call('POST', `/work/${created.body.id}/updates`, { token: manager, body: { body: 'Seals fitted, no leaks', status: 'completed' } });
     const asset = (await call('GET', `/assets/${g2.id}`, { token: admin })).body;
@@ -272,7 +274,7 @@ describe('work and maintenance history', () => {
     assert.equal(repair.source, 'work');
     assert.equal(repair.running_hours, 10603);
     assert.equal(asset.work[0].status, 'completed');
-    assert.equal((await call('GET', '/work', { token: admin })).body.total, 0, 'no open work left');
+    assert.deepEqual((await call('GET', '/work', { token: admin })).body.items.map((w) => w.asset_tag), ['9'], 'only G9 still open');
   });
 
   test('work cannot be logged on another island', async () => {
@@ -567,5 +569,40 @@ describe('work and maintenance history', () => {
     assert.equal(res.body.gensets_moved, 0);
     assert.equal((await at(gaafaru, '1')).serial_no, 'GAAF-99999');
     assert.equal((await at(gulhi, '2')).facility_id, real.facility_id);
+  });
+
+  test('setting a genset down opens work automatically, or updates its open work', async () => {
+    const tagId = async (tag) => (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = $2 and s.kind = 'genset' and s.active`, [maafushi.id, tag])).rows[0]?.id;
+    const g = await tagId('6');
+    const openWork = async () => (await call('GET', `/work?asset_id=${g}`, { token: admin })).body.items;
+    assert.equal((await openWork()).length, 0);
+
+    const res = await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g, status: 'down', note: 'Fuel injector pump failure' }] } });
+    assert.equal(res.status, 200);
+    let work = await openWork();
+    assert.equal(work.length, 1);
+    assert.equal(work[0].title, 'Genset 6 down: Fuel injector pump failure');
+    assert.equal(work[0].kind, 'repair');
+    assert.equal(work[0].status, 'planned');
+    assert.equal(res.body.work[0].id, work[0].id);
+    const audit = (await db.query(`select u.email from audit_log l join users u on u.id = l.user_id where l.entity = 'work_orders' and l.entity_id = $1`, [String(work[0].id)])).rows;
+    assert.equal(audit[0].email, 'mgr@srd.mv', 'opened in the name of whoever set it down');
+
+    // Still down: no second work order. Back up, then down again: the open work gets an update.
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g, status: 'down', note: 'still waiting' }] } });
+    assert.equal((await openWork()).length, 1);
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g, status: 'running' }] } });
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g, status: 'down', note: 'Tripped again' }] } });
+    work = await openWork();
+    assert.equal(work.length, 1);
+    assert.equal(work[0].last_update, 'Reported down: Tripped again');
+
+    // Once that work is completed, the next breakdown opens new work.
+    await call('PATCH', `/work/${work[0].id}`, { token: manager, body: { status: 'completed' } });
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g, status: 'running' }] } });
+    await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g, status: 'down' }] } });
+    work = await openWork();
+    assert.equal(work.length, 1);
+    assert.equal(work[0].title, 'Genset 6 down');
   });
 });

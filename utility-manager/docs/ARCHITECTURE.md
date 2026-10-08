@@ -278,6 +278,19 @@ How it works:
   (`documentVisible()`, applied to lists, details, files, CSV and the audit
   trail). Others get "not found". Managers create documents.
 
+## Genset down opens work (Oct 2026)
+
+Trigger `open_work_when_down` (migration 017) runs whenever a genset's status
+changes to `down`, from the website, Telegram `/down`, or a condition report
+saying "not running":
+- If the genset has open work (other than a move), that work gets an update:
+  "Reported down: …".
+- Otherwise a repair work order is opened: "Genset N down: <reason>",
+  planned, in the name of whoever set it down.
+
+The status API returns the work, and the Telegram reply and down alert link
+to it.
+
 ## Engine state: one answer (Oct 2026)
 
 A genset's state has two sources:
