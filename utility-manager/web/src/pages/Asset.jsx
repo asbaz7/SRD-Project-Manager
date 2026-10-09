@@ -150,12 +150,14 @@ export default function Asset() {
               <td className="wrap"><strong>{EVENT_KINDS[m.kind]}</strong>{m.notes && <div className="small">{m.notes}</div>}
                 {m.edited_at && <div className="small muted" title={m.edit_reason || ''}>Edited {date(m.edited_at)}{m.edited_by_name && ` by ${m.edited_by_name}`}{m.edit_reason && `: ${m.edit_reason}`}</div>}</td>
               <td className="num hide-sm">{num(m.running_hours)}</td>
-              <td className="hide-sm small muted">{m.source === 'report' ? 'Condition report' : m.source === 'work' ? <Link to={`/work/${m.work_id}`}>{m.work_ref}</Link> : `Added by ${m.created_by_name || '—'}`}</td>
+              <td className="hide-sm small muted">{m.source === 'report' ? (m.origin === 'fleet_manager' ? 'Condition report · Fleet Manager' : 'Condition report') : m.source === 'work' ? <Link to={`/work/${m.work_id}`}>{m.work_ref}</Link> : `Added by ${m.created_by_name || '—'}`}</td>
               <td className="nowrap">{manage && m.source !== 'report' && <button className="btn ghost small" onClick={() => setEditEvent(m)} aria-label="Edit record">Edit</button>}
                 {manage && (m.source === 'manual' || can('admin')) && <DeleteEvent id={m.id} onDone={state.reload} />}</td>
             </tr>)}</tbody>
           </table>}
       </Card>}
+
+      {isEngine && <ReportHistory assetId={a.id} />}
 
       {isEngine && a.hours_log.length > 1 && <Card title="Running hours by month">
         <table><tbody><tr>{a.hours_log.map((h) => <td key={h.month} className="num small"><span className="muted">{month(h.month)}</span><br />{num(h.total_hours)}</td>)}</tr></tbody></table>
@@ -184,6 +186,33 @@ export default function Asset() {
       {editEvent && <EventForm asset={a} event={editEvent} onClose={() => setEditEvent(null)} onSaved={() => { setEditEvent(null); state.reload(); }} />}
     </>;
   }}</Async>;
+}
+
+// Every monthly report received for this engine, newest first. When Fleet
+// Manager and an uploaded sheet both gave a month, both rows show and the
+// figures that disagree are marked.
+const REPORT_COLS = [
+  ['status_text', 'Report says'], ['total_hours', 'Hours', num], ['last_overhaul_on', 'Overhaul', date],
+  ['last_alt_service_on', 'Alternator', date], ['last_valve_on', 'Valves', date], ['last_battery_on', 'Battery', date],
+];
+function ReportHistory({ assetId }) {
+  const state = useApi(`/condition-reports/history?asset_id=${assetId}`);
+  const rows = state.data?.engines || [];
+  if (!rows.length) return null;
+  const byMonth = Object.groupBy ? Object.groupBy(rows, (r) => r.report_month) : rows.reduce((m, r) => ({ ...m, [r.report_month]: [...(m[r.report_month] || []), r] }), {});
+  const differs = (r, k) => (byMonth[r.report_month] || []).some((o) => o !== r && String(o[k] ?? '') !== String(r[k] ?? ''));
+  return <Card title="Reports by month">
+    <div className="scroll-y"><table>
+      <thead><tr><th>Month</th><th>Condition</th>{REPORT_COLS.map(([k, label]) => <th key={k} className={k === 'status_text' ? 'hide-sm' : 'num hide-sm'}>{label}</th>)}<th className="hide-sm">From</th></tr></thead>
+      <tbody>{rows.map((r) => <tr key={`${r.report_month}${r.source}`}>
+        <td className="nowrap">{month(r.report_month)}</td>
+        <td className={differs(r, 'condition') ? 'differs' : ''}><Condition value={r.condition} />{r.fault && <div className="small wrap">{r.fault}</div>}</td>
+        {REPORT_COLS.map(([k, , f]) => <td key={k} className={`${k === 'status_text' ? 'small wrap' : 'num nowrap'} hide-sm ${differs(r, k) ? 'differs' : ''}`}>{r[k] == null ? '—' : f ? f(r[k]) : r[k]}</td>)}
+        <td className="small muted hide-sm nowrap">{r.source === 'fleet_manager' ? 'Fleet Manager' : 'Upload'}</td>
+      </tr>)}</tbody>
+    </table></div>
+    {rows.some((r) => REPORT_COLS.some(([k]) => differs(r, k)) || differs(r, 'condition')) && <p className="muted small">Highlighted: Fleet Manager and the uploaded sheet disagree for that month.</p>}
+  </Card>;
 }
 
 function StatusForm({ asset, onClose, onSaved }) {

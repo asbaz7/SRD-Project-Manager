@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, FACILITY_KINDS, WORK_KINDS, date, month, num, withUnit } from '../format.js';
+import { ASSET_KINDS, FACILITY_KINDS, WORK_KINDS, date, month, num, peakLoad, withUnit } from '../format.js';
 import { useApi } from '../hooks.js';
 
 export default function Island() {
@@ -58,7 +58,7 @@ export default function Island() {
             {f.kind === 'powerhouse' && (() => {
               const r = island.reports.find((x) => x.facility_id === f.id);
               return <> · Condition report: {r ? <strong>{month(r.report_month)}</strong> : 'none yet'}
-                {r?.peak_load_month && ` · peak ${r.peak_load_month}`} · <Link to="/electricity/reports">upload</Link></>;
+                {peakLoad(r) && ` · peak ${peakLoad(r)}`} · <Link to="/electricity/reports">upload</Link></>;
             })()}
           </p>}
           {f.assets.length === 0 ? <Empty>No assets recorded.</Empty> :

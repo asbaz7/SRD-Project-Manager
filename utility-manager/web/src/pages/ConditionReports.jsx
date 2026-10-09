@@ -95,15 +95,16 @@ export default function ConditionReports({ embedded }) {
     <Async state={tracker}>{(t) => {
       const rows = filters.missing === '1' ? t.powerhouses.filter((p) => p.state === 'missing' || p.state === 'never') : t.powerhouses;
       return <Card title={`Reports for ${month(t.expected_month)} · ${t.missing ? `${t.missing} missing` : 'all received'}`}>
-        <p className="muted small">Each powerhouse sends its report for the previous month by the {t.due_day}th. Only the latest report is kept; dates found in it are added to each engine's maintenance history. Powerhouses whose latest report is from before {t.tracked_from?.slice(0, 4)} are not chased.</p>
+        <p className="muted small">Each powerhouse sends its report for the previous month by the {t.due_day}th. Reports come from Fleet Manager, which collects and checks the islands' sheets, or are uploaded here. Every month received is kept (see each engine's page); dates found in them are added to its maintenance history. Powerhouses whose latest report is from before {t.tracked_from?.slice(0, 4)} are not chased.</p>
         <table>
-          <thead><tr><th>Powerhouse</th><th>Latest report</th><th className="hide-sm">Uploaded</th><th className="num hide-sm">Gensets</th><th /></tr></thead>
+          <thead><tr><th>Powerhouse</th><th>Latest report</th><th className="hide-sm">Received</th><th className="num hide-sm">Gensets</th><th /></tr></thead>
           <tbody>{rows.map((p) => <tr key={p.facility_id} className={p.state === 'missing' || p.state === 'never' ? 'attention' : ''}>
             <td><Link to={`/islands/${p.island_id}`}><strong>{p.atoll_code} · {p.island_name}</strong></Link></td>
             <td><span className={`state ${p.state}`}>{p.state === 'up_to_date' ? '✓ ' : p.state === 'never' ? '✕ None yet' : p.state === 'untracked' ? '– ' : '✕ '}{p.report_month ? month(p.report_month) : ''}</span>
               {p.state === 'untracked' && <><br /><small className="muted">old report, not chased</small></>}
               {p.state === 'missing' && <><br /><small className="muted">{month(t.expected_month)} missing</small></>}</td>
-            <td className="hide-sm small">{p.uploaded_at ? <>{dateTime(p.uploaded_at)}<br /><span className="muted">{p.uploaded_by_name}</span></> : <span className="muted">—</span>}</td>
+            <td className="hide-sm small">{p.uploaded_at ? <>{dateTime(p.uploaded_at)}<br /><span className="muted">{p.source === 'fleet_manager' ? 'Fleet Manager' : p.uploaded_by_name}</span>
+              {p.held_rows?.length > 0 && <><br /><span className="warn-text" title={p.held_rows.map((h) => `${h.genset ? `G${h.genset}: ` : ''}${h.reason}`).join('\n')}>{p.held_rows.length} row{p.held_rows.length === 1 ? '' : 's'} held in Fleet Manager</span></>}</> : <span className="muted">—</span>}</td>
             <td className="num hide-sm">{p.genset_count}</td>
             <td>{can('manager') && <button className="btn small ghost" onClick={() => { target.current = p.island_id; input.current?.click(); }}>Upload</button>}</td>
           </tr>)}</tbody>

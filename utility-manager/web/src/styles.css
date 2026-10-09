@@ -107,6 +107,8 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .nowrap { white-space: nowrap; }
 .pre { white-space: pre-wrap; margin: 0 0 8px; }
 .bad { color: var(--bad); }
+.warn-text { color: var(--warn); }
+.differs { color: var(--warn); font-weight: 600; }
 .center { display: grid; place-items: center; min-height: 60vh; }
 .icon { flex: none; vertical-align: -4px; }
 

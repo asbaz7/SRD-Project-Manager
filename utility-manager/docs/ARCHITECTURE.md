@@ -496,8 +496,10 @@ history.
 
 | Table | Purpose |
 |---|---|
-| `engine_conditions` | Latest report figures per genset: condition, fault, hours, last overhaul and services, flags |
-| `powerhouse_reports` | Latest report month, peak loads and uploader per powerhouse |
+| `engine_conditions` | Latest report figures per genset: condition, fault, hours, last overhaul and services, flags, source |
+| `powerhouse_reports` | Latest report month, peak loads, source and uploader per powerhouse |
+| `engine_reports` | Every month's report per genset, per source (`upload` / `fleet_manager`); both kept when both send a month |
+| `powerhouse_report_history` | Every month's report per powerhouse, per source, with peak load and rows Fleet Manager held back |
 | `maintenance_events` | Permanent maintenance history: `unique(asset, kind, date)`, source report / work / manual |
 | `hours_log` | Total running hours per genset per month |
 | `work_orders`, `work_updates` | Ongoing work and its timeline. Ref `WO-0042` |
@@ -506,12 +508,47 @@ history.
 |---|---|---|---|
 | GET | `/engines?condition&flag&atoll_id&q&sort` (CSV) | any | Fleet view with summary counts |
 | GET | `/condition-reports` | any | Every powerhouse's latest report, and whether it is missing |
+| POST | `/condition-reports` | manager (Fleet Manager service account) | A powerhouse's checked monthly report as JSON (below). Sending a month again replaces it |
+| GET | `/condition-reports/history?facility_id\|asset_id&from&to` | any | Report history month by month, per source |
 | POST | `/condition-reports/preview` | manager | Read an uploaded `.xlsx` (base64), match its island and show the changes. Saves nothing |
 | POST | `/condition-reports/import` | manager | Apply it for the confirmed island |
 | POST | `/assets/:id/maintenance` | manager | Add a maintenance record by hand |
+| PATCH | `/maintenance/:id` | manager | Correct a record (manual: all fields; from work: hours and notes) with a required `reason` |
 | DELETE | `/maintenance/:id` | manager (own manual records) / admin | Remove a record |
 | GET / POST / PATCH | `/work`, `/work/:id` | read: any · write: manager | Work orders |
 | POST | `/work/:id/updates` | manager | Progress update, optionally changing the status |
+
+### Reports sent by Fleet Manager
+
+Fleet Manager collects the islands' sheets from OneDrive, checks them row by
+row and sends each powerhouse's report right after its import:
+
+```json
+POST /api/v1/condition-reports
+{
+  "report_month": "2026-08-01",            // first day of the month reported on
+  "reported_on": "2026-09-01",
+  "file_name": "ADh. Dhigurah ECR Aug 2026.xlsx",
+  "source_ref": "ECR import #412",
+  "peak_load": { "kw": 1258, "at": "2026-07-12T18:00:00+05:00" },
+  "held_rows": [{ "genset": "7", "reason": "Hours went backwards" }],
+  "engines": [{
+    "srd_asset_id": "4ec2ed22-…",
+    "status_text": "RUNNING; OK", "condition": "ok",   // ok | minor_fault | major_fault | not_running
+    "fault": null, "total_hours": 10999, "hours_since_overhaul": null, "hours_since_valve": null,
+    "last_overhaul_on": null, "last_valve_on": "2024-07-23", "last_battery_on": null, "last_alt_service_on": "2026-09-16",
+    "needs_overhaul": false, "alt_needs_service": true, "overhaul_spares_received": null,
+    "max_load_kw": 486, "capable_kw": 600
+  }]
+}
+```
+
+All gensets must be at one powerhouse (or give `facility_id` with an empty
+list). It is kept in the history next to any uploaded sheet of the same
+month, becomes the latest unless a newer month is in, sets the running state
+like an upload, and adds its dates to the maintenance history (`origin:
+fleet_manager`). The reply gives `latest`, counts, and `differences` from an
+uploaded sheet of the same month, field by field.
 
 ## 5. Access control
 

@@ -315,8 +315,8 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
     const asset = byTag.get(e.number);
     if (!asset) continue;
     const { rows } = await t.query(`
-      insert into maintenance_events (asset_id, kind, done_on, running_hours, source, created_by)
-      values ($1, $2, $3, $4, 'report', $5)
+      insert into maintenance_events (asset_id, kind, done_on, running_hours, source, origin, created_by)
+      values ($1, $2, $3, $4, 'report', 'upload', $5)
       on conflict (asset_id, kind, done_on) do update
         set running_hours = coalesce(maintenance_events.running_hours, excluded.running_hours)
         where maintenance_events.running_hours is null and excluded.running_hours is not null
@@ -336,57 +336,115 @@ export async function applyImport(t, parsed, { islandId, userId, fileName }) {
     }
   }
 
+  // Every month in the workbook goes into the report history.
+  for (const report of parsed.reports) {
+    if (!report.month) continue;
+    for (const g of report.gensets) {
+      const asset = byTag.get(g.number);
+      if (asset) await keepEngineReport(t, asset.id, report.month, report.updated_on, fromSheet(g), { source: 'upload', userId });
+    }
+    await keepPowerhouseReport(t, facilityId, report.month, {
+      source: 'upload', userId, reported_on: report.updated_on, peak_load_record: report.peak_load_record,
+      peak_load_month: report.peak_load_month, genset_count: report.gensets.length, file_name: fileName,
+    });
+  }
+
   // Latest condition, only if this report is not older than what we have.
   let updated = 0;
   if (latest.month) {
     for (const g of latest.gensets) {
-      const asset = byTag.get(g.number);
-      const { rowCount } = await t.query(`
-        insert into engine_conditions (asset_id, report_month, reported_on, status_text, condition, fault, total_hours,
-          hours_since_overhaul, last_overhaul_on, hours_since_valve, last_valve_on, last_alt_service_on, last_battery_on,
-          max_load_kw, capable_kw, needs_overhaul, alt_needs_service, overhaul_spares_received, uploaded_by, updated_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, now())
-        on conflict (asset_id) do update set
-          report_month = excluded.report_month, reported_on = excluded.reported_on, status_text = excluded.status_text,
-          condition = excluded.condition, fault = excluded.fault, total_hours = excluded.total_hours,
-          hours_since_overhaul = excluded.hours_since_overhaul, last_overhaul_on = excluded.last_overhaul_on,
-          hours_since_valve = excluded.hours_since_valve, last_valve_on = excluded.last_valve_on,
-          last_alt_service_on = excluded.last_alt_service_on, last_battery_on = excluded.last_battery_on,
-          max_load_kw = excluded.max_load_kw, capable_kw = excluded.capable_kw, needs_overhaul = excluded.needs_overhaul,
-          alt_needs_service = excluded.alt_needs_service, overhaul_spares_received = excluded.overhaul_spares_received,
-          uploaded_by = excluded.uploaded_by, updated_at = now()
-        where engine_conditions.report_month <= excluded.report_month`,
-      [asset.id, latest.month, latest.updated_on, g.status_text ?? null, g.condition ?? null, g.fault ?? null,
-        g.total_hours ?? null, g.hours_since_overhaul ?? null, g.overhaul_on ?? null, g.hours_since_valve ?? null,
-        g.valve_on ?? null, g.alt_serviced_on ?? null, g.battery_changed_on ?? null, g.max_load_kw ?? null,
-        g.capable_kw ?? null, g.needs_overhaul ?? null, g.alt_needs_service ?? null, g.overhaul_spares_received ?? null, userId]);
-      updated += rowCount;
-
-      // The report's running state, when it is newer than the last status
-      // someone recorded and actually different from it.
-      const status = STATUS_FOR[g.condition];
-      const at = `${latest.updated_on || addMonths(latest.month, 1)}T08:00:00+05:00`;
-      if (rowCount && status && status !== asset.status && (!asset.status_at || new Date(asset.status_at) < new Date(at))) {
-        await t.query(`
-          insert into asset_status_log (asset_id, status, note, reported_at, reported_by)
-          values ($1, $2, $3, $4, $5)`,
-        [asset.id, status, g.condition === 'ok' ? null : `Condition report ${latest.month.slice(0, 7)}: ${[g.status_text, g.fault].filter(Boolean).join(' — ')}`, at, userId]);
-      }
+      updated += await setLatest(t, byTag.get(g.number), latest.month, latest.updated_on, fromSheet(g), { source: 'upload', userId });
     }
-    await t.query(`
-      insert into powerhouse_reports (facility_id, report_month, reported_on, peak_load_record, peak_load_month,
-                                      genset_count, file_name, uploaded_by, uploaded_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, now())
-      on conflict (facility_id) do update set
-        report_month = excluded.report_month, reported_on = excluded.reported_on,
-        peak_load_record = excluded.peak_load_record, peak_load_month = excluded.peak_load_month,
-        genset_count = excluded.genset_count, file_name = excluded.file_name,
-        uploaded_by = excluded.uploaded_by, uploaded_at = now()
-      where powerhouse_reports.report_month <= excluded.report_month`,
-    [facilityId, latest.month, latest.updated_on, latest.peak_load_record, latest.peak_load_month,
-      latest.gensets.length, fileName?.slice(0, 200) || null, userId]);
+    await setLatestPowerhouse(t, facilityId, latest.month, {
+      source: 'upload', userId, reported_on: latest.updated_on, peak_load_record: latest.peak_load_record,
+      peak_load_month: latest.peak_load_month, genset_count: latest.gensets.length, file_name: fileName,
+    });
   }
   return { gensets_updated: updated, gensets_added: created, gensets_moved: moves.length, events_added: events };
+}
+
+// One genset's figures for a month, named as the database names them.
+export const REPORT_FIELDS = ['status_text', 'condition', 'fault', 'total_hours', 'hours_since_overhaul', 'last_overhaul_on',
+  'hours_since_valve', 'last_valve_on', 'last_alt_service_on', 'last_battery_on', 'max_load_kw', 'capable_kw',
+  'needs_overhaul', 'alt_needs_service', 'overhaul_spares_received'];
+
+const fromSheet = (g) => ({
+  status_text: g.status_text, condition: g.condition, fault: g.fault, total_hours: g.total_hours,
+  hours_since_overhaul: g.hours_since_overhaul, last_overhaul_on: g.overhaul_on, hours_since_valve: g.hours_since_valve,
+  last_valve_on: g.valve_on, last_alt_service_on: g.alt_serviced_on, last_battery_on: g.battery_changed_on,
+  max_load_kw: g.max_load_kw, capable_kw: g.capable_kw, needs_overhaul: g.needs_overhaul,
+  alt_needs_service: g.alt_needs_service, overhaul_spares_received: g.overhaul_spares_received,
+});
+const values = (r) => REPORT_FIELDS.map((k) => r[k] ?? null);
+const cols = REPORT_FIELDS.join(', ');
+const params = (from) => REPORT_FIELDS.map((_, i) => `$${i + from}`).join(', ');
+const assignAll = REPORT_FIELDS.map((k) => `${k} = excluded.${k}`).join(', ');
+
+// Keeps one month of one genset's report, per source; sent again, it replaces.
+export async function keepEngineReport(t, assetId, month, reportedOn, r, { source, sourceRef = null, userId }) {
+  await t.query(`
+    insert into engine_reports (asset_id, report_month, source, reported_on, source_ref, received_by, received_at, ${cols})
+    values ($1, $2, $3, $4, $5, $6, now(), ${params(7)})
+    on conflict (asset_id, report_month, source) do update set
+      reported_on = excluded.reported_on, source_ref = excluded.source_ref, received_by = excluded.received_by,
+      received_at = now(), ${assignAll}`,
+  [assetId, month, source, reportedOn ?? null, sourceRef, userId, ...values(r)]);
+}
+
+export async function keepPowerhouseReport(t, facilityId, month, p) {
+  await t.query(`
+    insert into powerhouse_report_history (facility_id, report_month, source, reported_on, peak_load_kw, peak_load_at,
+      peak_load_record, peak_load_month, genset_count, file_name, held_rows, source_ref, received_by, received_at)
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
+    on conflict (facility_id, report_month, source) do update set
+      reported_on = excluded.reported_on, peak_load_kw = excluded.peak_load_kw, peak_load_at = excluded.peak_load_at,
+      peak_load_record = excluded.peak_load_record, peak_load_month = excluded.peak_load_month,
+      genset_count = excluded.genset_count, file_name = excluded.file_name, held_rows = excluded.held_rows,
+      source_ref = excluded.source_ref, received_by = excluded.received_by, received_at = now()`,
+  [facilityId, month, p.source, p.reported_on ?? null, p.peak_load_kw ?? null, p.peak_load_at ?? null,
+    p.peak_load_record ?? null, p.peak_load_month ?? null, p.genset_count ?? null, p.file_name?.slice(0, 200) || null,
+    p.held_rows?.length ? JSON.stringify(p.held_rows) : null, p.source_ref ?? null, p.userId]);
+}
+
+// Makes a month the genset's latest report, unless a newer month is already
+// in; then records its running state when that is newer than the last status
+// someone set, and different. Returns 1 if it became the latest.
+export async function setLatest(t, asset, month, reportedOn, r, { source, userId }) {
+  const { rowCount } = await t.query(`
+    insert into engine_conditions (asset_id, report_month, reported_on, source, uploaded_by, updated_at, ${cols})
+    values ($1, $2, $3, $4, $5, now(), ${params(6)})
+    on conflict (asset_id) do update set
+      report_month = excluded.report_month, reported_on = excluded.reported_on, source = excluded.source,
+      uploaded_by = excluded.uploaded_by, updated_at = now(), ${assignAll}
+    where engine_conditions.report_month <= excluded.report_month`,
+  [asset.id, month, reportedOn ?? null, source, userId, ...values(r)]);
+  const status = STATUS_FOR[r.condition];
+  const at = `${reportedOn || addMonths(month, 1)}T08:00:00+05:00`;
+  if (rowCount && status && status !== asset.status && (!asset.status_at || new Date(asset.status_at) < new Date(at))) {
+    await t.query(`
+      insert into asset_status_log (asset_id, status, note, reported_at, reported_by)
+      values ($1, $2, $3, $4, $5)`,
+    [asset.id, status, r.condition === 'ok' ? null : `Condition report ${month.slice(0, 7)}: ${[r.status_text, r.fault].filter(Boolean).join(' — ')}`, at, userId]);
+  }
+  return rowCount;
+}
+
+export async function setLatestPowerhouse(t, facilityId, month, p) {
+  const { rowCount } = await t.query(`
+    insert into powerhouse_reports (facility_id, report_month, reported_on, peak_load_record, peak_load_month,
+                                    genset_count, file_name, uploaded_by, uploaded_at, source, peak_load_kw, peak_load_at, held_rows)
+    values ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9, $10, $11, $12)
+    on conflict (facility_id) do update set
+      report_month = excluded.report_month, reported_on = excluded.reported_on,
+      peak_load_record = excluded.peak_load_record, peak_load_month = excluded.peak_load_month,
+      genset_count = excluded.genset_count, file_name = excluded.file_name,
+      uploaded_by = excluded.uploaded_by, uploaded_at = now(), source = excluded.source,
+      peak_load_kw = excluded.peak_load_kw, peak_load_at = excluded.peak_load_at, held_rows = excluded.held_rows
+    where powerhouse_reports.report_month <= excluded.report_month`,
+  [facilityId, month, p.reported_on ?? null, p.peak_load_record ?? null, p.peak_load_month ?? null,
+    p.genset_count ?? null, p.file_name?.slice(0, 200) || null, p.userId, p.source,
+    p.peak_load_kw ?? null, p.peak_load_at ?? null, p.held_rows?.length ? JSON.stringify(p.held_rows) : null]);
+  return rowCount;
 }
 
 // Powerhouses whose latest report is older than this are not chased as
@@ -408,4 +466,60 @@ export function expectedMonth(today, dueDay = 10) {
   const back = d > dueDay ? 1 : 2;
   const date = new Date(Date.UTC(y, m - 1 - back, 1));
   return date.toISOString().slice(0, 10);
+}
+
+const DIFF_FIELDS = ['condition', 'total_hours', 'last_overhaul_on', 'last_valve_on', 'last_alt_service_on', 'last_battery_on',
+  'needs_overhaul', 'alt_needs_service'];
+const same = (a, b) => (a ?? null) === (b ?? null) || (a != null && b != null && Number(a) === Number(b) && !Number.isNaN(Number(a)));
+
+/**
+ * A powerhouse's monthly report as checked and sent by Fleet Manager
+ * (genset ids already linked). Kept in the history next to any upload of
+ * the same month; becomes the latest unless a newer month is in. Dates it
+ * carries go into the maintenance history. Returns counts, and where it
+ * differs from an uploaded sheet of the same month.
+ */
+export async function applyFleetReport(t, b, { facilityId, assets, userId }) {
+  const month = b.report_month;
+  const opts = { source: 'fleet_manager', sourceRef: b.source_ref ?? null, userId };
+  let updated = 0;
+  let events = 0;
+  const differences = [];
+  for (const e of b.engines) {
+    const asset = assets.get(e.srd_asset_id);
+    await keepEngineReport(t, asset.id, month, b.reported_on, e, opts);
+    updated += await setLatest(t, asset, month, b.reported_on, e, opts);
+    if (e.total_hours != null) {
+      await t.query(`insert into hours_log (asset_id, month, total_hours) values ($1, $2, $3)
+                     on conflict (asset_id, month) do update set total_hours = excluded.total_hours`, [asset.id, month, e.total_hours]);
+    }
+    for (const [field, kind, since] of [['last_overhaul_on', 'overhaul', 'hours_since_overhaul'], ['last_alt_service_on', 'alternator_service'],
+      ['last_valve_on', 'valve_clearance', 'hours_since_valve'], ['last_battery_on', 'battery_change']]) {
+      const day = e[field];
+      if (!day || day > addMonths(month, 2)) continue;
+      const hours = since && e.total_hours != null && e[since] != null && e.total_hours >= e[since] ? Math.round(e.total_hours - e[since]) : null;
+      const { rows } = await t.query(`
+        insert into maintenance_events (asset_id, kind, done_on, running_hours, source, origin, created_by)
+        values ($1, $2, $3, $4, 'report', 'fleet_manager', $5)
+        on conflict (asset_id, kind, done_on) do update
+          set running_hours = coalesce(maintenance_events.running_hours, excluded.running_hours)
+          where maintenance_events.running_hours is null and excluded.running_hours is not null
+        returning (xmax = 0) as inserted`, [asset.id, kind, day, hours, userId]);
+      events += rows.filter((r) => r.inserted).length;
+    }
+    const { rows: [up] } = await t.query(
+      "select * from engine_reports where asset_id = $1 and report_month = $2 and source = 'upload'", [asset.id, month]);
+    const fields = up ? DIFF_FIELDS.filter((k) => !same(up[k], e[k])) : [];
+    if (fields.length) {
+      differences.push({ srd_asset_id: asset.id, tag: asset.tag,
+        fields: Object.fromEntries(fields.map((k) => [k, { upload: up[k] ?? null, fleet_manager: e[k] ?? null }])) });
+    }
+  }
+  const p = {
+    ...opts, reported_on: b.reported_on, peak_load_kw: b.peak_load?.kw, peak_load_at: b.peak_load?.at,
+    genset_count: b.engines.length, file_name: b.file_name, held_rows: b.held_rows,
+  };
+  await keepPowerhouseReport(t, facilityId, month, p);
+  const latest = await setLatestPowerhouse(t, facilityId, month, p);
+  return { latest: !!latest, engines_updated: updated, events_added: events, held_rows: b.held_rows.length, differences };
 }

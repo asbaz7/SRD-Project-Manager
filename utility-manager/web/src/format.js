@@ -119,3 +119,20 @@ export function since(value) {
   const days = Math.round(mins / 1440);
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
+
+// A powerhouse's peak load: "1,258 kW on 12 Jul 2026 18:00". From the checked
+// figures Fleet Manager sends, else read from the sheet's text, which runs
+// the parts together ("1258/12/07/202618:00:00"); shown as written if that fails.
+export function peakLoad(r) {
+  if (!r) return null;
+  if (r.peak_load_kw != null) return `${num(r.peak_load_kw)} kW${r.peak_load_at ? ` on ${dateTime(r.peak_load_at)}` : ''}`;
+  const raw = r.peak_load_month || r.peak_load_record;
+  if (!raw) return null;
+  const m = String(raw).match(/^\s*([\d.,]+)\s*(?:kw)?\s*[/\s-]+(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\s*(\d{1,2}:\d{2})?/i);
+  if (!m) return raw;
+  const [, kw, d, mo, y, time] = m;
+  const day = new Date(Date.UTC(+y, +mo - 1, +d));
+  if (Number.isNaN(day.getTime()) || +mo > 12) return raw;
+  const when = day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${num(Number(kw.replace(/,/g, '')))} kW on ${when}${time ? ` ${time}` : ''}`;
+}
