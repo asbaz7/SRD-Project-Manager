@@ -633,4 +633,13 @@ describe('work and maintenance history', () => {
     await post('Waiting for parts but parking it', 'on_hold');
     assert.equal(await statusNow(), 'on_hold');
   });
+
+  test('alternator frame code and CPL can be edited through the API', async () => {
+    const g = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.kind = 'genset' and s.active limit 1`, [maafushi.id])).rows[0].id;
+    const res = await call('PATCH', `/assets/${g}`, { token: manager, body: { alt_frame: 'PI734B1', cpl_spec: '40869922' } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.alt_frame, 'PI734B1');
+    assert.equal(res.body.cpl_spec, '40869922');
+    assert.equal((await call('PATCH', `/assets/${g}`, { token: manager, body: { cpl_spec: null } })).body.cpl_spec, null);
+  });
 });

@@ -61,6 +61,7 @@ export function AssetForm({ facilityId, asset, onClose, onSaved }) {
       running_hours: numOrNull(a.running_hours), notes: a.notes || null,
       ...(a.kind === 'genset' ? {
         fixed_asset_code: a.fixed_asset_code || null, alt_make: a.alt_make || null, alt_serial: a.alt_serial || null,
+        alt_frame: a.alt_frame || null, cpl_spec: a.cpl_spec || null,
         alt_kw: numOrNull(a.alt_kw), next_overhaul_hours: numOrNull(a.next_overhaul_hours),
         next_overhaul_on: strOrNull(a.next_overhaul_on || ''), next_alt_service_on: strOrNull(a.next_alt_service_on || ''),
       } : {}),
@@ -86,6 +87,8 @@ export function AssetForm({ facilityId, asset, onClose, onSaved }) {
           <Field label="Fixed asset code"><input value={a.fixed_asset_code ?? ''} onChange={set('fixed_asset_code')} /></Field>
           <Field label="Alternator make"><input value={a.alt_make ?? ''} onChange={set('alt_make')} placeholder="e.g. STAMFORD" /></Field>
           <Field label="Alternator serial"><input value={a.alt_serial ?? ''} onChange={set('alt_serial')} /></Field>
+          <Field label="Alternator frame"><input value={a.alt_frame ?? ''} onChange={set('alt_frame')} /></Field>
+          <Field label="CPL / spec no."><input value={a.cpl_spec ?? ''} onChange={set('cpl_spec')} /></Field>
           <Field label="Alternator capacity (kW)"><input type="number" min="0" step="any" value={a.alt_kw ?? ''} onChange={set('alt_kw')} /></Field>
           <p className="wide muted small">Schedule (from the overhaul and alternator service schedules):</p>
           <Field label="Next overhaul at (running hours)"><input type="number" min="0" step="any" value={a.next_overhaul_hours ?? ''} onChange={set('next_overhaul_hours')} /></Field>

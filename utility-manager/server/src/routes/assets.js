@@ -42,6 +42,8 @@ const assetBody = z.object({
   fixed_asset_code: optText(50),
   alt_make: optText(100),
   alt_serial: optText(100),
+  alt_frame: optText(100),
+  cpl_spec: optText(50),
   alt_kw: optNumber,
   next_overhaul_hours: optNumber,
   next_overhaul_on: z.iso.date().nullish(),
@@ -49,7 +51,7 @@ const assetBody = z.object({
 });
 const ASSET_COLS = ['kind', 'tag', 'make_model', 'serial_no', 'rated_capacity', 'operating_capacity',
   'capacity_unit', 'commissioned_on', 'running_hours', 'notes', 'active', 'fixed_asset_code', 'alt_make',
-  'alt_serial', 'alt_kw', 'next_overhaul_hours', 'next_overhaul_on', 'next_alt_service_on'];
+  'alt_serial', 'alt_frame', 'cpl_spec', 'alt_kw', 'next_overhaul_hours', 'next_overhaul_on', 'next_alt_service_on'];
 
 const statusItem = z.object({
   asset_id: id,
