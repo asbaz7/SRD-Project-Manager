@@ -4,7 +4,7 @@ import { dateTime } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
 const ENTITIES = {
-  assets: 'Assets', facilities: 'Facilities', incidents: 'Incidents', projects: 'Projects',
+  assets: 'Assets', facilities: 'Facilities', work_orders: 'Work', maintenance_events: 'Maintenance records', incidents: 'Incidents', projects: 'Projects',
   project_updates: 'Project updates', islands: 'Islands', atolls: 'Atolls', users: 'Users', user_scopes: 'User assignments',
 };
 

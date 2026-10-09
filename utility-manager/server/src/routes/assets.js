@@ -198,8 +198,8 @@ export default async function assetRoutes(app) {
     const [condition, maintenance, work, hours, engine] = await Promise.all([
       db.query(`select c.*, u.full_name as uploaded_by_name from engine_current c
                   left join users u on u.id = c.uploaded_by where c.asset_id = $1`, [assetId]),
-      db.query(`select e.*, u.full_name as created_by_name, 'WO-' || lpad(e.work_id::text, 4, '0') as work_ref
-                  from maintenance_events e left join users u on u.id = e.created_by
+      db.query(`select e.*, u.full_name as created_by_name, ed.full_name as edited_by_name, 'WO-' || lpad(e.work_id::text, 4, '0') as work_ref
+                  from maintenance_events e left join users u on u.id = e.created_by left join users ed on ed.id = e.edited_by
                  where e.asset_id = $1 order by e.done_on desc, e.id desc`, [assetId]),
       db.query(`select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.kind, w.title, w.status, w.started_on, w.target_on,
                        w.completed_on, w.assigned_to,

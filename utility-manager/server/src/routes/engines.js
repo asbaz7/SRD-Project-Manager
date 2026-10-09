@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { assertIslandWrite, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
-import { forbidden } from '../errors.js';
-import { Where, date, id, idParam, one, optText, parse, serialParam } from '../http.js';
+import { badRequest, forbidden } from '../errors.js';
+import { Where, date, id, idParam, one, optText, parse, serialParam, text } from '../http.js';
 import { REPORTS_TRACKED_FROM, expectedMonth } from '../reportImport.js';
 
 export const EVENT_KINDS = ['overhaul', 'top_overhaul', 'alternator_service', 'valve_clearance', 'battery_change',
@@ -142,6 +142,35 @@ export default async function engineRoutes(app) {
       returning *`, [assetId, b.kind, b.done_on, b.running_hours ?? null, b.notes, req.user.id])).rows));
     reply.code(201);
     return row;
+  });
+
+  // Correcting a record. The reason is kept on it, so the audit trail shows
+  // it with the change. Report records are what the sheet said (fix the
+  // sheet, or an administrator removes them); a completed work order's record
+  // takes its date, type and engine from the work order.
+  app.patch('/maintenance/:id', manager, async (req) => {
+    const { id: eventId } = parse(serialParam, req.params);
+    const b = parse(eventBody.partial().extend({ reason: text(500) }), req.body);
+    const event = one((await db.query('select * from maintenance_events where id = $1', [eventId])).rows, 'Record');
+    await assertIslandWrite(db, req.user, { assetId: event.asset_id });
+    if (event.source === 'report') throw forbidden('Records taken from a condition report cannot be edited');
+    const fromWork = event.source === 'work' && event.work_id;
+    if (fromWork && ((b.kind && b.kind !== event.kind) || (b.done_on && b.done_on !== event.done_on))) {
+      throw badRequest(`The date and type come from WO-${String(event.work_id).padStart(4, '0')}. Edit the work order instead.`);
+    }
+    const next = {
+      kind: b.kind ?? event.kind, done_on: b.done_on ?? event.done_on,
+      running_hours: 'running_hours' in b ? b.running_hours ?? null : event.running_hours,
+      notes: 'notes' in b ? b.notes : event.notes,
+    };
+    const clash = await db.query('select 1 from maintenance_events where asset_id = $1 and kind = $2 and done_on = $3 and id <> $4',
+      [event.asset_id, next.kind, next.done_on, eventId]);
+    if (clash.rows.length) throw badRequest('There is already a record of that type on that date for this engine');
+    return db.tx(req.user.id, async (t) => one((await t.query(`
+      update maintenance_events
+         set kind = $2, done_on = $3, running_hours = $4, notes = $5, edit_reason = $6, edited_by = $7, edited_at = now()
+       where id = $1 returning *`,
+    [eventId, next.kind, next.done_on, next.running_hours, next.notes, b.reason, req.user.id])).rows));
   });
 
   app.delete('/maintenance/:id', manager, async (req) => {

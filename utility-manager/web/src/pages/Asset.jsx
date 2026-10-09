@@ -21,6 +21,7 @@ export default function Asset() {
   const state = useApi(`/assets/${id}`);
   const { can } = useAuth();
   const [modal, setModal] = useState(null);
+  const [editEvent, setEditEvent] = useState(null);
   const done = () => { setModal(null); state.reload(); };
 
   return <Async state={state}>{(a) => {
@@ -146,10 +147,12 @@ export default function Asset() {
             <thead><tr><th>Date</th><th>What</th><th className="num hide-sm">At hours</th><th className="hide-sm">Source</th><th /></tr></thead>
             <tbody>{a.maintenance.map((m) => <tr key={m.id}>
               <td className="nowrap">{date(m.done_on)}</td>
-              <td className="wrap"><strong>{EVENT_KINDS[m.kind]}</strong>{m.notes && <div className="small">{m.notes}</div>}</td>
+              <td className="wrap"><strong>{EVENT_KINDS[m.kind]}</strong>{m.notes && <div className="small">{m.notes}</div>}
+                {m.edited_at && <div className="small muted" title={m.edit_reason || ''}>Edited {date(m.edited_at)}{m.edited_by_name && ` by ${m.edited_by_name}`}{m.edit_reason && `: ${m.edit_reason}`}</div>}</td>
               <td className="num hide-sm">{num(m.running_hours)}</td>
               <td className="hide-sm small muted">{m.source === 'report' ? 'Condition report' : m.source === 'work' ? <Link to={`/work/${m.work_id}`}>{m.work_ref}</Link> : `Added by ${m.created_by_name || '—'}`}</td>
-              <td>{manage && (m.source === 'manual' || can('admin')) && <DeleteEvent id={m.id} onDone={state.reload} />}</td>
+              <td className="nowrap">{manage && m.source !== 'report' && <button className="btn ghost small" onClick={() => setEditEvent(m)} aria-label="Edit record">Edit</button>}
+                {manage && (m.source === 'manual' || can('admin')) && <DeleteEvent id={m.id} onDone={state.reload} />}</td>
             </tr>)}</tbody>
           </table>}
       </Card>}
@@ -178,6 +181,7 @@ export default function Asset() {
       {modal === 'edit' && <AssetForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
       {modal === 'status' && <StatusForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
       {modal === 'event' && <EventForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
+      {editEvent && <EventForm asset={a} event={editEvent} onClose={() => setEditEvent(null)} onSaved={() => { setEditEvent(null); state.reload(); }} />}
     </>;
   }}</Async>;
 }
@@ -199,22 +203,32 @@ function StatusForm({ asset, onClose, onSaved }) {
   </Modal>;
 }
 
-function EventForm({ asset, onClose, onSaved }) {
-  const [f, setF] = useState({ kind: 'overhaul', done_on: localDate(0), running_hours: asset.condition?.total_hours ?? '', notes: '' });
+// Adds a record, or corrects one (`event`) with a reason for the audit trail.
+// A completed work order's record takes its date and type from the work order.
+function EventForm({ asset, event, onClose, onSaved }) {
+  const [f, setF] = useState(event
+    ? { kind: event.kind, done_on: event.done_on, running_hours: event.running_hours ?? '', notes: event.notes || '', reason: '' }
+    : { kind: 'overhaul', done_on: localDate(0), running_hours: asset.condition?.total_hours ?? '', notes: '' });
+  const fromWork = event?.source === 'work' && event.work_id;
   const { submit, busy, error } = useSubmit(async () => {
-    await api(`/assets/${asset.id}/maintenance`, { method: 'POST', body: {
-      kind: f.kind, done_on: f.done_on, running_hours: f.running_hours === '' ? null : Number(f.running_hours), notes: f.notes || null } });
+    const body = { running_hours: f.running_hours === '' ? null : Number(f.running_hours), notes: f.notes || null };
+    if (!fromWork) Object.assign(body, { kind: f.kind, done_on: f.done_on });
+    if (event) await api(`/maintenance/${event.id}`, { method: 'PATCH', body: { ...body, reason: f.reason } });
+    else await api(`/assets/${asset.id}/maintenance`, { method: 'POST', body });
     onSaved();
   });
-  return <Modal title={`Maintenance record · ${ASSET_KINDS[asset.kind]} ${asset.tag}`} onClose={onClose}>
+  return <Modal title={`${event ? 'Edit maintenance record' : 'Maintenance record'} · ${ASSET_KINDS[asset.kind]} ${asset.tag}`} onClose={onClose}>
     <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <ErrorBox error={error} />
-      <Field label="What was done"><Select value={f.kind} onChange={(v) => setF({ ...f, kind: v })} options={EVENT_KINDS} /></Field>
-      <Field label="Date"><input type="date" required max={localDate(0)} value={f.done_on} onChange={(e) => setF({ ...f, done_on: e.target.value })} /></Field>
+      {fromWork && <p className="muted small wide">The date and type come from <Link to={`/work/${event.work_id}`}>{event.work_ref}</Link>. To change them, or move the record to another engine, edit the work order.</p>}
+      <Field label="What was done"><Select value={f.kind} disabled={!!fromWork} onChange={(v) => setF({ ...f, kind: v })} options={EVENT_KINDS} /></Field>
+      <Field label="Date"><input type="date" required disabled={!!fromWork} max={localDate(0)} value={f.done_on} onChange={(e) => setF({ ...f, done_on: e.target.value })} /></Field>
       <Field label="At running hours (optional)"><input type="number" min="0" step="any" value={f.running_hours} onChange={(e) => setF({ ...f, running_hours: e.target.value })} /></Field>
       <Field label="Notes" wide><textarea rows="3" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Parts replaced, contractor, findings…" /></Field>
-      <p className="muted small wide">Use this for work done before the system, or not covered by a report. Ongoing jobs are better logged as Work.</p>
-      <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Save record</button></div>
+      {event ? <Field label="Reason for the change" wide hint="Kept with the record and in the audit trail.">
+        <input required maxLength="500" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="e.g. Date typed wrong; job card says 14 Sept" /></Field>
+        : <p className="muted small wide">Use this for work done before the system, or not covered by a report. Ongoing jobs are better logged as Work.</p>}
+      <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{event ? 'Save changes' : 'Save record'}</button></div>
     </form>
   </Modal>;
 }

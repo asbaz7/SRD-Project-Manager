@@ -255,12 +255,24 @@ export default async function workRoutes(app) {
 
   app.patch('/work/:id', manager, async (req) => {
     const { id: workId } = parse(serialParam, req.params);
-    const patch = parse(body.omit({ island_id: true, asset_id: true, facility_id: true, service: true }).partial(), req.body);
+    const patch = parse(body.omit({ island_id: true, facility_id: true, service: true }).partial(), req.body);
     for (const k of Object.keys(patch)) if (!(k in (req.body || {}))) delete patch[k];
     const current = one((await db.query(
       'select island_id, status, completed_on, kind, asset_id, dest_facility_id, dest_tag from work_orders where id = $1', [workId])).rows, 'Work');
     technicalOnly(req.user);
     await assertIslandWrite(db, req.user, { islandId: current.island_id });
+    // Logged on the wrong engine: moving it to another one moves its
+    // history entry too (see log_completed_work). Not for moves.
+    if (patch.asset_id !== undefined) {
+      if (patch.asset_id === current.asset_id) delete patch.asset_id;
+      else if (current.kind === 'relocation') throw badRequest('The genset being moved cannot be changed. Cancel this move and start a new one.');
+      else if (!patch.asset_id) throw badRequest('Choose the asset the work was on');
+      else {
+        const at = await locate(db, { asset_id: patch.asset_id });
+        await assertIslandWrite(db, req.user, { islandId: at.island_id });
+        Object.assign(patch, { island_id: at.island_id, facility_id: at.facility_id, service: at.service });
+      }
+    }
     if (patch.kind && patch.kind !== current.kind && (patch.kind === 'relocation' || current.kind === 'relocation')) {
       throw badRequest('A genset move cannot be changed into other work, or the other way round');
     }
@@ -280,7 +292,7 @@ export default async function workRoutes(app) {
     }
     if (patch.status === 'completed' && !patch.completed_on) patch.completed_on = current.completed_on || new Date().toISOString().slice(0, 10);
     if (patch.status && !['completed', 'cancelled'].includes(patch.status)) patch.completed_on = null;
-    const set = updateSet(patch, COLS);
+    const set = updateSet(patch, [...COLS, 'asset_id', 'island_id', 'facility_id', 'service']);
     let move = null;
     await db.tx(req.user.id, async (t) => {
       await t.query(`update work_orders set ${set.sql} where id = $1`, [workId, ...set.values]);

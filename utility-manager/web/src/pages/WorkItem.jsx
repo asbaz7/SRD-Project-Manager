@@ -28,11 +28,23 @@ function WorkView({ work: w, reload }) {
     reload();
   });
   const open = !['completed', 'cancelled'].includes(w.status);
+  // Completed by mistake or too early: back to in progress, with the reason
+  // in the updates. Its entry in the engine's history is taken back.
+  const reopen = useSubmit(async () => {
+    const why = window.prompt('Why is this being reopened?');
+    if (!why?.trim()) return;
+    await api(`/work/${w.id}/updates`, { method: 'POST', body: { body: `Reopened: ${why.trim()}`, status: 'in_progress' } });
+    reload();
+  });
 
   if (editing) return <WorkForm work={w} onDone={() => { setEditing(false); reload(); }} />;
   return <>
     <PageHead title={w.title} crumbs={[{ to: '/work', label: 'Work' }, { label: w.ref }]}
-      actions={writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>} />
+      actions={writable && <>
+        {w.status === 'completed' && w.kind !== 'relocation' && <button className="btn" disabled={reopen.busy} onClick={reopen.submit}>Reopen</button>}
+        <button className="btn" onClick={() => setEditing(true)}>Edit</button>
+      </>} />
+    <ErrorBox error={reopen.error} />
     <div className="grid-2">
       <Card title="Details">
         {w.kind === 'relocation' && <MoveStages status={w.status} />}
@@ -52,7 +64,7 @@ function WorkView({ work: w, reload }) {
           <dt>Logged by</dt><dd>{w.created_by_name || '—'} · {dateTime(w.created_at)}</dd>
         </dl>
         {w.description && <p className="pre">{w.description}</p>}
-        {w.status === 'completed' && w.asset_id && w.kind !== 'relocation' && <p className="muted small">✓ Added to the engine's maintenance history.</p>}
+        {w.status === 'completed' && w.asset_id && w.kind !== 'relocation' && <p className="muted small">✓ Added to the engine's maintenance history. Editing the asset or completion date, or reopening, moves or takes back that entry.</p>}
         {w.kind === 'relocation' && w.status === 'completed' && <p className="muted small">✓ Transferred to {w.dest_island_name}, with its history.</p>}
         {w.kind === 'relocation' && ['dismantling', 'in_transit', 'installing'].includes(w.status) && <p className="muted small">It shows as out of service until the move is completed.</p>}
       </Card>
@@ -143,7 +155,7 @@ function WorkForm({ work, onDone }) {
   const finished = work && ['completed', 'cancelled'].includes(work.status);
   const destIsland = useApi(isMove && f.dest_island_id && !finished ? `/islands/${f.dest_island_id}` : null);
   const islandId = f.island_id || asset.data?.island_id || '';
-  const island = useApi(islandId && !work ? `/islands/${islandId}` : null);
+  const island = useApi(islandId && (!work || !isMove) ? `/islands/${islandId}` : null);
   const assets = (island.data?.facilities || []).filter((x) => x.active && (!f.service || x.service === f.service))
     .flatMap((x) => x.assets.filter((a) => a.active).map((a) => ({ ...a, service: x.service })));
   const set = (k) => (v) => setF((prev) => ({ ...prev, [k]: v?.target ? v.target.value : v }));
@@ -165,7 +177,8 @@ function WorkForm({ work, onDone }) {
       ...(isMove && !finished ? { dest_facility_id: f.dest_facility_id || null, dest_tag: f.dest_tag || moving?.tag || null } : {}),
     };
     if (work) {
-      await api(`/work/${work.id}`, { method: 'PATCH', body: { ...body, completed_on: f.completed_on || null } });
+      await api(`/work/${work.id}`, { method: 'PATCH', body: { ...body, completed_on: f.completed_on || null,
+        ...(!isMove && f.asset_id && f.asset_id !== work.asset_id ? { asset_id: f.asset_id } : {}) } });
       onDone();
     } else {
       const created = await api('/work', { method: 'POST', body: { ...body, island_id: islandId || null, asset_id: f.asset_id || null, service: f.service || null } });
@@ -186,6 +199,9 @@ function WorkForm({ work, onDone }) {
           <Field label={isMove ? 'Genset / asset being moved' : 'Asset (optional)'} hint={isMove ? '' : 'Leave empty for work on the plant or island as a whole.'}>
             <Select required={isMove} value={f.asset_id} onChange={(v) => setF({ ...f, asset_id: v, service: v ? assets.find((a) => a.id === v)?.service || f.service : f.service })} placeholder="— whole island —" options={assets.map((a) => [a.id, `${ASSET_KINDS[a.kind]} ${a.tag}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>
         </>}
+        {work && !isMove && <Field label="Asset" hint={work.asset_id ? 'Logged on the wrong one? Pick the right one here.' : 'Leave empty for work on the plant or island as a whole.'}>
+          <Select value={f.asset_id || ''} onChange={set('asset_id')} placeholder={work.asset_id ? undefined : '— whole island —'}
+            options={assets.filter((a) => a.service === work.service).map((a) => [a.id, `${ASSET_KINDS[a.kind]} ${a.tag}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>}
         <Field label="Type"><Select value={f.kind} disabled={!!work && work.kind === 'relocation'}
           onChange={(v) => setF({ ...f, kind: v, status: v === 'relocation' ? 'planned' : (f.status in statesFor(v) ? f.status : 'in_progress') })} options={kinds} /></Field>
         <Field label={isMove ? 'Stage' : 'Status'}><Select value={f.status} onChange={set('status')} options={states} /></Field>
@@ -206,7 +222,7 @@ function WorkForm({ work, onDone }) {
         <Field label="Assigned to"><input value={f.assigned_to || ''} onChange={set('assigned_to')} placeholder="Team or contractor" /></Field>
         <Field label="Started"><input type="date" value={f.started_on || ''} onChange={set('started_on')} /></Field>
         <Field label="Target date"><input type="date" value={f.target_on || ''} onChange={set('target_on')} /></Field>
-        {work && <Field label="Completed on"><input type="date" value={f.completed_on || ''} onChange={set('completed_on')} /></Field>}
+        {work && <Field label="Completed on" hint={work.status === 'completed' && work.asset_id && !isMove ? "Changing it moves the date in the engine's history." : ''}><input type="date" value={f.completed_on || ''} onChange={set('completed_on')} /></Field>}
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={() => (work ? onDone() : navigate(-1))}>Cancel</button>
           <button className="btn primary" disabled={busy}>{work ? 'Save changes' : 'Log work'}</button>

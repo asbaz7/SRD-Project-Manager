@@ -329,6 +329,51 @@ describe('work and maintenance history', () => {
     assert.equal((await call('DELETE', `/maintenance/${fromReport.id}`, { token: manager })).status, 403);
   });
 
+  test('a completed work order logged on the wrong engine can be moved, redated and reopened', async () => {
+    const island = (await call('GET', `/islands/${maafushi.id}`, { token: admin })).body;
+    const g3 = island.facilities[0].assets.find((a) => a.kind === 'genset' && a.tag === '3');
+    const history = async (assetId) => (await call('GET', `/assets/${assetId}`, { token: admin })).body.maintenance
+      .filter((e) => e.kind === 'alternator_service' && e.source === 'work');
+    const w = (await call('POST', '/work', { token: manager, body: {
+      asset_id: g2.id, kind: 'alternator_service', title: 'Gen 3 alternator periodic service', status: 'completed', completed_on: '2026-10-07' } })).body;
+    assert.deepEqual((await history(g2.id)).map((e) => e.done_on), ['2026-10-07']);
+
+    const moved = await call('PATCH', `/work/${w.id}`, { token: manager, body: { asset_id: g3.id } });
+    assert.equal(moved.status, 200, JSON.stringify(moved.body));
+    assert.equal(moved.body.asset_tag, '3');
+    assert.deepEqual(await history(g2.id), [], 'taken back from the wrong engine');
+    assert.deepEqual((await history(g3.id)).map((e) => [e.done_on, e.work_id]), [['2026-10-07', w.id]]);
+
+    await call('PATCH', `/work/${w.id}`, { token: manager, body: { completed_on: '2026-10-06' } });
+    assert.deepEqual((await history(g3.id)).map((e) => e.done_on), ['2026-10-06'], 'date follows the work order');
+
+    const reopened = await call('POST', `/work/${w.id}/updates`, { token: manager, body: { body: 'Reopened: not finished', status: 'in_progress' } });
+    assert.equal(reopened.status, 201);
+    assert.deepEqual(await history(g3.id), [], 'reopening takes the entry back');
+    const audit = (await call('GET', `/audit?entity=work_orders&entity_id=${w.id}`, { token: admin })).body.items;
+    assert.ok(audit.some((l) => l.changes.asset_id), 'engine change is in the audit trail');
+  });
+
+  test('maintenance records can be corrected with a reason', async () => {
+    const add = (await call('POST', `/assets/${g2.id}/maintenance`, { token: manager, body: { kind: 'battery_change', done_on: '2026-03-01' } })).body;
+    assert.equal((await call('PATCH', `/maintenance/${add.id}`, { token: manager, body: { done_on: '2026-03-10' } })).status, 400, 'reason required');
+    const fixed = await call('PATCH', `/maintenance/${add.id}`, { token: manager, body: { done_on: '2026-03-10', running_hours: 9500, reason: 'Date typed wrong' } });
+    assert.equal(fixed.status, 200, JSON.stringify(fixed.body));
+    assert.equal(fixed.body.done_on, '2026-03-10');
+    assert.equal(fixed.body.edit_reason, 'Date typed wrong');
+    const audit = (await call('GET', `/audit?entity=maintenance_events&entity_id=${add.id}`, { token: admin })).body.items;
+    assert.equal(audit[0].changes.edit_reason.to, 'Date typed wrong');
+
+    const asset = (await call('GET', `/assets/${g2.id}`, { token: admin })).body;
+    const fromReport = asset.maintenance.find((e) => e.source === 'report');
+    assert.equal((await call('PATCH', `/maintenance/${fromReport.id}`, { token: manager, body: { notes: 'x', reason: 'y' } })).status, 403);
+    const fromWork = asset.maintenance.find((e) => e.source === 'work');
+    const redate = await call('PATCH', `/maintenance/${fromWork.id}`, { token: manager, body: { done_on: '2026-01-01', reason: 'y' } });
+    assert.equal(redate.status, 400);
+    assert.match(redate.body.error?.message || JSON.stringify(redate.body), /work order/);
+    assert.equal((await call('PATCH', `/maintenance/${fromWork.id}`, { token: manager, body: { running_hours: 10600, reason: 'Hours from log sheet' } })).status, 200);
+  });
+
   test('schedule fields can be set, and drive the due flags', async () => {
     const res = await call('PATCH', `/assets/${g2.id}`, { token: manager, body: { next_overhaul_hours: 10000 } });
     assert.equal(res.status, 200, JSON.stringify(res.body));
