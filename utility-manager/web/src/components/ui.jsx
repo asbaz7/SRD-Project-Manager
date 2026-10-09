@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Icon } from './icons.jsx';
 import { ASSET_STATUS, CONDITIONS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES, date, month } from '../format.js';
@@ -166,13 +167,17 @@ export function Pager({ page, onOffset }) {
   );
 }
 
+// Drawn at page level (a portal): inside a glass card, the card's blur would
+// trap a fixed-position pop-up within the card, and clicks inside the pop-up
+// would land on the backdrop and close it.
 export function Modal({ title, onClose, children }) {
-  return (
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
         <header className="card-head"><h2>{title}</h2><button className="btn ghost" onClick={onClose} aria-label="Close">✕</button></header>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
