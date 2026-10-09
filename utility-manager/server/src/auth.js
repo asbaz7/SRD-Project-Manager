@@ -48,7 +48,8 @@ export const SESSION_COOKIE = 'srd_session';
 const sha256 = (token) => createHash('sha256').update(token).digest();
 
 export async function createSession(db, userId, { ttlHours, ip, userAgent }) {
-  const token = randomBytes(32).toString('base64url');
+  let token = randomBytes(32).toString('base64url');
+  while (token.startsWith(API_TOKEN_PREFIX)) token = randomBytes(32).toString('base64url');   // keep apart from access tokens
   const expiresAt = new Date(Date.now() + ttlHours * 3600_000);
   await db.query(
     `insert into sessions (token_hash, user_id, expires_at, ip, user_agent) values ($1, $2, $3, $4, $5)`,
@@ -61,8 +62,34 @@ export async function destroySession(db, token) {
   if (token) await db.query('delete from sessions where token_hash = $1', [sha256(token)]);
 }
 
+// Access tokens for other systems start with this; sessions don't.
+export const API_TOKEN_PREFIX = 'srd_';
+
+export async function createApiToken() {
+  const token = API_TOKEN_PREFIX + randomBytes(32).toString('base64url');
+  return { token, hash: sha256(token), hint: token.slice(-4) };
+}
+
+async function loadApiToken(db, token) {
+  const { rows } = await db.query(`
+    select t.id as token_id, t.last_used_at, u.id, u.email, u.full_name, u.role, u.technical, u.permissions,
+           coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
+                    filter (where sc.id is not null), '[]') as scopes
+      from api_tokens t join users u on u.id = t.user_id and u.active
+      left join user_scopes sc on sc.user_id = u.id
+     where t.token_hash = $1 and t.revoked_at is null
+     group by t.id, u.id`, [sha256(token)]);
+  const row = rows[0];
+  if (!row) return null;
+  if (!row.last_used_at || Date.now() - new Date(row.last_used_at).getTime() > 5 * 60_000) {
+    db.query('update api_tokens set last_used_at = now() where id = $1', [row.token_id]).catch(() => {});
+  }
+  return { ...row, must_change_password: false, viaToken: true };
+}
+
 export async function loadSession(db, token) {
   if (!token || token.length > 100) return null;
+  if (token.startsWith(API_TOKEN_PREFIX)) return toUser(await loadApiToken(db, token));
   const { rows } = await db.query(
     `select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical, u.permissions,
             s.last_seen_at, s.expires_at,
@@ -81,6 +108,11 @@ export async function loadSession(db, token) {
   if (Date.now() - new Date(row.last_seen_at).getTime() > 5 * 60_000) {
     db.query('update sessions set last_seen_at = now() where token_hash = $1', [sha256(token)]).catch(() => {});
   }
+  return toUser(row);
+}
+
+function toUser(row) {
+  if (!row) return null;
   const scopes = typeof row.scopes === 'string' ? JSON.parse(row.scopes) : row.scopes;
   return {
     id: row.id,
@@ -92,6 +124,7 @@ export async function loadSession(db, token) {
     // Staff: what this person may do beyond viewing (see allowed()).
     permissions: typeof row.permissions === 'string' ? row.permissions.replace(/[{}]/g, '').split(',').filter(Boolean) : (row.permissions || []),
     mustChangePassword: row.must_change_password,
+    viaToken: !!row.viaToken,
     scope: {
       region: scopes.some((s) => !s.atoll_id && !s.island_id),
       atollIds: scopes.filter((s) => s.atoll_id).map((s) => s.atoll_id),

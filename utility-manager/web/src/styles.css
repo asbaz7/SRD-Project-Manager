@@ -488,3 +488,6 @@ input:disabled, select:disabled { opacity: .7; }
   .card { box-shadow: none !important; backdrop-filter: none !important; break-inside: avoid; }
 }
 .survey-grid th[scope=row] { text-transform: none; letter-spacing: normal; }
+
+.token-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.token-box code { padding: 6px 10px; border-radius: 8px; background: var(--glass-strong); word-break: break-all; font-size: .85rem; }

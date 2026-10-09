@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { Async, Card, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import { PERMISSIONS, ROLES, date } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
+import AccessTokens from '../components/AccessTokens.jsx';
 
 export default function Users() {
   const state = useApi('/users');
@@ -19,7 +20,7 @@ export default function Users() {
         <table>
           <thead><tr><th>Name</th><th>Role</th><th>Staff type</th><th className="hide-sm">Last sign-in</th><th /></tr></thead>
           <tbody>{users.map((u) => <tr key={u.id} className={u.active ? '' : 'inactive'}>
-            <td><strong>{u.full_name}</strong>{!u.active && ' (disabled)'}<br /><small className="muted">{u.email}{u.designation && ` · ${u.designation}`}</small></td>
+            <td><strong>{u.full_name}</strong>{!u.active && ' (disabled)'}{u.service_account && <span className="pill doc-type"> service account</span>}<br /><small className="muted">{u.email}{u.designation && ` · ${u.designation}`}</small></td>
             <td>{ROLES[u.role]}{u.role === 'staff' && <><br /><small className="muted">{u.permissions?.length ? u.permissions.map((p) => PERMISSIONS[p]?.[0]).join(', ') : 'View only'}</small></>}</td>
             <td>{u.role === 'admin' ? <span className="muted">All</span> : u.technical ? 'Technical' : 'Non-technical'}</td>
             <td className="hide-sm small">{u.last_login_at ? date(u.last_login_at) : <span className="muted">never</span>}</td>
@@ -28,6 +29,7 @@ export default function Users() {
         </table>
       )}</Async>
     </Card>
+    {state.data && <AccessTokens users={state.data} reload={state.reload} />}
     {editing && <UserForm user={editing.id ? editing : null} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); state.reload(); }} />}
   </>;
 }

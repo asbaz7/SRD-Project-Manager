@@ -168,6 +168,28 @@ icon and a label. Each service has its own identity colour.
 Work orders carry a `service` (migration 005): taken from the asset or
 facility, or chosen for island-wide work.
 
+## Other systems: access tokens (Oct 2026)
+
+Another system (the Fleet Manager connector) uses SRD as a **service
+account** (`users.service_account`, migration 021):
+- it cannot sign in with a password and is not listed among people;
+- it is a technical manager for the whole region by default.
+
+It authenticates with an **access token**: `Authorization: Bearer srd_…`.
+- Only the token's SHA-256 is stored, with its last 4 characters as a hint.
+- Administrators create and revoke tokens under Users → Access tokens
+  (`/admin/api-tokens`, `/admin/service-accounts`).
+- Its changes are audited under the account's name.
+
+**Data agreement with the Fleet Manager** (Oct 2026):
+- **SRD keeps:** faults, work orders, running status, moves, islands, and its
+  own condition report upload (kept as a fallback until the connector has
+  proved reliable).
+- **The Fleet Manager sends:** alternator service dates and nameplate
+  corrections, through the normal API.
+- **Linking:** assets are linked by engine serial. Edit assets; don't delete
+  and recreate them.
+
 ## Users: head office only (decided Oct 2026)
 
 The system is used only by department staff at head office. No island

@@ -1,5 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { hashPassword, passwordProblem, requireRole } from '../auth.js';
+import { createApiToken, hashPassword, passwordProblem, requireRole } from '../auth.js';
 import { badRequest } from '../errors.js';
 import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
 
@@ -33,7 +34,7 @@ const patch = create.omit({ email: true, password: true }).partial().extend({
 });
 
 const LIST_SQL = `
-  select u.id, u.email, u.full_name, u.designation, u.phone, u.role, u.technical, u.permissions, u.active,
+  select u.id, u.email, u.full_name, u.designation, u.phone, u.role, u.technical, u.permissions, u.active, u.service_account,
          u.must_change_password, u.last_login_at, u.created_at,
          coalesce(json_agg(json_build_object(
            'atoll_id', s.atoll_id, 'island_id', s.island_id,
@@ -64,7 +65,7 @@ export default async function userRoutes(app) {
 
   // Lightweight list for pickers (project owner, etc.), visible to everyone signed in.
   app.get('/users/directory', async () => {
-    const { rows } = await db.query("select id, full_name, designation, role, (technical or role = 'admin') as technical from users where active order by full_name");
+    const { rows } = await db.query("select id, full_name, designation, role, (technical or role = 'admin') as technical from users where active and not service_account order by full_name");
     return rows;
   });
 
@@ -120,5 +121,46 @@ export default async function userRoutes(app) {
       }
     });
     return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id`, [userId])).rows, 'User');
+  });
+
+  // --- Access tokens for other systems (e.g. the Fleet Manager) --------------
+  app.get('/admin/api-tokens', admin, async () => (await db.query(`
+    select t.id, t.name, t.token_hint, t.created_at, t.last_used_at, t.revoked_at, u.id as user_id, u.full_name as user_name,
+           c.full_name as created_by_name
+      from api_tokens t join users u on u.id = t.user_id left join users c on c.id = t.created_by
+     order by t.revoked_at nulls first, t.created_at desc`)).rows);
+
+  // The token is returned once; only its hash is kept.
+  app.post('/admin/api-tokens', admin, async (req, reply) => {
+    const b = parse(z.object({ user_id: id, name: text(100) }), req.body);
+    one((await db.query('select id from users where id = $1 and active', [b.user_id])).rows, 'User');
+    const t = await createApiToken();
+    const { rows } = await db.tx(req.user.id, (tx) => tx.query(`
+      insert into api_tokens (user_id, name, token_hash, token_hint, created_by) values ($1, $2, $3, $4, $5) returning id`,
+    [b.user_id, b.name, t.hash, t.hint, req.user.id]));
+    reply.code(201);
+    return { id: rows[0].id, token: t.token };
+  });
+
+  app.delete('/admin/api-tokens/:id', admin, async (req) => {
+    const { id: tokenId } = parse(z.object({ id: z.coerce.number().int().positive() }), req.params);
+    await db.tx(req.user.id, (tx) => tx.query('update api_tokens set revoked_at = now() where id = $1 and revoked_at is null', [tokenId]));
+    return { ok: true };
+  });
+
+  // A service account: for another system to act as, with a token. It can't
+  // sign in with a password and isn't listed among people.
+  app.post('/admin/service-accounts', admin, async (req, reply) => {
+    const b = parse(z.object({ full_name: text(200), email: z.string().trim().toLowerCase().email().max(200),
+      role: z.enum(['manager', 'viewer']).default('manager'), technical: z.boolean().default(true) }), req.body);
+    const hash = await hashPassword(randomBytes(32).toString('base64url'));   // random and never shown: no password sign-in
+    const user = await db.tx(req.user.id, async (t) => {
+      const { rows } = await t.query(`insert into users (email, full_name, role, technical, password_hash, must_change_password, service_account)
+        values ($1, $2, $3, $4, $5, false, true) returning id`, [b.email, b.full_name, b.role, b.technical, hash]);
+      await writeScopes(t, rows[0].id, [{ region: true }]);
+      return rows[0];
+    });
+    reply.code(201);
+    return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id`, [user.id])).rows, 'User');
   });
 }

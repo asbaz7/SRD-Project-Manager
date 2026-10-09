@@ -25,7 +25,7 @@ export default async function authRoutes(app) {
   }, async (req, reply) => {
     const { email, password } = parse(login, req.body);
     const { rows } = await db.query(
-      'select id, password_hash from users where lower(email) = $1 and active',
+      'select id, password_hash from users where lower(email) = $1 and active and not service_account',
       [email],
     );
     const user = rows[0];
