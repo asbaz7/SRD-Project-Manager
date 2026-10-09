@@ -472,22 +472,6 @@ input:disabled, select:disabled { opacity: .7; }
 .project-form > .btn { justify-self: start; }
 .task-progress .grow { flex: 1; min-width: 0; }
 
-/* Surveys */
-.survey-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px; position: sticky; top: 8px; z-index: 5; }
-.survey-bar .grow { flex: 1; }
-.survey-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-.survey-fields .field.wide { grid-column: 1 / -1; }
-.survey-grid { min-width: 100%; }
-.survey-grid th[scope=row] { text-align: left; font-weight: 500; font-size: .85rem; color: var(--text-2); min-width: 220px; max-width: 300px; white-space: normal; }
-.survey-grid td { min-width: 130px; }
-.survey-grid td input, .survey-grid td select, .survey-grid td textarea { width: 100%; min-width: 110px; }
-.survey-grid thead th { white-space: nowrap; }
-@media print {
-  .sidebar, .topbar, .bottom-bar, .survey-bar, .page-head .btn, .file-pick { display: none !important; }
-  body { background: #fff !important; }
-  .card { box-shadow: none !important; backdrop-filter: none !important; break-inside: avoid; }
-}
-.survey-grid th[scope=row] { text-transform: none; letter-spacing: normal; }
 
 .token-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .token-box code { padding: 6px 10px; border-radius: 8px; background: var(--glass-strong); word-break: break-all; font-size: .85rem; }

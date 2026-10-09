@@ -16,7 +16,6 @@ const MORE = [
   { to: '/incidents', label: 'Incidents', icon: 'incident' },
   { to: '/projects', label: 'Projects', icon: 'project' },
   { to: '/documents', label: 'Documents', icon: 'document' },
-  { to: '/surveys', label: 'Surveys', icon: 'survey' },
   { to: '/islands', label: 'Islands', icon: 'island' },
 ];
 const ADMIN = [
@@ -50,8 +49,8 @@ export default function Layout() {
   const admin = ADMIN.filter((n) => can(n.role));
   // Non-technical staff don't have the service sections (engines, assets,
   // plants); work, incidents and projects move up instead.
-  const main = technical ? MAIN : [MAIN[0], ...MORE.slice(0, 5)];
-  const more = technical ? MORE : MORE.slice(5);
+  const main = technical ? MAIN : [MAIN[0], ...MORE.slice(0, 4)];
+  const more = technical ? MORE : MORE.slice(4);
 
   return (
     <div className="shell">

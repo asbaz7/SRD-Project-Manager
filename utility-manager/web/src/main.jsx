@@ -14,8 +14,6 @@ import Incident from './pages/Incident.jsx';
 import Projects from './pages/Projects.jsx';
 import Documents from './pages/Documents.jsx';
 import Document from './pages/Document.jsx';
-import Surveys, { NewSurvey } from './pages/Surveys.jsx';
-import Survey from './pages/Survey.jsx';
 import Project from './pages/Project.jsx';
 import Users from './pages/Users.jsx';
 import Audit from './pages/Audit.jsx';
@@ -64,9 +62,6 @@ createRoot(document.getElementById('root')).render(
             <Route path="documents" element={<Documents />} />
             <Route path="documents/new" element={<Document />} />
             <Route path="documents/:id" element={<Document />} />
-            <Route path="surveys" element={<Surveys />} />
-            <Route path="surveys/new" element={<NewSurvey />} />
-            <Route path="surveys/:id" element={<Survey />} />
             <Route path="admin/users" element={<Users />} />
             <Route path="admin/audit" element={<Audit />} />
             <Route path="*" element={<NotFound />} />

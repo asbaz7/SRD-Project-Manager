@@ -74,7 +74,6 @@ export const PERMISSIONS = {
   incidents: ['Report incidents', 'Report incidents and edit the ones they reported'],
   work: ['Update work', 'Post updates and move work along (not create, complete or cancel it)'],
   projects: ['Create projects', 'Start projects and share them with chosen people'],
-  surveys: ['Carry out surveys', 'Start and fill in surveys (technical surveys need technical staff type)'],
 };
 
 export function num(value, digits = 0) {

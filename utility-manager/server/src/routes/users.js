@@ -5,7 +5,7 @@ import { badRequest } from '../errors.js';
 import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
 
 const role = z.enum(['admin', 'manager', 'staff', 'viewer']);
-const PERMISSIONS = ['documents', 'incidents', 'work', 'projects', 'surveys'];
+const PERMISSIONS = ['documents', 'incidents', 'work', 'projects'];
 // A scope is one island, one atoll, or { region: true }.
 const scope = z.union([
   z.object({ island_id: id }),

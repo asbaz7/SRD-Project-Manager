@@ -28,7 +28,6 @@ import workRoutes from './routes/work.js';
 import serviceRoutes from './routes/services.js';
 import telegramRoutes from './routes/telegram.js';
 import documentRoutes from './routes/documents.js';
-import surveyRoutes from './routes/surveys.js';
 
 const PREFIX = '/api/v1';
 const PUBLIC_ROUTES = new Set([`${PREFIX}/auth/login`, `${PREFIX}/health`, `${PREFIX}/telegram/webhook`]);
@@ -226,7 +225,7 @@ export async function buildApp({ db, config, logger = true }) {
     return { ok: true };
   });
   for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes,
-    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes, documentRoutes, surveyRoutes]) {
+    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes, documentRoutes]) {
     await routes(api);
   }
   // Unknown API paths: still require sign-in, then 404.

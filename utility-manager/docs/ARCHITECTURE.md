@@ -338,32 +338,11 @@ saying "not running":
 The status API returns the work, and the Telegram reply and down alert link
 to it.
 
-## Surveys (Oct 2026)
+## Surveys: in the Fleet Manager (Oct 2026)
 
-Migration 019, `src/surveyTemplates.js`, `routes/surveys.js`, pages
-`Surveys.jsx` and `Survey.jsx`.
-
-- **Templates:** each survey type is a template (sections of fields, or
-  repeating groups shown as columns, such as gensets, feeders and pumping
-  stations). Templates are defined in code. Current types:
-  - `island_assessment`: the powerhouse takeover form, from
-    "Island Assessment - Dh. Bandidhoo.xlsx". It is technical.
-  - `general`: a general site survey.
-
-  Adding a type means adding a template; the pages draw any template.
-- **Answers:** stored as JSON in `surveys.answers`, cleaned against the
-  template (`cleanAnswers`). Unknown fields, bad dates and choices not in the
-  list are dropped.
-- **Place:** a survey is for an island in the register, or a typed place name
-  (e.g. islands not yet in the system).
-- **Status:** draft or completed. Photos and files go in `survey_files`, and
-  answers export as CSV.
-- **Fill from register** fills the powerhouse and genset columns from an
-  island's register.
-- **Access:** technical templates are hidden from non-technical staff.
-  Managers and staff with the new `surveys` permission start surveys.
-  Whoever started one, managers and administrators edit it. Administrators,
-  or the starter while it is a draft, can delete it.
+A Surveys section was built (migration 019) and then removed (migration
+022): surveys, and confirming "unverified" gensets, are done in the Fleet
+Manager, so there is one place for them.
 
 ## Engine state: one answer (Oct 2026)
 

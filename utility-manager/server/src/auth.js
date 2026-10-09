@@ -152,7 +152,7 @@ export function hasRole(user, minimum) {
 }
 
 // Managers and administrators may do everything of a kind; staff only what
-// their permissions list (documents, incidents, work, projects, surveys).
+// their permissions list (documents, incidents, work, projects).
 export function allowed(user, permission) {
   if (!user) return false;
   if (hasRole(user, 'manager')) return true;
