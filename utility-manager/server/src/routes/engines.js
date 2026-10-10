@@ -14,7 +14,10 @@ export const ENGINE_SELECT = `
   select s.id, s.tag, s.make_model, s.serial_no, s.rated_capacity, s.operating_capacity, s.capacity_unit,
          s.status, s.status_note, s.status_at, s.alt_make, s.alt_kw,
          s.next_overhaul_hours, s.next_overhaul_on, s.next_alt_service_on,
-         f.id as facility_id, f.name as facility_name, i.id as island_id, i.name as island_name, i.atoll_id, a.code as atoll_code,
+         f.id as facility_id, f.name as facility_name,
+         (select count(*) from facilities f2 where f2.island_id = f.island_id and f2.active and f2.service = 'electricity'
+             and f2.kind = 'powerhouse') > 1 as shared_island,
+         i.id as island_id, i.name as island_name, i.atoll_id, a.code as atoll_code,
          c.report_month, c.reported_on, c.condition, c.report_condition, c.condition_source, c.condition_note, c.condition_at, c.status_text, c.fault, c.total_hours, c.hours_since_overhaul,
          c.last_overhaul_on as report_overhaul_on, c.last_alt_service_on as report_alt_service_on,
          c.needs_overhaul, c.alt_needs_service, c.max_load_kw, c.capable_kw, c.last_valve_on, c.last_battery_on,
@@ -91,6 +94,9 @@ export function describeEngine(e, today, expected, intervals = []) {
   e.alt_service_rule = altSet ? 'set' : e.next_alt_service_due ? 'interval' : null;
   e.alt_requested = !!e.alt_needs_service;
   e.alt_service_due = !!(e.alt_needs_service || (e.next_alt_service_due && e.next_alt_service_due <= today));
+  // Retired engines raise nothing.
+  e.retired = e.status === 'decommissioned';
+  if (e.retired) Object.assign(e, { overhaul_due: false, alt_service_due: false, overhaul_requested: false, alt_requested: false });
   e.report_stale = !!e.report_month && e.report_month >= REPORTS_TRACKED_FROM && e.report_month < expected;
   delete e.total_count;
   return e;
@@ -120,7 +126,7 @@ export async function mvToday(db, tz) {
 const listQuery = z.object({
   atoll_id: id.optional(),
   island_id: id.optional(),
-  condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults']).optional(),
+  condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults', 'retired']).optional(),
   flag: z.enum(['overhaul', 'alternator', 'work', 'stale']).optional(),
   q: z.string().max(100).optional(),
   sort: z.enum(['island', 'condition', 'hours_since_overhaul', 'total_hours', 'last_overhaul', 'last_alt_service', 'next_service']).default('island'),
@@ -142,8 +148,11 @@ export default async function engineRoutes(app) {
     const q = parse(listQuery, req.query);
     const w = new Where().raw("s.kind = 'genset' and s.active")
       .add('i.atoll_id = ?', q.atoll_id).add('i.id = ?', q.island_id)
-      .add('(s.tag ilike ? or s.make_model ilike ? or i.name ilike ? or s.serial_no ilike ? or c.fault ilike ?)', q.q && `%${q.q}%`);
-    if (q.condition === 'no_report') w.raw('c.asset_id is null');
+      .add('(s.tag ilike ? or s.make_model ilike ? or i.name ilike ? or f.name ilike ? or s.serial_no ilike ? or c.fault ilike ?)', q.q && `%${q.q}%`);
+    // Retired (decommissioned) engines only when asked for.
+    if (q.condition === 'retired') w.raw("s.status = 'decommissioned'");
+    else w.raw("s.status <> 'decommissioned'");
+    if (q.condition === 'retired' || !q.condition) { /* no condition filter */ } else if (q.condition === 'no_report') w.raw('c.asset_id is null');
     else if (q.condition === 'faults') w.raw("c.condition in ('minor_fault', 'major_fault', 'not_running')");
     else w.add('c.condition = ?', q.condition);
     if (q.flag === 'work') w.raw("exists (select 1 from work_orders x where x.asset_id = s.id and x.status not in ('completed', 'cancelled'))");
@@ -198,6 +207,10 @@ export default async function engineRoutes(app) {
         alt_requested: count((e) => e.alt_requested),
         overhaul_requested: count((e) => e.overhaul_requested),
         with_work: count((e) => e.open_work.length),
+        retired: q.condition === 'retired' ? engines.length
+          : Number((await db.query(`select count(*) from assets s join facilities f on f.id = s.facility_id and f.active
+              join islands i on i.id = f.island_id and i.active where s.kind = 'genset' and s.active and s.status = 'decommissioned'
+              and ($1::uuid is null or i.atoll_id = $1)`, [q.atoll_id ?? null])).rows[0].count),
       },
       engines,
     };

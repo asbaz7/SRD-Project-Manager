@@ -4,11 +4,12 @@ import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, FACILITY_KINDS, WORK_KINDS, date, month, num, peakLoad, withUnit } from '../format.js';
-import { useApi } from '../hooks.js';
+import { useApi, useRowLink } from '../hooks.js';
 
 export default function Island() {
   const { id } = useParams();
   const state = useApi(`/islands/${id}`);
+  const rowLink = useRowLink();
   const { can, allowed } = useAuth();
   const [modal, setModal] = useState(null);
   const saved = () => { setModal(null); state.reload(); };
@@ -61,10 +62,15 @@ export default function Island() {
                 {peakLoad(r) && ` · peak ${peakLoad(r)}`} · <Link to="/electricity/reports">upload</Link></>;
             })()}
           </p>}
-          {f.assets.length === 0 ? <Empty>No assets recorded.</Empty> :
+          {(() => {
+            // In use first; retired (decommissioned or not in use) folded away.
+            const retired = f.assets.filter((a) => !a.active || a.status === 'decommissioned');
+            const current = f.assets.filter((a) => !retired.includes(a));
+            return <>
+          {current.length === 0 ? <Empty>No assets in use recorded.</Empty> :
             <table>
               <thead><tr><th>Asset</th><th>Status</th>{f.kind === 'powerhouse' && <><th>Condition</th><th className="num hide-sm">Since overhaul</th><th className="hide-sm">Last overhaul</th></>}<th className="num">Rated</th><th className="num hide-sm">Operating</th></tr></thead>
-              <tbody>{f.assets.map((a) => <tr key={a.id} className={a.active ? '' : 'inactive'}>
+              <tbody>{current.map((a) => <tr key={a.id} {...rowLink(`/assets/${a.id}`)}>
                 <td className="wrap"><Link to={`/assets/${a.id}`}><strong>{ASSET_KINDS[a.kind]} {a.tag}</strong></Link><br /><small className="muted">{a.make_model || '—'}</small>
                   <div><Flags e={a} /></div></td>
                 <td className="wrap"><AssetStatus status={a.status} />
@@ -79,6 +85,16 @@ export default function Island() {
                 <td className="num hide-sm">{withUnit(a.operating_capacity, a.capacity_unit || '')}</td>
               </tr>)}</tbody>
             </table>}
+          {f.moved_away?.length > 0 && <p className="small">{f.moved_away.map((m, i) => <span key={m.id}>{i > 0 && <br />}
+            🚚 {ASSET_KINDS[m.kind]} {m.from_tag} moved to <Link to={`/assets/${m.asset_id}`}>{m.to_atoll}. {m.to_island} · {ASSET_KINDS[m.kind]} {m.to_tag}</Link>
+            <span className="muted"> on {date(m.moved_on)}{m.source === 'merge' ? ' (records merged)' : ''}</span></span>)}</p>}
+          {retired.length > 0 && <details className="small">
+            <summary className="muted">Retired or not in use ({retired.length})</summary>
+            <ul className="plain">{retired.map((a) => <li key={a.id}><Link to={`/assets/${a.id}`}>{ASSET_KINDS[a.kind]} {a.tag}</Link>
+              <span className="muted"> · {a.make_model || '—'}{a.serial_no ? ` · S/N ${a.serial_no}` : ''}{a.status_note ? ` · ${a.status_note}` : ''}</span></li>)}</ul>
+          </details>}
+            </>;
+          })()}
         </Card>
       ))}
       {island.notes && <Card title="Notes"><p className="pre">{island.notes}</p></Card>}

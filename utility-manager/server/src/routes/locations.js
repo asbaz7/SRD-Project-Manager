@@ -100,7 +100,7 @@ export default async function locationRoutes(app) {
                  where f.island_id = $1
                  order by s.kind, length(s.tag), s.tag`, [islandId]),
     ]);
-    const [{ rows: reports }, { rows: work }] = await Promise.all([
+    const [{ rows: reports }, { rows: work }, { rows: movedAway }] = await Promise.all([
       db.query(`select r.*, u.full_name as uploaded_by_name from powerhouse_reports r
                   join facilities f on f.id = r.facility_id left join users u on u.id = r.uploaded_by
                  where f.island_id = $1`, [islandId]),
@@ -113,6 +113,16 @@ export default async function locationRoutes(app) {
                                       where u.work_id = w.id order by u.created_at desc limit 1) lu on true
                  where w.island_id = $1 and w.status not in ('completed', 'cancelled')
                  order by w.created_at desc`, [islandId]),
+      // Assets that left this island's facilities: shown as events where
+      // they were, the record itself lives on where they went.
+      db.query(`select m.id, m.asset_id, m.from_facility_id, m.from_tag, m.to_tag, m.moved_on, m.source, s.kind,
+                       ti.id as to_island_id, ti.name as to_island, ta.code as to_atoll, tf.name as to_facility
+                  from asset_moves m join assets s on s.id = m.asset_id
+                  join facilities ff on ff.id = m.from_facility_id
+                  left join facilities tf on tf.id = m.to_facility_id left join islands ti on ti.id = tf.island_id
+                  left join atolls ta on ta.id = ti.atoll_id
+                 where ff.island_id = $1 and tf.island_id is distinct from $1
+                 order by m.moved_on desc limit 50`, [islandId]),
     ]);
     for (const s of assets) if (typeof s.open_work === 'string') s.open_work = JSON.parse(s.open_work);
     island.open_work = work;
@@ -125,7 +135,10 @@ export default async function locationRoutes(app) {
       return island;
     }
     island.reports = reports;
-    for (const f of facilities) f.assets = assets.filter((s) => s.facility_id === f.id);
+    for (const f of facilities) {
+      f.assets = assets.filter((s) => s.facility_id === f.id);
+      f.moved_away = movedAway.filter((m) => m.from_facility_id === f.id);
+    }
     island.facilities = facilities;
     return island;
   });

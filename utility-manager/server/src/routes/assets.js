@@ -3,7 +3,8 @@ import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
 import { expectedMonth } from '../reportImport.js';
 import { ENGINE_SELECT, describeEngine, loadIntervals, mvToday } from './engines.js';
 import { sendCsv } from '../csv.js';
-import { conflict } from '../errors.js';
+import { conflict, forbidden } from '../errors.js';
+import { mergeAssets } from '../assetMoves.js';
 import { assetName, esc } from '../telegram.js';
 import {
   Where, date, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
@@ -161,7 +162,7 @@ export default async function assetRoutes(app) {
     if (!q.include_inactive) w.raw('s.active and f.active');
     w.add('f.island_id = ?', q.island_id).add('i.atoll_id = ?', q.atoll_id).add('s.facility_id = ?', q.facility_id)
       .add('f.service = ?', q.service).add('s.kind = ?', q.kind).add('s.status = ?', q.status)
-      .add('(s.tag ilike ? or s.make_model ilike ? or i.name ilike ?)', q.q && `%${q.q}%`);
+      .add('(s.tag ilike ? or s.make_model ilike ? or i.name ilike ? or s.serial_no ilike ?)', q.q && `%${q.q}%`);
     const csv = q.format === 'csv';
     const { rows } = await db.query(
       `${ASSET_LIST} ${w.sql} order by a.code, i.name, f.name, s.kind, length(s.tag), s.tag
@@ -220,9 +221,9 @@ export default async function assetRoutes(app) {
       const today = await mvToday(db, app.config.timezone);
       const e = describeEngine(engine.rows[0], today, expectedMonth(today), await loadIntervals(db));
       asset.engine = (({ last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul, overhaul_due, overhaul_rule,
-        overhaul_requested, alt_service_due, alt_service_rule, alt_requested, next_alt_service_due, intervals, report_stale }) => ({
+        overhaul_requested, alt_service_due, alt_service_rule, alt_requested, next_alt_service_due, intervals, report_stale, shared_island }) => ({
         last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul, overhaul_due, overhaul_rule, overhaul_requested,
-        alt_service_due, alt_service_rule, alt_requested, next_alt_service_due, intervals, report_stale }))(e);
+        alt_service_due, alt_service_rule, alt_requested, next_alt_service_due, intervals, report_stale, shared_island }))(e);
       // Average running hours per month over the last year, to project the next overhaul.
       const log = asset.hours_log;
       if (log.length >= 2) {
@@ -257,6 +258,20 @@ export default async function assetRoutes(app) {
     return db.tx(req.user.id, async (t) => one((await t.query(
       `update assets set ${set.sql}${lock} where id = $1 returning *`,
       [assetId, ...set.values, ...(lock ? [body.serial_no] : [])])).rows, 'Asset'));
+  });
+
+  // Folds a duplicate record of this asset into it (e.g. a genset
+  // decommissioned at the island it left and registered again here),
+  // keeping both histories and recording the move.
+  app.post('/assets/:id/merge', manager, async (req) => {
+    const { id: assetId } = parse(idParam, req.params);
+    if (!req.user.technical) throw forbidden('Asset records are merged by technical staff');
+    const b = parse(z.object({ from_asset_id: id, moved_on: z.iso.date(), notes: optText(500) }), req.body);
+    await assertIslandWrite(db, req.user, { assetId });
+    await assertIslandWrite(db, req.user, { assetId: b.from_asset_id });
+    const move = await db.tx(req.user.id, (t) => mergeAssets(t, {
+      targetId: assetId, sourceId: b.from_asset_id, movedOn: b.moved_on, notes: b.notes, userId: req.user.id }));
+    return { ok: true, move };
   });
 
   // Status for one or many assets at once (e.g. the morning genset round).

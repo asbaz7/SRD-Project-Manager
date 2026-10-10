@@ -73,3 +73,57 @@ export async function checkMovePlan(db, { assetId, destFacilityId, destTag, work
   if (open.length) throw conflict(`This is already being moved (WO-${String(open[0].id).padStart(4, '0')}).`);
   return { asset, dest, tag };
 }
+
+// Folds a duplicate record of a genset (`sourceId`, e.g. the decommissioned
+// entry at the island it left) into the current one (`targetId`). Its
+// history moves across; where both have the same record (a maintenance
+// entry, a month's hours or report), the current one's is kept. The move is
+// recorded, register details the current one lacks are filled in, and the
+// duplicate is deleted (the audit trail keeps it).
+export async function mergeAssets(t, { targetId, sourceId, movedOn, notes = null, userId }) {
+  if (targetId === sourceId) throw badRequest('Choose a different record to merge in');
+  const { rows } = await t.query(`
+    select s.*, f.service, f.name as facility_name from assets s join facilities f on f.id = s.facility_id
+     where s.id = any($1::uuid[])`, [[targetId, sourceId]]);
+  const target = rows.find((r) => r.id === targetId);
+  const source = rows.find((r) => r.id === sourceId);
+  if (!target || !source) throw badRequest('Unknown asset');
+  if (target.kind !== source.kind || target.service !== source.service) throw badRequest('Only records of the same kind of asset can be merged');
+  const { rows: openMoves } = await t.query(`select id from work_orders where asset_id = any($1::uuid[]) and kind = 'relocation'
+                                               and status not in ('completed', 'cancelled')`, [[targetId, sourceId]]);
+  if (openMoves.length) throw conflict(`Finish or cancel the move in progress first (WO-${String(openMoves[0].id).padStart(4, '0')}).`);
+
+  const p = [targetId, sourceId];
+  await t.query(`update maintenance_events m set asset_id = $1 where asset_id = $2 and not exists (
+                   select 1 from maintenance_events x where x.asset_id = $1 and x.kind = m.kind and x.done_on = m.done_on)`, p);
+  await t.query(`update hours_log h set asset_id = $1 where asset_id = $2 and not exists (
+                   select 1 from hours_log x where x.asset_id = $1 and x.month = h.month)`, p);
+  await t.query(`update engine_reports r set asset_id = $1 where asset_id = $2 and not exists (
+                   select 1 from engine_reports x where x.asset_id = $1 and x.report_month = r.report_month and x.source = r.source)`, p);
+  // Latest condition: whichever report is newer.
+  await t.query(`delete from engine_conditions c where c.asset_id = $1 and exists (
+                   select 1 from engine_conditions s where s.asset_id = $2 and s.report_month > c.report_month)`, p);
+  await t.query(`update engine_conditions set asset_id = $1 where asset_id = $2
+                   and not exists (select 1 from engine_conditions x where x.asset_id = $1)`, p);
+  for (const table of ['asset_status_log', 'work_orders', 'incidents', 'asset_moves']) {
+    await t.query(`update ${table} set asset_id = $1 where asset_id = $2`, p);
+  }
+  // Blanks in the current register filled from the duplicate.
+  await t.query(`
+    update assets t set make_model = coalesce(t.make_model, s.make_model), serial_no = coalesce(t.serial_no, s.serial_no),
+           rated_capacity = coalesce(t.rated_capacity, s.rated_capacity), operating_capacity = coalesce(t.operating_capacity, s.operating_capacity),
+           commissioned_on = coalesce(t.commissioned_on, s.commissioned_on), fixed_asset_code = coalesce(t.fixed_asset_code, s.fixed_asset_code),
+           cpl_spec = coalesce(t.cpl_spec, s.cpl_spec), alt_make = coalesce(t.alt_make, s.alt_make), alt_serial = coalesce(t.alt_serial, s.alt_serial),
+           alt_frame = coalesce(t.alt_frame, s.alt_frame), alt_kw = coalesce(t.alt_kw, s.alt_kw)
+      from assets s where t.id = $1 and s.id = $2`, p);
+  const fromTag = String(source.tag).replace(/\s*\(removed[^)]*\)\s*$/, '');
+  const serials = source.serial_no && target.serial_no && source.serial_no !== target.serial_no
+    ? ` Serial numbers differed: ${source.serial_no} (old record) and ${target.serial_no}.` : '';
+  const { rows: [move] } = await t.query(`
+    insert into asset_moves (asset_id, from_facility_id, to_facility_id, from_tag, to_tag, moved_on, notes, source, moved_by)
+    values ($1, $2, $3, $4, $5, $6, $7, 'merge', $8) returning *`,
+  [targetId, source.facility_id, target.facility_id, fromTag, target.tag, movedOn,
+    `${notes ? `${notes}. ` : ''}Merged the record kept at ${source.facility_name} as ${source.kind === 'genset' ? 'Genset' : ''} ${fromTag}.${serials}`.trim(), userId]);
+  await t.query('delete from assets where id = $1', [sourceId]);
+  return move;
+}

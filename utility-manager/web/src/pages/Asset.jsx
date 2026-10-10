@@ -19,7 +19,7 @@ const ago = (iso) => {
 export default function Asset() {
   const { id } = useParams();
   const state = useApi(`/assets/${id}`);
-  const { can } = useAuth();
+  const { can, technical } = useAuth();
   const [modal, setModal] = useState(null);
   const [editEvent, setEditEvent] = useState(null);
   const done = () => { setModal(null); state.reload(); };
@@ -31,7 +31,7 @@ export default function Asset() {
     const e = a.engine || {};
     const openWork = a.work.filter((w) => !['completed', 'cancelled'].includes(w.status));
     return <>
-      <PageHead title={`${a.atoll_code} · ${a.island_name} · ${ASSET_KINDS[a.kind]} ${a.tag}`}
+      <PageHead title={`${a.atoll_code} · ${a.island_name}${e.shared_island ? ` · ${a.facility_name}` : ''} · ${ASSET_KINDS[a.kind]} ${a.tag}`}
         crumbs={[{ to: `/${a.service}${isEngine ? '/engines' : ''}`, label: isEngine ? 'Engines' : SERVICES[a.service]?.label || 'Assets' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${ASSET_KINDS[a.kind]} ${a.tag}` }]}
         actions={manage && <>
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
@@ -40,6 +40,7 @@ export default function Asset() {
           {!a.work.some((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status))
             && <Link className="btn ghost" to={`/work/new?kind=relocation&asset_id=${a.id}`}>Move</Link>}
           <button className="btn ghost" onClick={() => setModal('edit')}>Edit details</button>
+          {technical && <button className="btn ghost" onClick={() => setModal('merge')}>Merge a duplicate…</button>}
         </>}>
         {a.work.filter((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status)).map((w) => (
           <div key={w.id} className="notice">🚚 Being moved: <WorkState value={w.status} /> · <Link to={`/work/${w.id}`}>{w.ref} {w.title}</Link></div>
@@ -141,7 +142,7 @@ export default function Asset() {
           <td className="nowrap small">{date(m.moved_on)}</td>
           <td className="wrap"><strong>{m.from_atoll}. {m.from_island} · {ASSET_KINDS[a.kind]} {m.from_tag}</strong> → <strong>{m.to_atoll}. {m.to_island} · {ASSET_KINDS[a.kind]} {m.to_tag}</strong>
             {m.notes && !/^WO-\d+$/.test(m.notes) && <><br /><small className="muted">{m.notes}</small></>}</td>
-          <td className="small muted nowrap">{m.work_id && <><Link to={`/work/${m.work_id}`}>WO-{String(m.work_id).padStart(4, '0')}</Link><br /></>}{m.source === 'report' ? 'From condition report' : m.moved_by_name}</td>
+          <td className="small muted nowrap">{m.work_id && <><Link to={`/work/${m.work_id}`}>WO-{String(m.work_id).padStart(4, '0')}</Link><br /></>}{m.source === 'report' ? 'From condition report' : m.source === 'merge' ? `Records merged · ${m.moved_by_name || ''}` : m.moved_by_name}</td>
         </tr>)}</tbody></table>
       </Card>}
       {isEngine && <Card title="Maintenance history" actions={manage && <button className="btn small" onClick={() => setModal('event')}>Add record</button>}>
@@ -186,6 +187,7 @@ export default function Asset() {
       {modal === 'edit' && <AssetForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
       {modal === 'status' && <StatusForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
       {modal === 'event' && <EventForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
+      {modal === 'merge' && <MergeForm asset={a} onClose={() => setModal(null)} onSaved={done} />}
       {editEvent && <EventForm asset={a} event={editEvent} onClose={() => setEditEvent(null)} onSaved={() => { setEditEvent(null); state.reload(); }} />}
     </>;
   }}</Async>;
@@ -261,6 +263,39 @@ function EventForm({ asset, event, onClose, onSaved }) {
         <input required maxLength="500" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="e.g. Date typed wrong; job card says 14 Sept" /></Field>
         : <p className="muted small wide">Use this for work done before the system, or not covered by a report. Ongoing jobs are better logged as Work.</p>}
       <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{event ? 'Save changes' : 'Save record'}</button></div>
+    </form>
+  </Modal>;
+}
+
+// Folds a second record of the same genset into this one: typically the
+// entry left at the island it came from when it was decommissioned there
+// and registered again here, instead of being moved.
+function MergeForm({ asset, onClose, onSaved }) {
+  const [q, setQ] = useState(asset.serial_no ? asset.serial_no.slice(-6) : '');
+  const [pick, setPick] = useState(null);
+  const [f, setF] = useState({ moved_on: '', notes: '' });
+  const found = useApi(q.trim().length >= 2 ? `/assets?kind=${asset.kind}&include_inactive=1&limit=20&q=${encodeURIComponent(q.trim())}` : null);
+  const options = (found.data?.items || []).filter((x) => x.id !== asset.id);
+  const { submit, busy, error } = useSubmit(async () => {
+    if (!window.confirm(`Merge ${pick.atoll_code}. ${pick.island_name} ${ASSET_KINDS[pick.kind]} ${pick.tag} into this record? Its history moves here and that record is removed. This can't be undone.`)) return;
+    await api(`/assets/${asset.id}/merge`, { method: 'POST', body: { from_asset_id: pick.id, moved_on: f.moved_on, notes: f.notes || null } });
+    onSaved();
+  });
+  return <Modal title={`Merge a duplicate into ${ASSET_KINDS[asset.kind]} ${asset.tag}`} onClose={onClose}>
+    <form className="form" onSubmit={(e) => { e.preventDefault(); if (pick) submit(); }}>
+      <ErrorBox error={error} />
+      <p className="muted small wide">For a {ASSET_KINDS[asset.kind].toLowerCase()} that was decommissioned at another island and registered again here instead of being moved. The other record's running hours, reports, maintenance and status history come here, the move is recorded, and the other record is removed. To move a genset that is still on the other record, use Move there instead.</p>
+      <Field label="Find the other record" hint="Island, number, model or serial" wide>
+        <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setPick(null); }} /></Field>
+      <div className="wide">{options.length === 0 ? <p className="muted small">{q.trim().length >= 2 ? 'Nothing found.' : ''}</p> :
+        <ul className="plain">{options.map((x) => <li key={x.id}><label className="check">
+          <input type="radio" name="merge-pick" checked={pick?.id === x.id} onChange={() => setPick(x)} />
+          {x.atoll_code}. {x.island_name} · {x.facility_name} · {ASSET_KINDS[x.kind]} {x.tag}
+          <span className="muted small"> · {x.make_model || '—'}{x.serial_no ? ` · S/N ${x.serial_no}` : ''} · {ASSET_STATUS[x.status]?.label || x.status}{x.active ? '' : ' · not in use'}</span>
+        </label></li>)}</ul>}</div>
+      <Field label="Moved here on" hint="Best known date; the first report from here if unsure."><input type="date" required max={localDate(0)} value={f.moved_on} onChange={(e) => setF({ ...f, moved_on: e.target.value })} /></Field>
+      <Field label="Note (optional)" wide><input maxLength="500" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="e.g. Same engine: serial typed with two digits swapped" /></Field>
+      <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !pick}>Merge</button></div>
     </form>
   </Modal>;
 }

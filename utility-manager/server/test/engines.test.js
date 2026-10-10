@@ -834,6 +834,40 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.deepEqual((await call('GET', '/service-intervals', { token: admin })).body.models, []);
   });
 
+  test('a genset registered twice is merged into one record with both histories', async () => {
+    // Dhigurah G9 was "moved" by decommissioning it and registering it again at Maafushi.
+    const old = gensets.find((g) => g.tag === '9');
+    await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: old.id, status: 'decommissioned', note: 'Moved to K. Maafushi' }] } });
+    const ph = (await db.query("select id from facilities where island_id = $1 and kind = 'powerhouse' order by created_at limit 1", [maafushi.id])).rows[0].id;
+    const fresh = (await db.query("insert into assets (facility_id, kind, tag, capacity_unit) values ($1, 'genset', '19', 'kW') returning id", [ph])).rows[0].id;
+    await db.query('insert into hours_log (asset_id, month, total_hours) values ($1, $2, 1)', [fresh, EXPECTED]);
+    const oldMonths = (await db.query('select month from hours_log where asset_id = $1', [old.id])).rows.length;
+    assert.ok(oldMonths >= 2);
+
+    // The retired one is out of the engine list and counts, listed under Retired.
+    const list = (await call('GET', '/engines', { token: admin })).body;
+    assert.ok(!list.engines.some((e) => e.id === old.id));
+    assert.ok(list.summary.retired >= 1);
+    const retired = (await call('GET', '/engines?condition=retired', { token: admin })).body;
+    assert.ok(retired.engines.some((e) => e.id === old.id && !e.alt_service_due && !e.overhaul_due));
+
+    const res = await call('POST', `/assets/${fresh}/merge`, { token: admin, body: { from_asset_id: old.id, moved_on: shift(EXPECTED, -1), notes: 'Serial typo' } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.move.source, 'merge');
+    assert.equal((await call('GET', `/assets/${old.id}`, { token: admin })).status, 404, 'duplicate removed');
+    const merged = (await call('GET', `/assets/${fresh}`, { token: admin })).body;
+    assert.equal(merged.make_model, 'CUMMINS QSK 60-G4', 'blanks filled from the old record');
+    assert.equal(merged.moves[0].from_tag, '9');
+    const hours = (await db.query('select month, total_hours from hours_log where asset_id = $1', [fresh])).rows;
+    assert.equal(hours.length, oldMonths, 'old months moved, the clashing month kept from the current record');
+    assert.equal(Number(hours.find((h) => h.month === EXPECTED).total_hours), 1);
+    const island = (await call('GET', `/islands/${dhigurah.id}`, { token: admin })).body;
+    const away = island.facilities.flatMap((f) => f.moved_away);
+    assert.ok(away.some((m) => m.asset_id === fresh && m.from_tag === '9' && m.to_island === 'Maafushi'));
+
+    assert.equal((await call('POST', `/assets/${fresh}/merge`, { token: admin, body: { from_asset_id: fresh, moved_on: EXPECTED } })).status, 400);
+  });
+
   test('bad reports are refused', async () => {
     const other = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id
                                     where f.island_id = $1 and s.kind = 'genset' and s.active limit 1`, [maafushi.id])).rows[0];

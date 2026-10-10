@@ -18,6 +18,7 @@ const CHIPS = [
   ['flag', 'alternator', 'Alternator service', 'alt_service_due'],
   ['flag', 'work', 'Work in progress', 'with_work'],
   ['flag', 'stale', 'Report out of date', null],
+  ['condition', 'retired', 'Retired', 'retired'],
 ];
 
 export default function Engines({ embedded }) {
@@ -66,7 +67,7 @@ export default function Engines({ embedded }) {
               </tr></thead>
               <tbody>{d.engines.map((e) => <tr key={e.id} {...rowProps(e)}>
                 <td className="wrap">
-                  <Link to={`/assets/${e.id}`}><strong>{e.atoll_code} · {e.island_name} · G{e.tag}</strong></Link><br />
+                  <Link to={`/assets/${e.id}`}><strong>{e.atoll_code} · {e.island_name}{e.shared_island ? ` · ${e.facility_name}` : ''} · G{e.tag}</strong></Link><br />
                   <small className="muted">{e.make_model || '—'}{e.rated_capacity ? ` · ${num(e.rated_capacity)} kW` : ''}</small>
                   <div><Flags e={e} /></div>
                 </td>
