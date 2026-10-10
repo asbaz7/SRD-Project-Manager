@@ -444,6 +444,8 @@ export async function setLatestPowerhouse(t, facilityId, month, p) {
   [facilityId, month, p.reported_on ?? null, p.peak_load_record ?? null, p.peak_load_month ?? null,
     p.genset_count ?? null, p.file_name?.slice(0, 200) || null, p.userId, p.source,
     p.peak_load_kw ?? null, p.peak_load_at ?? null, p.held_rows?.length ? JSON.stringify(p.held_rows) : null]);
+  // Its first report: it reports from now on.
+  await t.query('update facilities set reports_from = $2 where id = $1 and reports_from is null', [facilityId, month]);
   return rowCount;
 }
 
@@ -451,11 +453,16 @@ export async function setLatestPowerhouse(t, facilityId, month, p) {
 // "missing" (their reporting stopped long ago and is handled separately).
 export const REPORTS_TRACKED_FROM = '2024-01-01';
 
-export function reportState(reportMonth, expected) {
+// `reportsFrom` is the first month the powerhouse is expected to report
+// (facilities.reports_from); null = not surveyed yet, so not chased.
+export function reportState(reportMonth, expected, reportsFrom) {
+  if (reportMonth && reportMonth >= expected) return 'up_to_date';
+  if (reportsFrom === null || (reportsFrom && reportsFrom > expected)) return 'not_expected';
   if (!reportMonth) return 'never';
   if (reportMonth < REPORTS_TRACKED_FROM) return 'untracked';
-  return reportMonth >= expected ? 'up_to_date' : 'missing';
+  return 'missing';
 }
+export const isMissing = (state) => state === 'missing' || state === 'never';
 
 /**
  * Which month's report every powerhouse should have sent by `today`

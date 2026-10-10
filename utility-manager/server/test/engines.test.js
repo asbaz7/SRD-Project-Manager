@@ -68,6 +68,8 @@ before(async () => {
   db = await createDb({ pgliteDir: ':memory:' });
   await migrate(db, {});
   await seedRegister(db);
+  // Every seeded powerhouse is surveyed and expected to report (as on the live system).
+  await db.query("update facilities set reports_from = '2024-01-01' where kind = 'powerhouse'");
   app = await buildApp({ db, config: loadConfig({ timezone: 'Indian/Maldives', webDist: '' }), logger: false });
   const hash = await hashPassword(PASSWORD);
   await db.query(`insert into users (email, full_name, role, password_hash, must_change_password) values
@@ -754,6 +756,44 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.equal(res.body.latest, false);
     assert.equal(res.body.engines_updated, 0);
     assert.equal((await call('GET', `/assets/${gensets[0].id}`, { token: admin })).body.condition.total_hours, 99998);
+  });
+
+  test('powerhouses not surveyed yet are not chased until their reports start', async () => {
+    const tracker = async () => (await call('GET', '/condition-reports', { token: admin })).body;
+    const before = await tracker();
+    const target = before.powerhouses.find((p) => p.state === 'never');
+    // Not surveyed: out of the missing count and the dashboard.
+    const off = await call('PATCH', `/facilities/${target.facility_id}`, { token: admin, body: { reports_from: null } });
+    assert.equal(off.status, 200, JSON.stringify(off.body));
+    let t = await tracker();
+    assert.equal(t.powerhouses.find((p) => p.facility_id === target.facility_id).state, 'not_expected');
+    assert.equal(t.missing, before.missing - 1);
+    assert.equal(t.not_expected, before.not_expected + 1);
+    const dash = (await call('GET', '/dashboard', { token: admin })).body;
+    assert.ok(!dash.reports.missing.some((r) => r.facility_id === target.facility_id));
+    // Reports starting later: chased from that month.
+    await call('PATCH', `/facilities/${target.facility_id}`, { token: admin, body: { reports_from: shift(EXPECTED, 2) } });
+    assert.equal((await tracker()).powerhouses.find((p) => p.facility_id === target.facility_id).state, 'not_expected');
+    assert.equal((await call('PATCH', `/facilities/${target.facility_id}`, { token: admin, body: { reports_from: '2026-08-15' } })).status, 400);
+    // A first report starts the chase by itself.
+    const fresh = (await db.query(`insert into facilities (island_id, service, kind, name)
+      select island_id, 'electricity', 'powerhouse', 'Second powerhouse' from facilities where id = $1 returning id`, [target.facility_id])).rows[0].id;
+    const g = (await db.query(`insert into assets (facility_id, kind, tag) values ($1, 'genset', '1') returning id`, [fresh])).rows[0].id;
+    assert.equal((await tracker()).powerhouses.find((p) => p.facility_id === fresh).state, 'not_expected');
+    assert.equal((await send({ report_month: EXPECTED, engines: [{ srd_asset_id: g, condition: 'ok' }] })).status, 200);
+    const after = (await db.query('select reports_from from facilities where id = $1', [fresh])).rows[0];
+    assert.equal(after.reports_from, EXPECTED);
+  });
+
+  test('engines with no report count apart from engines down, and retired ones not at all', async () => {
+    const before = (await call('GET', '/dashboard', { token: admin })).body.services.electricity;
+    const g = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id
+                                where s.kind = 'genset' and s.active and s.status = 'unknown' limit 1`)).rows[0];
+    await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g.id, status: 'decommissioned', note: 'retired' }] } });
+    const after = (await call('GET', '/dashboard', { token: admin })).body.services.electricity;
+    assert.equal(after.assets, before.assets - 1);
+    assert.equal(after.unknown, before.unknown - 1);
+    assert.equal(after.down, before.down, 'no report is not down');
   });
 
   test('bad reports are refused', async () => {

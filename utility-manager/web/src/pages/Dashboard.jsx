@@ -67,7 +67,8 @@ export default function Dashboard() {
 
         {d.technical && <div className="grid-3">
           <ServiceTile svc="electricity" s={el}
-            hero={<>{el.running}<small> of {el.assets} gensets running</small></>}
+            // Engines with no report and no status set count apart, not as down.
+            hero={<>{el.running}<small> running · {el.down} down{el.standby ? ` · ${el.standby} standby` : ''}{el.unknown ? ` · ${el.unknown} no report` : ''}</small></>}
             facts={[
               [power(el.available_kw), `available of ${power(el.installed_kw)}`],
               [d.engines.major_fault + d.engines.not_running, 'serious faults', d.engines.major_fault + d.engines.not_running > 0],

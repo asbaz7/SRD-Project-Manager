@@ -66,7 +66,8 @@ function ServiceOverview({ svc }) {
       return <>
         <div className="stats">
           <Stat label={isEl ? 'Gensets running' : 'Assets running'} value={`${s.running} of ${s.assets}`}
-            sub={kw ? `${power(kw.available)} of ${power(kw.rated)} available` : `${s.facilities} plants · ${s.islands} islands`} />
+            sub={<>{s.down} down{s.standby ? ` · ${s.standby} standby` : ''}{s.unknown ? ` · ${s.unknown} ${isEl ? 'no report' : 'unknown'}` : ''}<br />
+              {kw ? `${power(kw.available)} of ${power(kw.rated)} available` : `${s.facilities} plants · ${s.islands} islands`}</>} />
           {isEl && <Stat label="Serious faults" value={d.engines.major_fault + d.engines.not_running} tone={d.engines.major_fault + d.engines.not_running ? 'alert' : ''}
             sub={`${d.engines.not_running} not running · ${d.engines.minor_fault} minor`} to="/electricity/engines?condition=faults" />}
           {isEl && <Stat label="Overhaul due" value={d.engines.overhaul_due} tone={d.engines.overhaul_due ? 'warn' : ''}
@@ -83,11 +84,12 @@ function ServiceOverview({ svc }) {
             <ConditionMeter e={d.engines} />
           </Card>
           <Card title={`Condition reports for ${month(d.reports.expected_month)}`} actions={<Link to="/electricity/reports" className="btn small">Upload</Link>}>
-            {d.reports.missing.length === 0 ? <p className="all-clear"><Icon name="check" /> Every powerhouse has reported.</p> : <>
+            {d.reports.missing.length === 0 ? <p className="all-clear"><Icon name="check" /> Every powerhouse that reports has sent it.</p> : <>
               <p className="small">{d.reports.missing.length} powerhouse{d.reports.missing.length === 1 ? ' has' : 's have'} not sent this month's report:</p>
               <p className="small">{d.reports.missing.map((r, i) => <span key={r.facility_id}>{i > 0 && ' · '}<Link to={`/islands/${r.island_id}`}>{r.atoll_code} {r.island_name}</Link>
                 <span className="muted"> ({r.report_month ? `last ${month(r.report_month)}` : 'none yet'})</span></span>)}</p>
             </>}
+            {d.reports.not_expected > 0 && <p className="muted small">{d.reports.not_expected} powerhouse{d.reports.not_expected === 1 ? ' is' : 's are'} not surveyed yet and not chased. Set the month reports start on the powerhouse (island page → Edit).</p>}
           </Card>
         </div>}
 

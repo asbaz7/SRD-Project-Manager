@@ -21,10 +21,12 @@ const facilityBody = z.object({
   fuel_capacity_l: optNumber,
   water_capacity_m3: optNumber,
   commissioned_on: z.iso.date().nullish(),
+  // First month a condition report is expected; empty = not surveyed yet.
+  reports_from: z.iso.date().refine((d) => d.endsWith('-01'), 'must be the first day of a month').nullish(),
   notes: optText(),
   active: z.boolean().optional(),
 });
-const FACILITY_COLS = ['service', 'kind', 'name', 'fuel_capacity_l', 'water_capacity_m3', 'commissioned_on', 'notes', 'active'];
+const FACILITY_COLS = ['service', 'kind', 'name', 'fuel_capacity_l', 'water_capacity_m3', 'commissioned_on', 'reports_from', 'notes', 'active'];
 
 const assetBody = z.object({
   facility_id: id,

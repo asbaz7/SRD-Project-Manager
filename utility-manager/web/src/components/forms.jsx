@@ -17,6 +17,7 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
       service: f.service, kind: f.kind, name: f.name,
       fuel_capacity_l: numOrNull(f.fuel_capacity_l), water_capacity_m3: numOrNull(f.water_capacity_m3),
       commissioned_on: strOrNull(f.commissioned_on || ''), notes: f.notes || null,
+      ...(f.service === 'electricity' && f.kind === 'powerhouse' ? { reports_from: f.reports_from ? `${f.reports_from.slice(0, 7)}-01` : null } : {}),
     };
     if (facility) await api(`/facilities/${facility.id}`, { method: 'PATCH', body: { ...body, active: f.active } });
     else await api('/facilities', { method: 'POST', body: { ...body, island_id: islandId } });
@@ -37,6 +38,8 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
         <Field label="Type"><Select value={f.kind} onChange={set('kind')} options={FACILITY_KINDS} /></Field>
         {f.service === 'electricity' && <Field label="Fuel capacity (L)"><input type="number" min="0" step="any" value={f.fuel_capacity_l ?? ''} onChange={set('fuel_capacity_l')} /></Field>}
         {f.service === 'water' && <Field label="Water storage capacity (m³)"><input type="number" min="0" step="any" value={f.water_capacity_m3 ?? ''} onChange={set('water_capacity_m3')} /></Field>}
+        {f.service === 'electricity' && f.kind === 'powerhouse' && <Field label="Condition reports expected from" hint="Leave empty until STELCO has surveyed it: it isn't chased for reports until then. Its first report fills this in.">
+          <input type="month" value={f.reports_from?.slice(0, 7) ?? ''} onChange={(e) => set('reports_from')(e.target.value)} /></Field>}
         <Field label="Commissioned on"><input type="date" value={f.commissioned_on ?? ''} onChange={set('commissioned_on')} /></Field>
         <Field label="Notes" wide><textarea rows="2" value={f.notes ?? ''} onChange={set('notes')} /></Field>
         {facility && <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => set('active')(e.target.checked)} /> In use</label>}

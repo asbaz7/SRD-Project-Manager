@@ -94,13 +94,14 @@ export default function ConditionReports({ embedded }) {
     </div>
     <Async state={tracker}>{(t) => {
       const rows = filters.missing === '1' ? t.powerhouses.filter((p) => p.state === 'missing' || p.state === 'never') : t.powerhouses;
-      return <Card title={`Reports for ${month(t.expected_month)} · ${t.missing ? `${t.missing} missing` : 'all received'}`}>
-        <p className="muted small">Each powerhouse sends its report for the previous month by the {t.due_day}th. Reports come from Fleet Manager, which collects and checks the islands' sheets, or are uploaded here. Every month received is kept (see each engine's page); dates found in them are added to its maintenance history. Powerhouses whose latest report is from before {t.tracked_from?.slice(0, 4)} are not chased.</p>
+      return <Card title={`Reports for ${month(t.expected_month)} · ${t.missing ? `${t.missing} missing` : 'all received'}${t.not_expected ? ` · ${t.not_expected} not surveyed yet` : ''}`}>
+        <p className="muted small">Each powerhouse sends its report for the previous month by the {t.due_day}th. Reports come from Fleet Manager, which collects and checks the islands' sheets, or are uploaded here. Every month received is kept (see each engine's page); dates found in them are added to its maintenance history. Powerhouses whose latest report is from before {t.tracked_from?.slice(0, 4)} are not chased, nor are those not yet surveyed: set the month their reports start on the powerhouse (island page → Edit). A powerhouse's first report starts the chase by itself.</p>
         <table>
           <thead><tr><th>Powerhouse</th><th>Latest report</th><th className="hide-sm">Received</th><th className="num hide-sm">Gensets</th><th /></tr></thead>
           <tbody>{rows.map((p) => <tr key={p.facility_id} className={p.state === 'missing' || p.state === 'never' ? 'attention' : ''}>
             <td><Link to={`/islands/${p.island_id}`}><strong>{p.atoll_code} · {p.island_name}</strong></Link></td>
-            <td><span className={`state ${p.state}`}>{p.state === 'up_to_date' ? '✓ ' : p.state === 'never' ? '✕ None yet' : p.state === 'untracked' ? '– ' : '✕ '}{p.report_month ? month(p.report_month) : ''}</span>
+            <td><span className={`state ${p.state}`}>{p.state === 'up_to_date' ? '✓ ' : p.state === 'never' ? '✕ None yet' : p.state === 'untracked' ? '– ' : p.state === 'not_expected' ? '– ' : '✕ '}{p.report_month ? month(p.report_month) : p.state === 'not_expected' ? 'Not surveyed yet' : ''}</span>
+              {p.state === 'not_expected' && p.reports_from && <><br /><small className="muted">reports from {month(p.reports_from)}</small></>}
               {p.state === 'untracked' && <><br /><small className="muted">old report, not chased</small></>}
               {p.state === 'missing' && <><br /><small className="muted">{month(t.expected_month)} missing</small></>}</td>
             <td className="hide-sm small">{p.uploaded_at ? <>{dateTime(p.uploaded_at)}<br /><span className="muted">{p.source === 'fleet_manager' ? 'Fleet Manager' : p.uploaded_by_name}</span>

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { id, parse } from '../http.js';
-import { expectedMonth, reportState } from '../reportImport.js';
+import { expectedMonth, isMissing, reportState } from '../reportImport.js';
 import { mvToday } from './engines.js';
 import { projectVisible } from './projects.js';
 
@@ -33,7 +33,7 @@ export default async function dashboardRoutes(app) {
                coalesce(sum(s.operating_capacity) filter (where s.kind = 'genset' and s.status in ('running', 'standby')), 0) as available_kw
           from facilities f
           join islands i on i.id = f.island_id and i.active
-          left join assets s on s.facility_id = f.id and s.active
+          left join assets s on s.facility_id = f.id and s.active and s.status <> 'decommissioned'
          where f.active and ($1::uuid is null or i.atoll_id = $1)
          group by f.service`, [atoll]),
       db.query(`
@@ -96,10 +96,10 @@ export default async function dashboardRoutes(app) {
           join facilities f on f.id = s.facility_id and f.active
           join islands i on i.id = f.island_id and i.active
           left join engine_current c on c.asset_id = s.id
-         where s.kind = 'genset' and s.active and ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
+         where s.kind = 'genset' and s.active and s.status <> 'decommissioned' and ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
       // Powerhouses whose report for the expected month has not come in.
       !technical ? skip : db.query(`
-        select f.id as facility_id, i.id as island_id, i.name as island_name, a.code as atoll_code, r.report_month
+        select f.id as facility_id, f.reports_from, i.id as island_id, i.name as island_name, a.code as atoll_code, r.report_month
           from facilities f
           join islands i on i.id = f.island_id and i.active
           join atolls a on a.id = i.atoll_id
@@ -162,7 +162,8 @@ export default async function dashboardRoutes(app) {
       reports: technical ? {
         expected_month: expected,
         total: reports.rows.length,
-        missing: reports.rows.filter((r) => ['missing', 'never'].includes(reportState(r.report_month, expected))),
+        missing: reports.rows.filter((r) => isMissing(reportState(r.report_month, expected, r.reports_from))),
+        not_expected: reports.rows.filter((r) => reportState(r.report_month, expected, r.reports_from) === 'not_expected').length,
       } : null,
       work: work.rows,
       assets_down: down.rows,

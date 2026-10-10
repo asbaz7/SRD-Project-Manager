@@ -3,7 +3,7 @@ import { assertIslandWrite, requireRole } from '../auth.js';
 import { parseConditionReport } from '../conditionReport.js';
 import { badRequest } from '../errors.js';
 import { date, datetime, id, one, optText, parse, text } from '../http.js';
-import { REPORTS_TRACKED_FROM, applyFleetReport, applyImport, expectedMonth, matchIsland, planImport, reportState } from '../reportImport.js';
+import { REPORTS_TRACKED_FROM, applyFleetReport, applyImport, expectedMonth, isMissing, matchIsland, planImport, reportState } from '../reportImport.js';
 
 const upload = z.object({
   file_name: z.string().trim().max(300).default(''),
@@ -58,7 +58,7 @@ export default async function conditionReportRoutes(app) {
     const day = await today(db, config.timezone);
     const expected = expectedMonth(day);
     const { rows } = await db.query(`
-      select f.id as facility_id, f.name as facility_name, i.id as island_id, i.name as island_name,
+      select f.id as facility_id, f.name as facility_name, f.reports_from, i.id as island_id, i.name as island_name,
              a.id as atoll_id, a.code as atoll_code,
              r.report_month, r.reported_on, r.uploaded_at, r.file_name, r.peak_load_month, r.source, r.held_rows, u.full_name as uploaded_by_name,
              (select count(*) from assets s where s.facility_id = f.id and s.kind = 'genset' and s.active) as genset_count
@@ -70,13 +70,14 @@ export default async function conditionReportRoutes(app) {
        where f.active and f.service = 'electricity' and f.kind = 'powerhouse'
          and ($1::uuid is null or i.atoll_id = $1)
        order by (r.report_month is null) desc, r.report_month, a.code, i.name`, [q.atoll_id ?? null]);
-    for (const r of rows) r.state = reportState(r.report_month, expected);
+    for (const r of rows) r.state = reportState(r.report_month, expected, r.reports_from);
     return {
       today: day,
       expected_month: expected,
       due_day: 10,
       powerhouses: rows,
-      missing: rows.filter((r) => r.state === 'missing' || r.state === 'never').length,
+      missing: rows.filter((r) => isMissing(r.state)).length,
+      not_expected: rows.filter((r) => r.state === 'not_expected').length,
       tracked_from: REPORTS_TRACKED_FROM,
     };
   });

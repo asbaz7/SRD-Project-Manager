@@ -59,6 +59,8 @@ before(async () => {
   db = await createDb({ pgliteDir: ':memory:' });
   await migrate(db, {});
   await seedRegister(db);
+  // Every seeded powerhouse is surveyed and expected to report (as on the live system).
+  await db.query("update facilities set reports_from = '2024-01-01' where kind = 'powerhouse'");
   app = await buildApp({
     db, logger: false,
     config: loadConfig({ timezone: 'Indian/Maldives', webDist: '', telegramToken: TOKEN, publicUrl: 'https://srd.example' }),

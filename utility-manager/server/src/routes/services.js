@@ -2,7 +2,7 @@
 // needs attention, and its work, incidents and projects.
 import { z } from 'zod';
 import { id, parse, service } from '../http.js';
-import { expectedMonth, reportState } from '../reportImport.js';
+import { expectedMonth, isMissing, reportState } from '../reportImport.js';
 import { mvToday } from './engines.js';
 import { projectVisible } from './projects.js';
 
@@ -27,17 +27,17 @@ export default async function serviceRoutes(app) {
                count(s.id) filter (where s.status = 'unknown') as unknown
           from facilities f
           join islands i on i.id = f.island_id and i.active
-          left join assets s on s.facility_id = f.id and s.active
+          left join assets s on s.facility_id = f.id and s.active and s.status <> 'decommissioned'
          where f.active and f.service = $1 and ${scope}`, [svc, atoll]),
       db.query(`
         select s.capacity_unit as unit, sum(s.rated_capacity) as rated,
                sum(coalesce(s.operating_capacity, s.rated_capacity)) filter (where s.status in ('running', 'standby')) as available
           from assets s join facilities f on f.id = s.facility_id and f.active join islands i on i.id = f.island_id and i.active
-         where s.active and f.service = $1 and s.rated_capacity is not null and ${scope}
+         where s.active and s.status <> 'decommissioned' and f.service = $1 and s.rated_capacity is not null and ${scope}
          group by s.capacity_unit order by sum(s.rated_capacity) desc`, [svc, atoll]),
       db.query(`
         select f.id, f.name, f.kind, f.fuel_capacity_l, f.water_capacity_m3, i.id as island_id, i.name as island_name,
-               a.code as atoll_code, r.report_month,
+               a.code as atoll_code, r.report_month, f.reports_from,
                count(s.id) as assets,
                count(s.id) filter (where s.status = 'running') as running,
                count(s.id) filter (where s.status in ('down', 'maintenance')) as down,
@@ -47,7 +47,7 @@ export default async function serviceRoutes(app) {
           from facilities f
           join islands i on i.id = f.island_id and i.active
           join atolls a on a.id = i.atoll_id
-          left join assets s on s.facility_id = f.id and s.active
+          left join assets s on s.facility_id = f.id and s.active and s.status <> 'decommissioned'
           left join engine_current c on c.asset_id = s.id
           left join powerhouse_reports r on r.facility_id = f.id
          where f.active and f.service = $1 and ${scope}
@@ -110,11 +110,11 @@ export default async function serviceRoutes(app) {
           join facilities f on f.id = s.facility_id and f.active
           join islands i on i.id = f.island_id and i.active
           left join engine_current c on c.asset_id = s.id
-         where s.kind = 'genset' and s.active and f.service = $1 and ${scope}`, [svc, atoll]) : { rows: [] },
+         where s.kind = 'genset' and s.active and s.status <> 'decommissioned' and f.service = $1 and ${scope}`, [svc, atoll]) : { rows: [] },
     ]);
 
-    for (const f of facilities.rows) f.report_state = f.kind === 'powerhouse' ? reportState(f.report_month, expected) : null;
-    const missing = facilities.rows.filter((f) => f.report_state === 'missing' || f.report_state === 'never');
+    for (const f of facilities.rows) f.report_state = f.kind === 'powerhouse' ? reportState(f.report_month, expected, f.reports_from) : null;
+    const missing = facilities.rows.filter((f) => isMissing(f.report_state));
     return {
       service: svc,
       today,
@@ -127,7 +127,7 @@ export default async function serviceRoutes(app) {
       projects: projects.rows,
       ...(svc === 'electricity' ? {
         engines: engines.rows[0],
-        reports: { expected_month: expected, missing: missing.map(({ id: facilityId, island_id, island_name, atoll_code, report_month }) => ({ facility_id: facilityId, island_id, island_name, atoll_code, report_month })) },
+        reports: { expected_month: expected, not_expected: facilities.rows.filter((f) => f.report_state === 'not_expected').length, missing: missing.map(({ id: facilityId, island_id, island_name, atoll_code, report_month }) => ({ facility_id: facilityId, island_id, island_name, atoll_code, report_month })) },
       } : {}),
     };
   });
