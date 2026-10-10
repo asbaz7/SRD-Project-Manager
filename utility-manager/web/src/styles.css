@@ -477,3 +477,11 @@ input:disabled, select:disabled { opacity: .7; }
 
 .token-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .token-box code { padding: 6px 10px; border-radius: 8px; background: var(--glass-strong); word-break: break-all; font-size: .85rem; }
+
+/* Whole-row links (useRowLink). */
+tr.row-link { cursor: pointer; }
+tr.row-link:hover > td { background: var(--glass-hover); }
+/* Atoll group headings on the Islands list. */
+tr.group-head > td { background: var(--track); font-weight: 700; cursor: pointer; }
+tr.group-head .chev { display: inline-block; width: 1em; transition: transform .15s; }
+tr.group-head.collapsed .chev { transform: rotate(-90deg); }

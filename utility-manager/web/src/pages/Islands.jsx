@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, ErrorBox, Field, Modal, PageHead, Select, Service } from '../components/ui.jsx';
-import { num } from '../format.js';
-import { useApi, useFilters, useSubmit } from '../hooks.js';
+import { num, power } from '../format.js';
+import { useApi, useFilters, useRowLink, useSubmit } from '../hooks.js';
 
 export default function Islands() {
   const { technical, can } = useAuth();
@@ -25,26 +25,59 @@ export default function Islands() {
         options={(atolls.data || []).map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />
       <input type="search" placeholder="Search island…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
     </div>
-    <Async state={state}>{(islands) => (
-      <Card>
-        <table>
-          <thead><tr><th>Island</th><th>Services</th>{technical && <><th>Gensets</th><th className="num hide-sm">Installed</th><th className="num hide-sm">Fuel capacity</th></>}<th className="num">Open incidents</th><th className="num hide-sm">Active projects</th></tr></thead>
-          <tbody>{islands.map((i) => <tr key={i.id}>
-            <td><Link to={`/islands/${i.id}`}><strong>{i.atoll_code}</strong> · {i.name}</Link></td>
-            <td>{i.services.map((s) => <Service key={s} value={s} short />)}</td>
+    <Async state={state}>{(islands) => <IslandTable islands={islands} technical={technical} />}</Async>
+  </>;
+}
+
+// Islands under their atoll, with subtotals, like the Powerhouses tab. A
+// heading folds its atoll away; the atoll filter above narrows the list.
+function IslandTable({ islands, technical }) {
+  const rowLink = useRowLink();
+  const [folded, setFolded] = useState(() => new Set());
+  const toggle = (code) => setFolded((prev) => { const next = new Set(prev); if (next.has(code)) next.delete(code); else next.add(code); return next; });
+  const atolls = [];
+  for (const i of islands) {
+    let a = atolls.at(-1);
+    if (!a || a.code !== i.atoll_code) atolls.push(a = { code: i.atoll_code, name: i.atoll_name, islands: [] });
+    a.islands.push(i);
+  }
+  const sum = (list, k) => list.reduce((n, i) => n + Number(i[k] || 0), 0);
+  // Fuel capacity is set on few powerhouses yet: the column shows once any is.
+  const fuel = technical && islands.some((i) => i.fuel_capacity_l);
+  const cols = 3 + (technical ? 2 + (fuel ? 1 : 0) : 0) + 1;
+  const gensets = (x) => (x.genset_count ? <>{num(x.running_count)} of {num(x.genset_count)} running
+    {x.down_count > 0 && <span className="status bad"> · ✕ {num(x.down_count)} down</span>}
+    {x.no_report_count > 0 && <span className="muted"> · {num(x.no_report_count)} no report</span>}</> : <span className="muted">—</span>);
+  return <Card>
+    <div className="table-scroll"><table>
+      <thead><tr><th>Island</th><th className="hide-sm">Services</th>{technical && <><th>Gensets</th><th className="num hide-sm">Installed</th>{fuel && <th className="num hide-sm">Fuel capacity</th>}</>}<th className="num">Open incidents</th><th className="num hide-sm">Active projects</th></tr></thead>
+      {atolls.map((a) => {
+        const shut = folded.has(a.code);
+        const total = { genset_count: sum(a.islands, 'genset_count'), running_count: sum(a.islands, 'running_count'),
+          down_count: sum(a.islands, 'down_count'), no_report_count: sum(a.islands, 'no_report_count') };
+        return <tbody key={a.code}>
+          <tr className={`group-head${shut ? ' collapsed' : ''}`} onClick={() => toggle(a.code)}>
+            <td colSpan={2}><button type="button" className="link" aria-expanded={!shut} onClick={(e) => { e.stopPropagation(); toggle(a.code); }}>
+              <span className="chev" aria-hidden="true">▾</span> {a.code} · {a.name}</button> <span className="muted small">{a.islands.length} island{a.islands.length === 1 ? '' : 's'}</span></td>
+            {technical && <><td className="small">{gensets(total)}</td><td className="num hide-sm small">{power(sum(a.islands, 'installed_kw'))}</td>{fuel && <td className="num hide-sm small">{sum(a.islands, 'fuel_capacity_l') ? `${num(sum(a.islands, 'fuel_capacity_l'))} L` : ''}</td>}</>}
+            <td className="num small">{sum(a.islands, 'open_incidents') || ''}</td><td className="num hide-sm small">{sum(a.islands, 'active_projects') || ''}</td>
+          </tr>
+          {!shut && a.islands.map((i) => <tr key={i.id} {...rowLink(`/islands/${i.id}`)}>
+            <td><Link to={`/islands/${i.id}`}><strong>{i.name}</strong></Link></td>
+            <td className="hide-sm small">{i.services.map((sv) => <Service key={sv} value={sv} />)}</td>
             {technical && <>
-              <td>{i.genset_count ? <>{i.running_count} of {i.genset_count} running{i.down_count > 0 && <span className="status bad"> · ✕ {i.down_count} down</span>}</> : <span className="muted">—</span>}</td>
+              <td>{gensets(i)}</td>
               <td className="num hide-sm">{i.installed_kw ? `${num(i.installed_kw)} kW` : '—'}</td>
-              <td className="num hide-sm">{i.fuel_capacity_l ? `${num(i.fuel_capacity_l)} L` : <span className="muted">—</span>}</td>
+              {fuel && <td className="num hide-sm">{i.fuel_capacity_l ? `${num(i.fuel_capacity_l)} L` : ''}</td>}
             </>}
             <td className={`num ${i.open_incidents ? 'bad' : ''}`}>{i.open_incidents}</td>
             <td className="num hide-sm">{i.active_projects}</td>
-          </tr>)}</tbody>
-        </table>
-        <p className="muted small">{islands.length} islands</p>
-      </Card>
-    )}</Async>
-  </>;
+          </tr>)}
+        </tbody>;
+      })}
+    </table></div>
+    <p className="muted small">{islands.length} islands in {atolls.length} atoll{atolls.length === 1 ? '' : 's'}{technical && !fuel ? ' · fuel capacity not set on any powerhouse yet' : ''}</p>
+  </Card>;
 }
 
 function AtollForm({ onClose, onSaved }) {

@@ -19,10 +19,11 @@ const islandSummary = (vis) => `
   select i.id, i.name, i.population, i.notes, i.active, a.id as atoll_id, a.code as atoll_code, a.name as atoll_name,
          count(distinct f.id) filter (where f.active) as facility_count,
          coalesce(array_agg(distinct f.service::text) filter (where f.active), '{}') as services,
-         count(s.id) filter (where s.kind = 'genset') as genset_count,
+         count(s.id) filter (where s.kind = 'genset' and s.status <> 'decommissioned') as genset_count,
          count(s.id) filter (where s.status = 'running') as running_count,
          count(s.id) filter (where s.status in ('down', 'maintenance')) as down_count,
-         coalesce(sum(s.rated_capacity) filter (where s.kind = 'genset'), 0) as installed_kw,
+         count(s.id) filter (where s.kind = 'genset' and s.status = 'unknown') as no_report_count,
+         coalesce(sum(s.rated_capacity) filter (where s.kind = 'genset' and s.status <> 'decommissioned'), 0) as installed_kw,
          (select count(*) from incidents x where x.island_id = i.id and x.status = 'open') as open_incidents,
          (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold') and ${vis.sql}) as active_projects,
          (select sum(fc.fuel_capacity_l) from facilities fc

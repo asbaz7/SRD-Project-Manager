@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { csvUrl, qs } from '../api.js';
 import { Async, Card, EngineState, Empty, Flags, PageHead, Select } from '../components/ui.jsx';
 import { date, month, num } from '../format.js';
-import { useApi, useFilters } from '../hooks.js';
+import { useApi, useFilters, useRowLink } from '../hooks.js';
 
 const CHIPS = [
   ['', '', 'All engines', 'total'],
@@ -21,6 +21,11 @@ const CHIPS = [
 export default function Engines({ embedded }) {
   const [filters, setFilter] = useFilters({ sort: 'island' });
   const atolls = useApi('/atolls');
+  const rowLink = useRowLink();
+  const rowProps = (e) => {
+    const p = rowLink(`/assets/${e.id}`);
+    return { ...p, className: `${p.className}${e.condition === 'not_running' || e.condition === 'major_fault' ? ' attention' : ''}` };
+  };
   const params = { atoll_id: filters.atoll_id, condition: filters.condition, flag: filters.flag, q: filters.q, sort: filters.sort };
   const state = useApi(`/engines${qs(params)}`);
   const summary = useApi(`/engines${qs({ atoll_id: filters.atoll_id })}`); // counts for the chips, unfiltered
@@ -56,7 +61,7 @@ export default function Engines({ embedded }) {
                 <th className="num">Since overhaul</th><th className="num hide-sm">Total hours</th>
                 <th className="hide-sm">Last overhaul</th><th className="hide-sm">Alternator serviced</th><th className="hide-sm">Report</th>
               </tr></thead>
-              <tbody>{d.engines.map((e) => <tr key={e.id} className={e.condition === 'not_running' || e.condition === 'major_fault' ? 'attention' : ''}>
+              <tbody>{d.engines.map((e) => <tr key={e.id} {...rowProps(e)}>
                 <td className="wrap">
                   <Link to={`/assets/${e.id}`}><strong>{e.atoll_code} · {e.island_name} · G{e.tag}</strong></Link><br />
                   <small className="muted">{e.make_model || '—'}{e.rated_capacity ? ` · ${num(e.rated_capacity)} kW` : ''}</small>

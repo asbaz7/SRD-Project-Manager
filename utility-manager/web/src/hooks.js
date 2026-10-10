@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
 
 // Load a GET endpoint; re-runs when `path` changes. `path` null = skip.
@@ -53,4 +53,19 @@ export function useSubmit(fn) {
     }
   };
   return { submit, busy, error, setError };
+}
+
+// Makes a whole table row open `to`, as its name link does. Clicks on a
+// link or control inside the row, and selecting text, are left alone;
+// Ctrl / ⌘-click opens a new tab.
+export function useRowLink() {
+  const navigate = useNavigate();
+  return (to) => ({
+    className: 'row-link',
+    onClick: (e) => {
+      if (e.target.closest('a, button, input, select, textarea, label') || window.getSelection()?.toString()) return;
+      if (e.metaKey || e.ctrlKey) window.open(to, '_blank', 'noopener');
+      else navigate(to);
+    },
+  });
 }

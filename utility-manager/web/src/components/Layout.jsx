@@ -4,9 +4,12 @@ import { useAuth } from '../auth.jsx';
 import { ROLES } from '../format.js';
 import { Icon } from './icons.jsx';
 
-// The three service sections come first: that is where people go.
+// The region (Overview, Islands) and then the three service sections:
+// everything else hangs off an island.
+const ISLANDS = { to: '/islands', label: 'Islands', icon: 'island' };
 const MAIN = [
   { to: '/', label: 'Overview', icon: 'home', end: true },
+  ISLANDS,
   { to: '/electricity', label: 'Electricity', icon: 'electricity', svc: 'electricity' },
   { to: '/water', label: 'Water', icon: 'water', svc: 'water' },
   { to: '/sewerage', label: 'Sewerage', icon: 'sewerage', svc: 'sewerage' },
@@ -16,7 +19,6 @@ const MORE = [
   { to: '/incidents', label: 'Incidents', icon: 'incident' },
   { to: '/projects', label: 'Projects', icon: 'project' },
   { to: '/documents', label: 'Documents', icon: 'document' },
-  { to: '/islands', label: 'Islands', icon: 'island' },
 ];
 const ADMIN = [
   { to: '/admin/users', label: 'Users', icon: 'users', role: 'admin' },
@@ -49,16 +51,18 @@ export default function Layout() {
   const admin = ADMIN.filter((n) => can(n.role));
   // Non-technical staff don't have the service sections (engines, assets,
   // plants); work, incidents and projects move up instead.
-  const main = technical ? MAIN : [MAIN[0], ...MORE.slice(0, 4)];
-  const more = technical ? MORE : MORE.slice(4);
+  const main = technical ? MAIN : [MAIN[0], ISLANDS, ...MORE];
+  const more = technical ? MORE : [];
+  // Phones: four tabs (Overview and the services, or the main lists); the
+  // rest, Islands included, sit under More.
+  const tabs = main.filter((n) => n !== ISLANDS).slice(0, 4);
 
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Main">
         <Brand />
         {main.map((n) => <Link key={n.to} item={n} />)}
-        <div className="nav-section">{technical ? 'Activity' : 'More'}</div>
-        {more.map((n) => <Link key={n.to} item={n} />)}
+        {more.length > 0 && <><div className="nav-section">Activity</div>{more.map((n) => <Link key={n.to} item={n} />)}</>}
         {admin.length > 0 && <><div className="nav-section">Administration</div>{admin.map((n) => <Link key={n.to} item={n} />)}</>}
         <div className="nav-foot">
           <NavLink to="/account" className="who">
@@ -76,7 +80,7 @@ export default function Layout() {
       </header>
       <main className="page"><Outlet /></main>
       <nav className="bottom-bar" aria-label="Main">
-        {main.slice(0, 4).map((n) => (
+        {tabs.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>
             <Icon name={n.icon} size={22} />{n.label}
           </NavLink>
@@ -86,7 +90,7 @@ export default function Layout() {
       {sheet && <>
         <div className="sheet-backdrop" onClick={() => setSheet(false)} />
         <div className="sheet" role="menu">
-          {[...main.slice(4), ...more, ...admin].map((n) => <Link key={n.to} item={n} />)}
+          {[...main.filter((n) => !tabs.includes(n)), ...more, ...admin].map((n) => <Link key={n.to} item={n} />)}
           <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
       </>}
