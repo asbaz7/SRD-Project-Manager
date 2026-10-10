@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { id, parse } from '../http.js';
 import { expectedMonth, isMissing, reportState } from '../reportImport.js';
-import { mvToday } from './engines.js';
+import { dueCounts, mvToday } from './engines.js';
 import { projectVisible } from './projects.js';
 
 // Everything the overview page needs in one call. Optional atoll filter.
@@ -158,7 +158,7 @@ export default async function dashboardRoutes(app) {
       },
       projects: { ...projects.rows[0], list: activeProjects.rows },
       fuel_storage: technical ? fuel.rows[0] : null,
-      engines: technical ? engines.rows[0] : null,
+      engines: technical ? { ...engines.rows[0], ...(await dueCounts(db, today, atoll)) } : null,
       reports: technical ? {
         expected_month: expected,
         total: reports.rows.length,

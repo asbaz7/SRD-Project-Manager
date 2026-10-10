@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
 import { expectedMonth } from '../reportImport.js';
-import { ENGINE_SELECT, describeEngine, mvToday } from './engines.js';
+import { ENGINE_SELECT, describeEngine, loadIntervals, mvToday } from './engines.js';
 import { sendCsv } from '../csv.js';
 import { conflict } from '../errors.js';
 import { assetName, esc } from '../telegram.js';
@@ -218,10 +218,11 @@ export default async function assetRoutes(app) {
     asset.hours_log = hours.rows.reverse();
     if (engine.rows[0]) {
       const today = await mvToday(db, app.config.timezone);
-      const e = describeEngine(engine.rows[0], today, expectedMonth(today));
-      asset.engine = (({ last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul, overhaul_due,
-        alt_service_due, report_stale }) => ({ last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul,
-        overhaul_due, alt_service_due, report_stale }))(e);
+      const e = describeEngine(engine.rows[0], today, expectedMonth(today), await loadIntervals(db));
+      asset.engine = (({ last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul, overhaul_due, overhaul_rule,
+        overhaul_requested, alt_service_due, alt_service_rule, alt_requested, next_alt_service_due, intervals, report_stale }) => ({
+        last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul, overhaul_due, overhaul_rule, overhaul_requested,
+        alt_service_due, alt_service_rule, alt_requested, next_alt_service_due, intervals, report_stale }))(e);
       // Average running hours per month over the last year, to project the next overhaul.
       const log = asset.hours_log;
       if (log.length >= 2) {

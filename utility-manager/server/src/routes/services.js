@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { id, parse, service } from '../http.js';
 import { expectedMonth, isMissing, reportState } from '../reportImport.js';
-import { mvToday } from './engines.js';
+import { dueCounts, mvToday } from './engines.js';
 import { projectVisible } from './projects.js';
 
 export default async function serviceRoutes(app) {
@@ -126,7 +126,7 @@ export default async function serviceRoutes(app) {
       incidents: incidents.rows,
       projects: projects.rows,
       ...(svc === 'electricity' ? {
-        engines: engines.rows[0],
+        engines: { ...engines.rows[0], ...(await dueCounts(db, today, atoll)) },
         reports: { expected_month: expected, not_expected: facilities.rows.filter((f) => f.report_state === 'not_expected').length, missing: missing.map(({ id: facilityId, island_id, island_name, atoll_code, report_month }) => ({ facility_id: facilityId, island_id, island_name, atoll_code, report_month })) },
       } : {}),
     };

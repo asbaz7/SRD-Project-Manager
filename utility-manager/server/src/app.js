@@ -36,7 +36,7 @@ const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Technical information: engines, condition reports, assets, plants and the
 // Electricity / Water / Sewerage sections. Only technical staff (and
 // administrators) may use these, whatever their role.
-const TECHNICAL_PREFIXES = ['/engines', '/maintenance', '/condition-reports', '/assets', '/facilities', '/services']
+const TECHNICAL_PREFIXES = ['/engines', '/maintenance', '/service-intervals', '/condition-reports', '/assets', '/facilities', '/services']
   .map((p) => PREFIX + p);
 const BODY_LIMIT = 15 * 1024 * 1024; // report imports and document files (base64)
 

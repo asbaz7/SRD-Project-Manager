@@ -80,12 +80,13 @@ export default function Asset() {
           <dl className="facts small">
             <dt>Last overhaul</dt><dd>{date(e.last_overhaul_on)} <span className="muted">{ago(e.last_overhaul_on)}</span></dd>
             <dt>Total hours</dt><dd>{num(c?.total_hours)}{e.hours_per_month ? <span className="muted"> · ≈{num(e.hours_per_month)} h/month</span> : ''}</dd>
-            <dt>Next overhaul</dt><dd>{a.next_overhaul_hours != null || a.next_overhaul_on
+            <dt>Next overhaul</dt><dd>{e.hours_to_overhaul != null || a.next_overhaul_on
               ? <>{a.next_overhaul_hours != null && `at ${num(a.next_overhaul_hours)} h`}{a.next_overhaul_on && ` · by ${date(a.next_overhaul_on)}`}
-                {e.hours_to_overhaul != null && <span className={e.hours_to_overhaul <= 0 ? 'bad' : 'muted'}> ({e.hours_to_overhaul <= 0 ? `${num(-e.hours_to_overhaul)} h overdue` : `${num(e.hours_to_overhaul)} h to go${e.hours_per_month ? `, ≈${Math.max(1, Math.round(e.hours_to_overhaul / e.hours_per_month))} months` : ''}`})</span>}</>
-              : <span className="muted">Not scheduled yet</span>}</dd>
+                {e.hours_to_overhaul != null && <span className={e.hours_to_overhaul <= 0 ? 'bad' : ''}>{a.next_overhaul_hours != null || a.next_overhaul_on ? ' (' : ''}{e.hours_to_overhaul <= 0 ? `${num(-e.hours_to_overhaul)} h overdue` : `in ${num(e.hours_to_overhaul)} h${e.hours_per_month ? `, ≈${Math.max(1, Math.round(e.hours_to_overhaul / e.hours_per_month))} months` : ''}`}{a.next_overhaul_hours != null || a.next_overhaul_on ? ')' : ''}</span>}
+                {e.overhaul_rule === 'interval' && <><br /><small className="muted">every {num(e.intervals.overhaul_hours)} h{e.intervals.model_match ? ` (${e.intervals.model_match})` : ''}</small></>}</>
+              : <span className="muted">Not known: no hours since overhaul</span>}</dd>
           </dl>
-          {(c?.needs_overhaul || e.overhaul_due) && <p className="flag bad">Overhaul needed{c?.needs_overhaul ? ' (per latest report)' : ''}</p>}
+          {(c?.needs_overhaul || e.overhaul_due) && <p className="flag bad">Overhaul needed{c?.needs_overhaul ? ' · requested on the latest report' : ' · by hours'}</p>}
           {c?.overhaul_spares_received != null && <p className="small">Spares received: {c.overhaul_spares_received ? 'Yes' : 'No'}</p>}
         </Card>
 
@@ -95,9 +96,11 @@ export default function Asset() {
           <dl className="facts small">
             <dt>Make</dt><dd>{a.alt_make || '—'}{a.alt_kw ? ` · ${num(a.alt_kw)} kW` : ''}</dd>
             <dt>Serial / frame</dt><dd>{[a.alt_serial, a.alt_frame].filter(Boolean).join(' · ') || '—'}</dd>
-            <dt>Next service</dt><dd>{a.next_alt_service_on ? date(a.next_alt_service_on) : <span className="muted">Not scheduled yet</span>}</dd>
+            <dt>Next service</dt><dd>{e.next_alt_service_due ? <>{date(e.next_alt_service_due)}<br /><small className="muted">{e.alt_service_rule === 'set'
+              ? 'set on this genset' : `${e.intervals.alt_service_months} months after the last${e.intervals.model_match ? ` (${e.intervals.model_match})` : ''}`}</small></>
+              : <span className="muted">Not known: no service recorded</span>}</dd>
           </dl>
-          {e.alt_service_due && <p className="flag warn">Service needed{c?.alt_needs_service ? ' (per latest report)' : ''}</p>}
+          {e.alt_service_due && <p className="flag warn">Service needed{e.alt_requested ? ' · requested on the latest report' : ' · by date'}</p>}
         </Card>
 
         <Card title="Other">

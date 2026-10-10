@@ -43,11 +43,12 @@ export function WorkState({ value }) {
 // Small labelled flags shown next to an engine.
 export function Flags({ e }) {
   const flags = [];
-  if (e.overhaul_due || e.needs_overhaul) flags.push(['bad', 'Overhaul due']);
-  if (e.alt_service_due || e.alt_needs_service) flags.push(['warn', 'Alternator service']);
+  // "requested" = the island ticked it on its sheet; otherwise due by rule.
+  if (e.overhaul_due || e.needs_overhaul) flags.push(['bad', 'Overhaul due', e.needs_overhaul ? 'Island requested on its report' : 'Due by hours since overhaul']);
+  if (e.alt_service_due || e.alt_needs_service) flags.push(['warn', `Alternator service${e.alt_needs_service ? ' · requested' : ''}`, e.alt_needs_service ? 'Island requested on its report' : `Due since ${e.next_alt_service_due || '—'}`]);
   for (const w of e.open_work || []) flags.push(['info', `🔧 ${w.title}`]);
   if (!flags.length) return null;
-  return <span className="flags">{flags.map(([tone, t], i) => <span key={i} className={`flag ${tone}`}>{t}</span>)}</span>;
+  return <span className="flags">{flags.map(([tone, t, why], i) => <span key={i} className={`flag ${tone}`} title={why}>{t}</span>)}</span>;
 }
 
 export function Severity({ value }) {

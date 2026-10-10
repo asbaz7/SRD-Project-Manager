@@ -512,6 +512,8 @@ history.
 | GET | `/condition-reports/history?facility_id\|asset_id&from&to` | any | Report history month by month, per source |
 | POST | `/condition-reports/preview` | manager | Read an uploaded `.xlsx` (base64), match its island and show the changes. Saves nothing |
 | POST | `/condition-reports/import` | manager | Apply it for the confirmed island |
+| GET / PUT | `/service-intervals` | read: any · write: technical manager | Overhaul (hours) and alternator service (months) intervals: the region's, and per model (matched on part of the make / model, e.g. `KTA38`) |
+| PATCH | `/assets/:id` with `next_overhaul_on`, `next_overhaul_hours`, `next_alt_service_on` | manager (e.g. the Fleet Manager service account) | Set the next service on one genset; wins over the interval until a later service is recorded |
 | POST | `/assets/:id/maintenance` | manager | Add a maintenance record by hand |
 | PATCH | `/maintenance/:id` | manager | Correct a record (manual: all fields; from work: hours and notes) with a required `reason` |
 | DELETE | `/maintenance/:id` | manager (own manual records) / admin | Remove a record |

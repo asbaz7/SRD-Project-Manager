@@ -235,7 +235,9 @@ describe('uploading condition reports', () => {
     assert.equal(all.summary.minor_fault, 1);
     assert.equal(all.summary.not_running, 1);
     assert.equal(all.summary.overhaul_due, 1);
-    assert.equal(all.summary.alt_service_due, 1);
+    // One ticked on its sheet, one due by rule (last service over 12 months ago).
+    assert.equal(all.summary.alt_service_due, 2);
+    assert.equal(all.summary.alt_requested, 1);
     const faults = (await call('GET', '/engines?condition=faults', { token: admin })).body;
     assert.deepEqual(faults.engines.map((e) => e.tag).sort(), ['2', '9']);
     const due = (await call('GET', '/engines?flag=overhaul', { token: admin })).body;
@@ -794,6 +796,42 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.equal(after.assets, before.assets - 1);
     assert.equal(after.unknown, before.unknown - 1);
     assert.equal(after.down, before.down, 'no report is not down');
+  });
+
+  test('overhauls and alternator services fall due by interval, per model and per engine', async () => {
+    const [g1] = gensets;
+    const engine = async () => (await call('GET', `/assets/${g1.id}`, { token: admin })).body.engine;
+    await db.query("update engine_conditions set needs_overhaul = false, alt_needs_service = false, hours_since_overhaul = 15000, last_alt_service_on = $2 where asset_id = $1",
+      [g1.id, shift(EXPECTED, -6)]);
+    await db.query("delete from maintenance_events where asset_id = $1 and kind in ('alternator_service', 'overhaul', 'top_overhaul')", [g1.id]);
+    let e = await engine();
+    assert.equal(e.hours_to_overhaul, 5000, 'region default: 20,000 h');
+    assert.equal(e.overhaul_rule, 'interval');
+    assert.equal(e.next_alt_service_due, shift(EXPECTED, 6), 'region default: 12 months');
+    assert.equal(e.alt_service_due, false);
+
+    const model = (await db.query('select make_model from assets where id = $1', [g1.id])).rows[0].make_model;
+    const put = await call('PUT', '/service-intervals', { token: manager, body: {
+      region: { overhaul_hours: 20000, alt_service_months: 12 }, models: [{ model_match: model.split(' ').at(-1), overhaul_hours: 12000, alt_service_months: 3 }] } });
+    assert.equal(put.status, 200, JSON.stringify(put.body));
+    e = await engine();
+    assert.equal(e.hours_to_overhaul, -3000, 'model interval wins');
+    assert.equal(e.overhaul_due, true);
+    assert.equal(e.alt_service_due, true, 'due by rule without the tick');
+    assert.equal(e.alt_requested, false);
+
+    // Set on the genset itself (e.g. by Fleet Manager): wins over the rule.
+    const set = await call('PATCH', `/assets/${g1.id}`, { token: admin, body: { next_alt_service_on: shift(EXPECTED, 9), next_overhaul_hours: 999999 } });
+    assert.equal(set.status, 200, JSON.stringify(set.body));
+    e = await engine();
+    assert.equal(e.alt_service_rule, 'set');
+    assert.equal(e.alt_service_due, false);
+    assert.equal(e.overhaul_due, false);
+    const dash = (await call('GET', '/dashboard', { token: admin })).body.engines;
+    assert.ok(dash.alt_service_due >= dash.alt_requested);
+    assert.equal((await call('PUT', '/service-intervals', { token: manager, body: { region: {}, models: [{ model_match: 'KTA', overhaul_hours: 1 }, { model_match: 'kta' }] } })).status, 400);
+    await call('PUT', '/service-intervals', { token: manager, body: { region: { overhaul_hours: 20000, alt_service_months: 12 }, models: [] } });
+    assert.deepEqual((await call('GET', '/service-intervals', { token: admin })).body.models, []);
   });
 
   test('bad reports are refused', async () => {

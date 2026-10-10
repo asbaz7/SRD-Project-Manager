@@ -71,7 +71,7 @@ function ServiceOverview({ svc }) {
           {isEl && <Stat label="Serious faults" value={d.engines.major_fault + d.engines.not_running} tone={d.engines.major_fault + d.engines.not_running ? 'alert' : ''}
             sub={`${d.engines.not_running} not running · ${d.engines.minor_fault} minor`} to="/electricity/engines?condition=faults" />}
           {isEl && <Stat label="Overhaul due" value={d.engines.overhaul_due} tone={d.engines.overhaul_due ? 'warn' : ''}
-            sub={`${d.engines.alt_service_due} alternator services due`} to="/electricity/engines?flag=overhaul" />}
+            sub={`${d.engines.alt_service_due} alternator services due${d.engines.alt_requested ? ` (${d.engines.alt_requested} requested by islands)` : ''}`} to="/electricity/engines?flag=overhaul" />}
           {!isEl && <Stat label="Out of service" value={s.down} tone={s.down ? 'alert' : ''} />}
           <Stat label="Work ongoing" value={d.work.length} to={`/work?service=${svc}`} />
           <Stat label="Open incidents" value={d.incidents.length} tone={d.incidents.some((x) => x.severity === 'critical') ? 'alert' : ''} to={`/incidents?service=${svc}&status=open`} />

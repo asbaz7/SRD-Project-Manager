@@ -35,7 +35,7 @@ function attentionItems(d) {
   for (const w of d.work.filter((x) => x.overdue)) {
     items.push({ tone: 'warn', mark: '⏱', to: `/work/${w.id}`, text: `${w.title} — past target date`, sub: `${w.atoll_code} ${w.island_name} · target ${date(w.target_on)}` });
   }
-  if (e.overhaul_due) items.push({ tone: 'info', mark: e.overhaul_due, to: '/electricity/engines?flag=overhaul', text: `${e.overhaul_due} engine${e.overhaul_due === 1 ? '' : 's'} due for overhaul`, sub: e.alt_service_due ? `${e.alt_service_due} alternator services due as well` : '' });
+  if (e.overhaul_due) items.push({ tone: 'info', mark: e.overhaul_due, to: '/electricity/engines?flag=overhaul', text: `${e.overhaul_due} engine${e.overhaul_due === 1 ? '' : 's'} due for overhaul`, sub: e.alt_service_due ? `${e.alt_service_due} alternator services due as well${e.alt_requested ? ` (${e.alt_requested} requested by islands)` : ''}` : '' });
   return items;
 }
 
