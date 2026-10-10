@@ -57,7 +57,7 @@ export default async function serviceRoutes(app) {
       // fault in the latest condition report.
       db.query(`
         select s.id, s.kind, s.tag, s.make_model, s.status, s.status_note, s.status_at,
-               c.condition, c.condition_source, c.condition_note, c.condition_at, c.status_text, c.fault, i.id as island_id, i.name as island_name, a.code as atoll_code,
+               c.condition, c.condition_source, c.condition_note, c.condition_at, c.status_text, c.fault, c.report_month, i.id as island_id, i.name as island_name, a.code as atoll_code,
                (select w.title from work_orders w where w.asset_id = s.id and w.status not in ('completed', 'cancelled')
                  order by w.created_at desc limit 1) as work_title
           from assets s
@@ -67,6 +67,10 @@ export default async function serviceRoutes(app) {
           left join engine_current c on c.asset_id = s.id
          where s.active and f.service = $1 and ${scope}
            and (s.status in ('down', 'maintenance') or c.condition in ('major_fault', 'not_running'))
+           -- A report's fault that completed work dealt with is off the list
+           -- until a newer report raises it again.
+           and not (s.status not in ('down', 'maintenance') and c.condition_source = 'report' and exists (
+             select 1 from work_orders x where x.asset_id = s.id and x.status = 'completed' and x.fault_report_month = c.report_month))
          order by (c.condition = 'not_running' or s.status = 'down') desc, a.code, i.name, length(s.tag), s.tag
          limit 100`, [svc, atoll]),
       db.query(`

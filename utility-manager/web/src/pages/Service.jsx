@@ -56,6 +56,8 @@ function AtollFilter({ filters, setFilter }) {
 
 function ServiceOverview({ svc }) {
   const [filters, setFilter] = useFilters();
+  const { can, technical } = useAuth();
+  const canLog = can('manager') && technical;
   const state = useApi(`/services/${svc}${qs({ atoll_id: filters.atoll_id })}`);
   const isEl = svc === 'electricity';
   return <>
@@ -97,13 +99,19 @@ function ServiceOverview({ svc }) {
           {d.attention.length === 0 ? <p className="all-clear"><Icon name="check" /> Everything with a status is in service.</p> :
             <ul className="attention-list scroll-y">{d.attention.map((a) => {
               const serious = a.condition === 'not_running' || a.status === 'down';
-              return <li key={a.id}><Link to={`/assets/${a.id}`}>
+              // No work yet: log it from here, filled in from the fault.
+              const fault = (a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || '';
+              const logWork = canLog && !a.work_title && `/work/new${qs({ asset_id: a.id, kind: 'repair',
+                title: `${ASSET_KINDS[a.kind]} ${a.tag}: ${fault || (a.condition ? 'fault in condition report' : 'out of service')}`.slice(0, 200),
+                description: [a.status_text && `Report says: ${a.status_text}`, fault].filter(Boolean).join('\n') || undefined,
+                fault_report_month: a.condition_source === 'report' ? a.report_month : undefined })}`;
+              return <li key={a.id} className={logWork ? 'with-action' : ''}><Link to={`/assets/${a.id}`}>
                 <span className={`dot ${serious ? 'bad' : 'serious'}`} aria-hidden="true">{serious ? '✕' : '■'}</span>
                 <span className="grow"><strong>{a.atoll_code} · {a.island_name} · {ASSET_KINDS[a.kind]} {a.tag}</strong>
                   <small>{a.condition ? <Condition value={a.condition} /> : <AssetStatus status={a.status} />}{' '}
                     {(a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || a.make_model || ''}{a.work_title && ` · 🔧 ${a.work_title}`}</small></span>
                 <Icon name="arrow" />
-              </Link></li>;
+              </Link>{logWork && <Link className="act" to={logWork}>Log work</Link>}</li>;
             })}</ul>}
         </Card>
 

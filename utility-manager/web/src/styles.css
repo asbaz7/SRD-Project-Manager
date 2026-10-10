@@ -487,3 +487,8 @@ tr.group-head .chev { display: inline-block; width: 1em; transition: transform .
 tr.group-head.collapsed .chev { transform: rotate(-90deg); }
 ul.plain { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
 details > summary { cursor: pointer; }
+
+/* Needs attention rows with a "Log work" action beside the row link. */
+.attention-list li.with-action { display: flex; gap: 6px; align-items: stretch; }
+.attention-list li.with-action > a:first-child { flex: 1; min-width: 0; }
+.attention-list li a.act { flex: none; align-items: center; padding: 0 12px; font-size: .85rem; font-weight: 600; color: var(--accent); }

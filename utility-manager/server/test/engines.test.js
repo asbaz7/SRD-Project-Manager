@@ -868,6 +868,34 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.equal((await call('POST', `/assets/${fresh}/merge`, { token: admin, body: { from_asset_id: fresh, moved_on: EXPECTED } })).status, 400);
   });
 
+  test('work logged from a fault clears it from Needs attention when completed; work is assigned to a person', async () => {
+    // Dhigurah G2 reports a major fault and is still running.
+    const g2 = gensets.find((g) => g.tag === '2');
+    await send({ report_month: EXPECTED, engines: [{ srd_asset_id: g2.id, condition: 'major_fault', status_text: 'RUNNING; MAJOR FAULT', fault: 'Turbo noise' }] });
+    await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g2.id, status: 'running' }] } });
+    const attention = async () => (await call('GET', `/services/electricity?atoll_id=${dhigurah.atoll_id}`, { token: admin })).body.attention;
+    assert.ok((await attention()).some((a) => a.id === g2.id && a.report_month === EXPECTED));
+
+    const people = (await call('GET', '/users/directory', { token: admin })).body;
+    const person = people.find((p) => p.technical);
+    const w = await call('POST', '/work', { token: admin, body: {
+      asset_id: g2.id, kind: 'repair', title: 'Genset 2: Turbo noise', fault_report_month: EXPECTED, assigned_user_id: person.id, assigned_to: 'Mechanical team' } });
+    assert.equal(w.status, 201, JSON.stringify(w.body));
+    assert.equal(w.body.assigned_user_name, person.full_name);
+    assert.ok((await attention()).find((a) => a.id === g2.id).work_title, 'listed with its work while open');
+    const mine = (await call('GET', `/work?assignee=${person.id}`, { token: admin })).body.items;
+    assert.deepEqual(mine.map((x) => x.id), [w.body.id]);
+
+    await call('POST', `/work/${w.body.id}/updates`, { token: admin, body: { body: 'Turbo replaced', status: 'completed' } });
+    assert.ok(!(await attention()).some((a) => a.id === g2.id), 'cleared once the work is completed');
+    // A newer report with the fault brings it back.
+    await send({ report_month: shift(EXPECTED, 1), engines: [{ srd_asset_id: g2.id, condition: 'major_fault', fault: 'Turbo noise again' }] });
+    assert.ok((await attention()).some((a) => a.id === g2.id));
+
+    const svc = (await db.query("select id from users where service_account limit 1")).rows[0];
+    if (svc) assert.equal((await call('PATCH', `/work/${w.body.id}`, { token: admin, body: { assigned_user_id: svc.id } })).status, 400);
+  });
+
   test('bad reports are refused', async () => {
     const other = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id
                                     where f.island_id = $1 and s.kind = 'genset' and s.active limit 1`, [maafushi.id])).rows[0];
