@@ -52,6 +52,7 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
 }
 
 const DEFAULT_UNIT = { genset: 'kW', solar_inverter: 'kW', battery: 'kWh', transformer: 'kVA', ro_unit: 'm3/day', pump: 'm3/h', blower: 'kW', tank: 'm3' };
+const UNITS = ['kW', 'kVA', 'kWh', 'm3/day', 'm3/h', 'm3', 'L'];
 
 export function AssetForm({ facilityId, asset, onClose, onSaved }) {
   const [a, setA] = useState(asset || { kind: 'genset', tag: '', capacity_unit: 'kW', active: true });
@@ -83,7 +84,10 @@ export function AssetForm({ facilityId, asset, onClose, onSaved }) {
         <Field label="Serial number"><input value={a.serial_no ?? ''} onChange={set('serial_no')} /></Field>
         <Field label="Rated capacity"><input type="number" min="0" step="any" value={a.rated_capacity ?? ''} onChange={set('rated_capacity')} /></Field>
         <Field label="Operating (derated) capacity"><input type="number" min="0" step="any" value={a.operating_capacity ?? ''} onChange={set('operating_capacity')} /></Field>
-        <Field label="Capacity unit"><input value={a.capacity_unit ?? ''} onChange={set('capacity_unit')} /></Field>
+        {/* Gensets are always rated in kW; other assets pick a unit. */}
+        <Field label="Capacity unit">{a.kind === 'genset' ? <input value="kW" disabled />
+          : <Select value={a.capacity_unit ?? ''} onChange={set('capacity_unit')} placeholder="—"
+              options={[...new Set([...UNITS, ...(a.capacity_unit ? [a.capacity_unit] : [])])].map((u) => [u, u])} />}</Field>
         {a.kind !== 'genset' && <Field label="Running hours"><input type="number" min="0" step="any" value={a.running_hours ?? ''} onChange={set('running_hours')} /></Field>}
         <Field label={a.kind === 'genset' ? 'Installed on' : 'Commissioned on'}><input type="date" value={a.commissioned_on ?? ''} onChange={set('commissioned_on')} /></Field>
         {a.kind === 'genset' && <>

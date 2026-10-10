@@ -238,6 +238,7 @@ export default async function assetRoutes(app) {
 
   app.post('/assets', manager, async (req, reply) => {
     const body = parse(assetBody, req.body);
+    if (body.kind === 'genset') body.capacity_unit = 'kW';      // gensets are always rated in kW
     await assertIslandWrite(db, req.user, { facilityId: body.facility_id });
     const cols = ['facility_id', ...ASSET_COLS].filter((k) => body[k] !== undefined);
     const row = await db.tx(req.user.id, async (t) => one((await t.query(
@@ -251,6 +252,10 @@ export default async function assetRoutes(app) {
     const { id: assetId } = parse(idParam, req.params);
     const body = parse(assetBody.omit({ facility_id: true }).partial(), req.body);
     await assertIslandWrite(db, req.user, { assetId });
+    if (body.capacity_unit !== undefined || body.kind === 'genset') {
+      const { rows: [cur] } = await db.query('select kind from assets where id = $1', [assetId]);
+      if ((body.kind ?? cur?.kind) === 'genset') body.capacity_unit = 'kW';
+    }
     const set = updateSet(body, ASSET_COLS);
     // A serial number changed by hand is kept over what reports say.
     const lock = body.serial_no !== undefined

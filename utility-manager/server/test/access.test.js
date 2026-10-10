@@ -333,6 +333,12 @@ test('access tokens: a service account for another system, revocable, changes si
   const who = (await db.query(`select u.full_name from audit_log l join users u on u.id = l.user_id where l.entity = 'maintenance_events' order by l.at desc limit 1`)).rows[0];
   assert.equal(who.full_name, 'Fleet Manager');
 
+  // Its "last used" stamps are hidden from the audit trail unless asked for.
+  const stamps = (rows) => rows.filter((l) => l.entity === 'api_tokens' && l.action === 'update'
+    && Object.keys(l.changes).length === 1 && l.changes.last_used_at);
+  assert.equal(stamps((await call('GET', '/audit?limit=200', T.admin)).body.items).length, 0);
+  assert.ok(stamps((await call('GET', '/audit?limit=200&system=1', T.admin)).body.items).length >= 1);
+
   // Revoked: refused at once.
   await call('DELETE', `/admin/api-tokens/${made.body.id}`, T.admin);
   assert.equal((await call('GET', '/auth/me', token)).status, 401);

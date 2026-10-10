@@ -4,7 +4,7 @@ import { dateTime } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
 const ENTITIES = {
-  assets: 'Assets', facilities: 'Facilities', work_orders: 'Work', maintenance_events: 'Maintenance records', incidents: 'Incidents', projects: 'Projects',
+  assets: 'Assets', facilities: 'Facilities', work_orders: 'Work', maintenance_events: 'Maintenance records', service_intervals: 'Service intervals', api_tokens: 'Access tokens', incidents: 'Incidents', projects: 'Projects',
   project_updates: 'Project updates', islands: 'Islands', atolls: 'Atolls', users: 'Users', user_scopes: 'User assignments',
 };
 
@@ -21,12 +21,13 @@ const fmt = (v) => (v === null || v === undefined ? '∅' : typeof v === 'object
 
 export default function Audit() {
   const [filters, setFilter] = useFilters();
-  const state = useApi(`/audit${qs({ entity: filters.entity, entity_id: filters.entity_id, offset: filters.offset })}`);
+  const state = useApi(`/audit${qs({ entity: filters.entity, entity_id: filters.entity_id, system: filters.system, offset: filters.offset })}`);
   return <>
     <PageHead title="Audit trail" icon="audit" />
     <div className="filters">
       <Select value={filters.entity} onChange={(v) => setFilter('entity', v)} placeholder="All records" options={ENTITIES} aria-label="Record type" />
       {filters.entity_id && <button className="btn ghost small" onClick={() => setFilter('entity_id', '')}>✕ one record</button>}
+      <label className="check"><input type="checkbox" checked={filters.system === '1'} onChange={(e) => setFilter('system', e.target.checked ? '1' : '')} /> Show system updates (access tokens used by other systems)</label>
     </div>
     <Async state={state}>{(page) => (
       <Card>

@@ -16,8 +16,15 @@ export default async function auditRoutes(app) {
       entity: z.string().max(60).optional(),
       entity_id: z.string().max(100).optional(),
       user_id: id.optional(),
+      system: z.enum(['0', '1']).default('0'),
     }), req.query);
     const w = new Where().add('l.entity = ?', q.entity).add('l.entity_id = ?', q.entity_id).add('l.user_id = ?', q.user_id);
+    // An integration's token is stamped "last used" on every call: noise,
+    // hidden unless asked for.
+    if (q.system !== '1') {
+      w.raw(`not (l.entity = 'api_tokens' and l.action = 'update' and l.changes ? 'last_used_at'
+                  and (select count(*) from jsonb_object_keys(l.changes)) = 1)`);
+    }
     if (!req.user.technical) w.raw(`l.entity not in (${TECHNICAL_ENTITIES.map((e) => `'${e}'`).join(', ')})`);
     // Document changes only for documents the user can see.
     if (req.user.role !== 'admin') {

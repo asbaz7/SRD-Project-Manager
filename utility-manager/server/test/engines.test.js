@@ -896,6 +896,18 @@ describe('reports sent by Fleet Manager, and report history', () => {
     if (svc) assert.equal((await call('PATCH', `/work/${w.body.id}`, { token: admin, body: { assigned_user_id: svc.id } })).status, 400);
   });
 
+  test('gensets are always rated in kW; K. Kudagiri is on the register', async () => {
+    const ph = (await db.query("select id from facilities where island_id = $1 and kind = 'powerhouse' order by created_at limit 1", [maafushi.id])).rows[0].id;
+    const made = await call('POST', '/assets', { token: admin, body: { facility_id: ph, kind: 'genset', tag: '31', capacity_unit: 'KVA', rated_capacity: 500 } });
+    assert.equal(made.status, 201, JSON.stringify(made.body));
+    assert.equal(made.body.capacity_unit, 'kW');
+    assert.equal((await call('PATCH', `/assets/${made.body.id}`, { token: admin, body: { capacity_unit: 'kw ' } })).body.capacity_unit, 'kW');
+    const kudagiri = (await call('GET', '/islands', { token: admin })).body.find((i) => i.name === 'Kudagiri');
+    assert.equal(kudagiri?.atoll_code, 'K');
+    const island = (await call('GET', `/islands/${kudagiri.id}`, { token: admin })).body;
+    assert.deepEqual(island.facilities.map((f) => f.name), ['Kudagiri Powerhouse']);
+  });
+
   test('bad reports are refused', async () => {
     const other = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id
                                     where f.island_id = $1 and s.kind = 'genset' and s.active limit 1`, [maafushi.id])).rows[0];

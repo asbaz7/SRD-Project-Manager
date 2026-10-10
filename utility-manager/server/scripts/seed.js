@@ -8,6 +8,8 @@ import { createDb } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
 
 const ATOLLS = { K: 'Kaafu', ADh: 'Alif Dhaalu', V: 'Vaavu', M: 'Meemu' };
+// Islands with a powerhouse but no gensets on the register yet.
+const NO_GENSETS_YET = [['K', 'Kudagiri']];
 
 export async function seedRegister(db) {
   const tsv = await readFile(new URL('../seed/srd_register.tsv', import.meta.url), 'utf8');
@@ -35,6 +37,15 @@ export async function seedRegister(db) {
           from facilities f join islands i on i.id = f.island_id join atolls a on a.id = i.atoll_id
          where a.code = $1 and i.name = $2 and f.name = $2 || ' Powerhouse'
         on conflict (facility_id, kind, tag) do nothing`, [r.atoll, r.island, r.tag, r.model, r.rated, r.operating]);
+    }
+    for (const [atoll, island] of NO_GENSETS_YET) {
+      await t.query(`insert into islands (atoll_id, name) select id, $2 from atolls where code = $1
+                     on conflict (atoll_id, name) do nothing`, [atoll, island]);
+      await t.query(`
+        insert into facilities (island_id, service, kind, name)
+        select i.id, 'electricity', 'powerhouse', $2 || ' Powerhouse'
+          from islands i join atolls a on a.id = i.atoll_id where a.code = $1 and i.name = $2
+        on conflict (island_id, name) do nothing`, [atoll, island]);
     }
   });
   // Fuel storage capacity per island, from the old shared sheet's "Islands"
