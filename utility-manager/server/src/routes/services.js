@@ -37,6 +37,7 @@ export default async function serviceRoutes(app) {
          group by s.capacity_unit order by sum(s.rated_capacity) desc`, [svc, atoll]),
       db.query(`
         select f.id, f.name, f.kind, f.fuel_capacity_l, f.water_capacity_m3, i.id as island_id, i.name as island_name,
+               f.licence_type, f.licence_expires_on, f.licence_status,
                a.code as atoll_code, r.report_month, f.reports_from,
                count(s.id) as assets,
                count(s.id) filter (where s.status = 'running') as running,

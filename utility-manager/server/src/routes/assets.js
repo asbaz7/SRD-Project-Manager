@@ -10,7 +10,7 @@ import {
   Where, date, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
 } from '../http.js';
 
-const FACILITY_KINDS = ['powerhouse', 'solar_plant', 'water_plant', 'water_storage', 'sewerage_plant', 'pump_station', 'other'];
+const FACILITY_KINDS = ['powerhouse', 'solar_plant', 'water_plant', 'water_storage', 'sewerage_plant', 'sewerage_system', 'pump_station', 'other'];
 const ASSET_KINDS = ['genset', 'solar_inverter', 'battery', 'transformer', 'ro_unit', 'pump', 'blower', 'tank', 'other'];
 const STATUSES = ['running', 'standby', 'down', 'maintenance', 'decommissioned', 'unknown'];
 
@@ -22,12 +22,19 @@ const facilityBody = z.object({
   fuel_capacity_l: optNumber,
   water_capacity_m3: optNumber,
   commissioned_on: z.iso.date().nullish(),
+  handover_on: z.iso.date().nullish(),
+  // Operating licence (water and sewerage): P permanent, T temporary, TP.
+  licence_type: optText(20),
+  licence_issued_on: z.iso.date().nullish(),
+  licence_expires_on: z.iso.date().nullish(),
+  licence_status: optText(200),
   // First month a condition report is expected; empty = not surveyed yet.
   reports_from: z.iso.date().refine((d) => d.endsWith('-01'), 'must be the first day of a month').nullish(),
   notes: optText(),
   active: z.boolean().optional(),
 });
-const FACILITY_COLS = ['service', 'kind', 'name', 'fuel_capacity_l', 'water_capacity_m3', 'commissioned_on', 'reports_from', 'notes', 'active'];
+const FACILITY_COLS = ['service', 'kind', 'name', 'fuel_capacity_l', 'water_capacity_m3', 'commissioned_on', 'handover_on',
+  'licence_type', 'licence_issued_on', 'licence_expires_on', 'licence_status', 'reports_from', 'notes', 'active'];
 
 const assetBody = z.object({
   facility_id: id,

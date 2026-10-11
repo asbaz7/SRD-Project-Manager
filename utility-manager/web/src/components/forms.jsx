@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { useSubmit } from '../hooks.js';
-import { ASSET_KINDS, FACILITY_KINDS, SERVICES } from '../format.js';
+import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES } from '../format.js';
 import { ErrorBox, Field, Modal, Select } from './ui.jsx';
 
 const numOrNull = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
@@ -17,6 +17,10 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
       service: f.service, kind: f.kind, name: f.name,
       fuel_capacity_l: numOrNull(f.fuel_capacity_l), water_capacity_m3: numOrNull(f.water_capacity_m3),
       commissioned_on: strOrNull(f.commissioned_on || ''), notes: f.notes || null,
+      ...(f.service !== 'electricity' ? {
+        handover_on: strOrNull(f.handover_on || ''), licence_type: f.licence_type || null, licence_issued_on: strOrNull(f.licence_issued_on || ''),
+        licence_expires_on: strOrNull(f.licence_expires_on || ''), licence_status: f.licence_status || null,
+      } : {}),
       ...(f.service === 'electricity' && f.kind === 'powerhouse' ? { reports_from: f.reports_from ? `${f.reports_from.slice(0, 7)}-01` : null } : {}),
     };
     if (facility) await api(`/facilities/${facility.id}`, { method: 'PATCH', body: { ...body, active: f.active } });
@@ -38,6 +42,13 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
         <Field label="Type"><Select value={f.kind} onChange={set('kind')} options={FACILITY_KINDS} /></Field>
         {f.service === 'electricity' && <Field label="Fuel capacity (L)"><input type="number" min="0" step="any" value={f.fuel_capacity_l ?? ''} onChange={set('fuel_capacity_l')} /></Field>}
         {f.service === 'water' && <Field label="Water storage capacity (m³)"><input type="number" min="0" step="any" value={f.water_capacity_m3 ?? ''} onChange={set('water_capacity_m3')} /></Field>}
+        {f.service !== 'electricity' && <>
+          <Field label="Handed over"><input type="date" value={f.handover_on?.slice(0, 10) ?? ''} onChange={set('handover_on')} /></Field>
+          <Field label="Operating licence"><Select value={f.licence_type ?? ''} onChange={set('licence_type')} placeholder="None" options={LICENCE_TYPES} /></Field>
+          <Field label="Licence issued"><input type="date" value={f.licence_issued_on?.slice(0, 10) ?? ''} onChange={set('licence_issued_on')} /></Field>
+          <Field label="Licence expires"><input type="date" value={f.licence_expires_on?.slice(0, 10) ?? ''} onChange={set('licence_expires_on')} /></Field>
+          <Field label="Licence status" hint="e.g. Valid, Expired, Applied, Change to URA OL"><input value={f.licence_status ?? ''} onChange={set('licence_status')} /></Field>
+        </>}
         {f.service === 'electricity' && f.kind === 'powerhouse' && <Field label="Condition reports expected from" hint="Leave empty until STELCO has surveyed it: it isn't chased for reports until then. Its first report fills this in.">
           <input type="month" value={f.reports_from?.slice(0, 7) ?? ''} onChange={(e) => set('reports_from')(e.target.value)} /></Field>}
         <Field label="Commissioned on"><input type="date" value={f.commissioned_on ?? ''} onChange={set('commissioned_on')} /></Field>

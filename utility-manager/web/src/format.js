@@ -17,8 +17,24 @@ export const ASSET_STATUS = {
 
 export const FACILITY_KINDS = {
   powerhouse: 'Powerhouse', solar_plant: 'Solar plant', water_plant: 'Water plant (RO)', water_storage: 'Water storage',
-  sewerage_plant: 'Sewage treatment plant', pump_station: 'Pump station', other: 'Other',
+  sewerage_plant: 'Sewage treatment plant', sewerage_system: 'Sewerage system', pump_station: 'Pump station', other: 'Other',
 };
+// Operating licences of water and sewerage systems.
+export const LICENCE_TYPES = { P: 'Permanent', T: 'Temporary', TP: 'Temporary (TP)' };
+
+// A plant's operating licence at a glance: expired (by the department's
+// status or the date), expiring within 90 days, not held, or valid.
+export function licenceState(f) {
+  if (!f.licence_type && !f.licence_status && !f.licence_expires_on) return null;
+  const expires = f.licence_expires_on ? String(f.licence_expires_on).slice(0, 10) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  const soon = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
+  if (/expired/i.test(f.licence_status || '') || (expires && expires < today)) return { tone: 'bad', text: `Licence expired${expires && expires < today ? ` ${date(expires)}` : ''}` };
+  if (!f.licence_type) return { tone: 'warn', text: `No licence${f.licence_status ? `: ${f.licence_status}` : ''}` };
+  if (expires && expires < soon) return { tone: 'warn', text: `Licence expires ${date(expires)}` };
+  return { tone: '', text: `Licence ${LICENCE_TYPES[f.licence_type] || f.licence_type}${expires ? ` to ${date(expires)}` : ''}` };
+}
+
 export const ASSET_KINDS = {
   genset: 'Genset', solar_inverter: 'Solar inverter', battery: 'Battery', transformer: 'Transformer',
   ro_unit: 'RO unit', pump: 'Pump', blower: 'Blower', tank: 'Tank', other: 'Other',

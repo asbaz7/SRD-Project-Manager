@@ -421,3 +421,14 @@ test('unit heads assign work in their unit and run it; the General Manager assig
   await call('PATCH', `/users/${U.tech2}`, T.admin, { designation: 'General Manager', unit_id: null });
   assert.equal((await job(T.tech2, { assigned_user_id: U.tech })).status, 201);
 });
+
+test('water and sewerage plants keep their operating licence and handover date', async () => {
+  const f = await call('POST', '/facilities', T.admin, { island_id: maafushi.id, service: 'sewerage', kind: 'sewerage_system', name: 'Maafushi Sewerage System',
+    handover_on: '2019-07-19', licence_type: 'TP', licence_issued_on: '2022-07-07', licence_expires_on: '2023-07-07', licence_status: 'Expired' });
+  assert.equal(f.status, 201);
+  assert.equal(f.body.licence_type, 'TP');
+  const p = await call('PATCH', `/facilities/${f.body.id}`, T.admin, { licence_type: 'T', licence_expires_on: '2027-06-14', licence_status: 'Valid' });
+  assert.equal(p.body.licence_status, 'Valid');
+  const water = (await call('GET', '/services/sewerage', T.admin)).body.facilities.find((x) => x.id === f.body.id);
+  assert.equal(water.licence_type, 'T');
+});

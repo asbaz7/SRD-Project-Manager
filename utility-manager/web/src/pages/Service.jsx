@@ -5,7 +5,7 @@ import { csvUrl, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Icon } from '../components/icons.jsx';
 import { AssetStatus, Async, Card, Condition, ConditionMeter, Empty, PageHead, Pager, Progress, ProjectState, Select, Severity, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, month, num, power, since } from '../format.js';
+import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, licenceState, month, num, power, since } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 import ConditionReports from './ConditionReports.jsx';
 import Engines from './Engines.jsx';
@@ -167,6 +167,7 @@ function Plants({ svc }) {
                 {f.minor > 0 && <span className="status warn">▲ {f.minor} minor</span>}
                 {f.open_work > 0 && <span className="flag info">🔧 {f.open_work}</span>}
               </div>
+              {licenceState(f) && <div className="row"><span className={`flag ${licenceState(f).tone}`}>{licenceState(f).text}</span></div>}
               {f.report_state && <div className="row"><span className={`state ${f.report_state}`}>Report: {f.report_month ? month(f.report_month) : 'none yet'}</span></div>}
             </Link>
           ))}</div>

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, FACILITY_KINDS, WORK_KINDS, date, month, num, peakLoad, withUnit } from '../format.js';
+import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, WORK_KINDS, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { useApi, useRowLink } from '../hooks.js';
 
 export default function Island() {
@@ -62,6 +62,13 @@ export default function Island() {
                 {peakLoad(r) && ` · peak ${peakLoad(r)}`} · <Link to="/electricity/reports">upload</Link></>;
             })()}
           </p>}
+          {f.service !== 'electricity' && (f.handover_on || licenceState(f)) && <p className="small">
+            {licenceState(f) && <span className={`flag ${licenceState(f).tone}`}>{licenceState(f).text}</span>}
+            <span className="muted">{[f.licence_type && `${LICENCE_TYPES[f.licence_type] || f.licence_type} licence`,
+              f.licence_issued_on && `issued ${date(f.licence_issued_on)}`, f.licence_expires_on && `expires ${date(f.licence_expires_on)}`,
+              f.licence_status && `status: ${f.licence_status}`, f.handover_on && `handed over ${date(f.handover_on)}`].filter(Boolean).map((x) => ` · ${x}`).join('')}</span>
+          </p>}
+          {f.notes && <details className="small"><summary className="muted">Notes</summary><p className="pre">{f.notes}</p></details>}
           {(() => {
             // In use first; retired (decommissioned or not in use) folded away.
             const retired = f.assets.filter((a) => !a.active || a.status === 'decommissioned');
