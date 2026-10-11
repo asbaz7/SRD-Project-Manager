@@ -299,16 +299,22 @@ export function createTelegram({ db, config, log }) {
     return { options: rows };
   }
 
-  const islandHelp = (r) => (r.candidates?.length
-    ? `Which island? ${r.candidates.map((c) => `${c.atoll_code}. ${c.name}`).join(', ')}`
-    : "I couldn't find that island. Try e.g. <code>/status Maafushi</code> or <code>/status K Maafushi</code>.");
+  // With `pick` ('st' for /status, 'wk' for /work) the islands come as
+  // buttons, so a tap answers "Which island?" (see answerButton).
+  const islandHelp = (r, pick) => {
+    if (!r.candidates?.length) return "I couldn't find that island. Try e.g. <code>/status Maafushi</code> or <code>/status K Maafushi</code>.";
+    const names = r.candidates.map((c) => `${c.atoll_code}. ${c.name}`);
+    const text = `Which island? ${names.join(', ')}`;
+    if (!pick) return text;
+    return { text, reply_markup: { inline_keyboard: names.map((n) => [{ text: n, callback_data: `${pick}:${n}`.slice(0, 64) }]) } };
+  };
 
   const apiError = (res) => esc(res.body?.error || `Something went wrong (${res.status})`);
 
   async function cmdStatus(user, words, asUser) {
     if (!words.length) return 'Which island? e.g. <code>/status Maafushi</code>';
     const r = await takeIsland(words);
-    if (!r.island) return islandHelp(r);
+    if (!r.island) return islandHelp(r, 'st');
     const res = await asUser(user.id, 'GET', `/islands/${r.island.id}`);
     if (res.status !== 200) return apiError(res);
     const isl = res.body;
@@ -411,7 +417,7 @@ export function createTelegram({ db, config, log }) {
     let label = 'all islands';
     if (words.length) {
       const r = await takeIsland(words);
-      if (!r.island) return islandHelp(r);
+      if (!r.island) return islandHelp(r, 'wk');
       q += `&island_id=${r.island.id}`;
       label = `${r.island.atoll_code}. ${r.island.name}`;
     }
@@ -465,7 +471,7 @@ export function createTelegram({ db, config, log }) {
       text = text.replace(mention, '').trim();
     }
     const reply = (body, extra = {}) => send(chat.id, body, { reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true }, ...extra });
-    if (!agent) return chat.type === 'private' ? reply('Send /help to see what I can do.') : undefined;
+    if (!agent) return chat.type === 'private' ? reply('I only understand commands for now, e.g. <code>/status ADh Omadhoo</code>. Send /help to see them all.') : undefined;
     if (!text) return;
     const user = await linkedUser(msg.from.id);
     if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
@@ -483,9 +489,20 @@ export function createTelegram({ db, config, log }) {
   }
 
   // ✅ / ❌ under a proposed change: only the person it was proposed to can answer.
+  // An island button under "Which island?" runs /status or /work for it.
   async function answerButton(cb, asUser) {
-    const m = /^ag:([0-9a-f]+):([yn])$/.exec(cb.data || '');
     const msg = cb.message;
+    const pick = /^(st|wk):(.+)$/.exec(cb.data || '');
+    if (pick && msg) {
+      const user = await linkedUser(cb.from.id);
+      if (!user) return call('answerCallbackQuery', { callback_query_id: cb.id, text: 'Link your account first: on the website, open your name → Link Telegram.' });
+      if (pick[1] === 'st' && !user.technical) return call('answerCallbackQuery', { callback_query_id: cb.id, text: 'That needs technical access.' });
+      await call('answerCallbackQuery', { callback_query_id: cb.id });
+      const words = pick[2].split(/\s+/);
+      const out = pick[1] === 'st' ? await cmdStatus(user, words, asUser) : await cmdWork(user, words, asUser);
+      return send(msg.chat.id, typeof out === 'string' ? out : out.text, { reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true } });
+    }
+    const m = /^ag:([0-9a-f]+):([yn])$/.exec(cb.data || '');
     if (!m || !msg || !agent) return call('answerCallbackQuery', { callback_query_id: cb.id });
     const user = await linkedUser(cb.from.id);
     const text = user && await agent.confirm(msg.chat.id, user, m[1], m[2] === 'y', asUser);
@@ -507,7 +524,10 @@ export function createTelegram({ db, config, log }) {
     if (mention && me && mention.toLowerCase() !== me.username.toLowerCase()) return;
     const cmd = rawCmd.toLowerCase();
     const words = argText.trim().split(/\s+/).filter(Boolean);
-    const reply = (text) => send(chat.id, text, { reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true } });
+    // A reply is text, or { text, reply_markup } for buttons.
+    const reply = (out) => send(chat.id, typeof out === 'string' ? out : out.text, {
+      reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true },
+      ...(out.reply_markup ? { reply_markup: out.reply_markup } : {}) });
 
     if (cmd === 'start' && words[0]) return reply(await cmdLink(words[0], msg.from, chat));
     if (cmd === 'start' || cmd === 'help') {

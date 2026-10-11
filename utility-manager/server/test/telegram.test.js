@@ -205,6 +205,15 @@ test('/status takes the atoll by code or name: Th Omadhoo, Thaa Omadhoo, Th. Oma
   assert.match(repliesTo(MANAGER_TG), /<b>ADh\. Omadhoo<\/b>/);
   await say(MANAGER_TG, '/status Omadhoo');
   assert.match(repliesTo(MANAGER_TG), /^Which island\? ADh\. Omadhoo, Th\. Omadhoo$/);
+
+  // The islands come as buttons: a tap gives that island's status.
+  const buttons = sent.at(-1).reply_markup.inline_keyboard.flat();
+  assert.deepEqual(buttons.map((b) => b.text), ['ADh. Omadhoo', 'Th. Omadhoo']);
+  const tapped = await tap(MANAGER_TG, buttons[1].callback_data);
+  assert.match(tapped.at(-1).text, /<b>Th\. Omadhoo<\/b>/);
+  await say(MANAGER_TG, '/work Omadhoo');
+  const workButton = sent.at(-1).reply_markup.inline_keyboard.flat()[0];
+  assert.match((await tap(MANAGER_TG, workButton.callback_data)).at(-1).text, /ADh\. Omadhoo/);
 });
 
 test('alerts go to chats that turned them on; serious incidents from Telegram alert the group', async () => {
