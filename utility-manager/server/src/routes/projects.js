@@ -4,6 +4,7 @@ import { sendCsv } from '../csv.js';
 import { zipSync } from 'fflate';
 import { badRequest, forbidden, notFound } from '../errors.js';
 import { esc } from '../telegram.js';
+import { editUpdate } from './work.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, unitId, updateSet } from '../http.js';
 
 const STATES = ['planned', 'ongoing', 'on_hold', 'completed', 'cancelled'];
@@ -199,9 +200,9 @@ export default async function projectRoutes(app) {
       select m.user_id, m.access, u.full_name, u.designation from project_members m join users u on u.id = m.user_id
        where m.project_id = $1 order by m.access desc, u.full_name`, [projectId])).rows;
     project.updates = (await db.query(`
-      select u.*, us.full_name as created_by_name from project_updates u
+      select u.*, us.full_name as created_by_name, (u.created_by = $2 and u.created_at > now() - interval '8 hours') as can_edit from project_updates u
         left join users us on us.id = u.created_by
-       where u.project_id = $1 order by u.created_at desc`, [projectId])).rows;
+       where u.project_id = $1 order by u.created_at desc`, [projectId, req.user.id])).rows;
     return project;
   });
 
@@ -268,6 +269,14 @@ export default async function projectRoutes(app) {
     if (b.status) await announceFileDeletion(projectId, before);
     reply.code(201);
     return rows[0];
+  });
+
+  // The author may correct an update's text for 8 hours after posting it.
+  app.patch('/projects/:id/updates/:updateId', async (req) => {
+    const { id: projectId, updateId } = parse(z.object({ id: z.coerce.number().int().positive(), updateId: z.coerce.number().int().positive() }), req.params);
+    const b = parse(z.object({ body: text(5000) }), req.body);
+    await assertAccess(db, req.user, projectId, 'view');
+    return editUpdate(db, req.user, 'project_updates', 'project_id', projectId, updateId, b.body);
   });
 
   // --- Files: kept while the project is open --------------------------------

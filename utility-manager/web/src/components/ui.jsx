@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import { api } from '../api.js';
 import { Icon } from './icons.jsx';
 import { ASSET_STATUS, CONDITIONS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES, date, month } from '../format.js';
 
@@ -181,4 +183,29 @@ export function Modal({ title, onClose, children }) {
     </div>,
     document.body,
   );
+}
+
+// An update's text. Its author may correct it within 8 hours of posting
+// (the server decides: can_edit); edited ones say so.
+export function UpdateText({ update, url, onSaved }) {
+  const [text, setText] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const save = async () => {
+    setBusy(true); setError(null);
+    try {
+      await api(url, { method: 'PATCH', body: { body: text } });
+      setText(null);
+      onSaved();
+    } catch (err) { setError(err); } finally { setBusy(false); }
+  };
+  if (text !== null) return <form className="update-edit" onSubmit={(e) => { e.preventDefault(); save(); }}>
+    <ErrorBox error={error} />
+    <textarea required rows="3" maxLength="5000" value={text} onChange={(e) => setText(e.target.value)} aria-label="Update" autoFocus />
+    <div className="form-actions"><button type="button" className="btn ghost small" onClick={() => setText(null)}>Cancel</button>
+      <button className="btn primary small" disabled={busy || !text.trim()}>Save</button></div>
+  </form>;
+  return <p className="pre">{update.body}
+    {update.edited_at && <span className="muted small"> (edited)</span>}
+    {update.can_edit && <> <button type="button" className="btn ghost small" onClick={() => setText(update.body)}>Edit</button></>}</p>;
 }

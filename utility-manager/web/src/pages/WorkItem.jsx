@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Async, Card, Empty, ErrorBox, Field, PageHead, Select, WorkState } from '../components/ui.jsx';
+import { Async, Card, Empty, ErrorBox, Field, PageHead, Select, UpdateText, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, MOVE_STAGES, SERVICES, WORK_KINDS, WORK_STATES, date, dateTime, statesFor } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
@@ -96,7 +96,7 @@ function WorkView({ work: w, reload }) {
       {w.updates.length === 0 ? <Empty>No updates yet.</Empty> :
         <ol className="timeline">{w.updates.map((x) => <li key={x.id}>
           <div className="muted small">{dateTime(x.created_at)} · {x.created_by_name}{x.status && <> · <WorkState value={x.status} /></>}</div>
-          <p className="pre">{x.body}</p>
+          <UpdateText update={x} url={`/work/${w.id}/updates/${x.id}`} onSaved={reload} />
         </li>)}</ol>}
     </Card>
   </>;

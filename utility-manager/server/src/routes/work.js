@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { allowed, assertIslandWrite, canWriteIsland, hasRole, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
-import { badRequest, forbidden } from '../errors.js';
+import { badRequest, forbidden, notFound } from '../errors.js';
 import { assetName, esc } from '../telegram.js';
 import { checkMovePlan, moveAsset } from '../assetMoves.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, unitId, updateSet } from '../http.js';
@@ -37,6 +37,19 @@ function checkStatus(kind, status) {
   if (kind !== 'relocation' && MOVE_STAGES.includes(status)) throw badRequest(`${STAGE_LABEL[status]} is a stage of a genset move`);
 }
 const OPEN = "w.status not in ('completed', 'cancelled')";
+
+// Corrects the text of an update (work or project): only its author, and
+// only within 8 hours of posting it.
+export async function editUpdate(db, user, table, parentCol, parentId, updateId, body) {
+  const { rows: [u] } = await db.query(`select created_by, created_at > now() - interval '8 hours' as recent
+                                          from ${table} where id = $1 and ${parentCol} = $2`, [updateId, parentId]);
+  if (!u) throw notFound('Update');
+  if (u.created_by !== user.id) throw forbidden('Only the person who posted an update can edit it');
+  if (!u.recent) throw forbidden('Updates can be edited for 8 hours after they are posted');
+  const { rows } = await db.tx(user.id, (t) => t.query(
+    `update ${table} set body = $1, edited_at = now() where id = $2 returning *`, [body, updateId]));
+  return rows[0];
+}
 
 const body = z.object({
   island_id: id.nullish(),
@@ -243,9 +256,17 @@ export default async function workRoutes(app) {
         from work_commenters c join users u on u.id = c.user_id left join users a on a.id = c.added_by
        where c.work_id = $1 order by u.full_name`, [workId])).rows;
     work.updates = (await db.query(`
-      select u.*, us.full_name as created_by_name from work_updates u left join users us on us.id = u.created_by
-       where u.work_id = $1 order by u.created_at desc`, [workId])).rows;
+      select u.*, us.full_name as created_by_name, (u.created_by = $2 and u.created_at > now() - interval '8 hours') as can_edit
+        from work_updates u left join users us on us.id = u.created_by
+       where u.work_id = $1 order by u.created_at desc`, [workId, req.user.id])).rows;
     return work;
+  });
+
+  // The author may correct an update's text for 8 hours after posting it.
+  app.patch('/work/:id/updates/:updateId', async (req) => {
+    const { id: workId, updateId } = parse(z.object({ id: z.coerce.number().int().positive(), updateId: z.coerce.number().int().positive() }), req.params);
+    const b = parse(z.object({ body: text(5000) }), req.body);
+    return editUpdate(db, req.user, 'work_updates', 'work_id', workId, updateId, b.body);
   });
 
   app.post('/work', manager, async (req, reply) => {

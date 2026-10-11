@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Async, Card, Empty, ErrorBox, Field, PageHead, Progress, ProjectState, Select, Service } from '../components/ui.jsx';
+import { Async, Card, Empty, ErrorBox, Field, PageHead, Progress, ProjectState, Select, Service, UpdateText } from '../components/ui.jsx';
 import { PROJECT_STATES, PROJECT_TYPES, date, dateTime, num, pct } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
@@ -83,7 +83,7 @@ function ProjectView({ project: p, reload }) {
         <ol className="timeline">{p.updates.map((x) => <li key={x.id}>
           <div className="muted small">{dateTime(x.created_at)} · {x.created_by_name}
             {x.progress_pct != null && ` · ${x.progress_pct}%`}{x.status && <> · <ProjectState value={x.status} /></>}</div>
-          <p className="pre">{x.body}</p>
+          <UpdateText update={x} url={`/projects/${p.id}/updates/${x.id}`} onSaved={reload} />
         </li>)}</ol>}
     </Card>
   </>;

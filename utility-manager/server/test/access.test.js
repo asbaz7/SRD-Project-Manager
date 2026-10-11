@@ -432,3 +432,28 @@ test('water and sewerage plants keep their operating licence and handover date',
   const water = (await call('GET', '/services/sewerage', T.admin)).body.facilities.find((x) => x.id === f.body.id);
   assert.equal(water.licence_type, 'T');
 });
+
+test('the author of an update can correct it for 8 hours; nobody else can', async () => {
+  const w = (await call('POST', '/work', T.admin, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Edit test' })).body;
+  const u = (await call('POST', `/work/${w.id}/updates`, T.tech, { body: 'shutoff vlave replaced' })).body;
+  let view = (await call('GET', `/work/${w.id}`, T.tech)).body.updates[0];
+  assert.equal(view.can_edit, true);
+  assert.equal((await call('GET', `/work/${w.id}`, T.admin)).body.updates[0].can_edit, false);
+
+  assert.equal((await call('PATCH', `/work/${w.id}/updates/${u.id}`, T.admin, { body: 'changed by someone else' })).status, 403);
+  const fixed = await call('PATCH', `/work/${w.id}/updates/${u.id}`, T.tech, { body: 'shutoff valve replaced' });
+  assert.equal(fixed.status, 200);
+  assert.equal(fixed.body.body, 'shutoff valve replaced');
+  assert.ok(fixed.body.edited_at);
+
+  // After 8 hours it can't be changed any more.
+  await db.query("update work_updates set created_at = now() - interval '9 hours' where id = $1", [u.id]);
+  assert.equal((await call('GET', `/work/${w.id}`, T.tech)).body.updates[0].can_edit, false);
+  assert.equal((await call('PATCH', `/work/${w.id}/updates/${u.id}`, T.tech, { body: 'too late' })).status, 403);
+
+  // Project updates the same way.
+  const p = (await call('POST', '/projects', T.office, { service: 'water', island_id: maafushi.id, title: 'Edit test project' })).body;
+  const pu = (await call('POST', `/projects/${p.id}/updates`, T.office, { body: 'Surveyd' })).body;
+  assert.equal((await call('PATCH', `/projects/${p.id}/updates/${pu.id}`, T.office, { body: 'Surveyed' })).body.body, 'Surveyed');
+  assert.equal((await call('PATCH', `/projects/${p.id}/updates/${pu.id}`, T.admin, { body: 'x' })).status, 403);
+});
