@@ -27,13 +27,13 @@ export default function Service({ svc }) {
   if (!technical) return <>
     <PageHead title={SERVICES[svc].label} icon={svc} tone={svc} />
     <Card><p>This section holds technical information (engines, condition reports, assets and plants) and is available to technical staff.</p>
-      <p className="muted small">You can follow <Link to={`/work?service=${svc}`}>{SERVICES[svc].label.toLowerCase()} work</Link>, <Link to={`/incidents?service=${svc}`}>incidents</Link> and <Link to={`/projects?service=${svc}`}>projects</Link>.</p></Card>
+      <p className="muted small">You can follow <Link to={`/work?service=${svc}`}>{SERVICES[svc].label.toLowerCase()} work</Link>, <Link to={`/interruptions?service=${svc}`}>interruptions</Link> and <Link to={`/projects?service=${svc}`}>projects</Link>.</p></Card>
   </>;
   return <>
     <PageHead title={SERVICES[svc].label} subtitle={SUBTITLE[svc]} icon={svc} tone={svc}
       actions={<>
         {can('manager') && <Link className="btn" to={`/work/new?service=${svc}`}>Log work</Link>}
-        {allowed('incidents') && <Link className="btn" to={`/incidents/new?service=${svc}`}>Report incident</Link>}
+        {allowed('incidents') && <Link className="btn" to={`/interruptions/new?service=${svc}`}>Report interruption</Link>}
       </>} />
     <nav className="tabs glass" aria-label={`${SERVICES[svc].label} sections`}>
       {TABS[svc].map(([key, label]) => (
@@ -85,7 +85,7 @@ function ServiceOverview({ svc }) {
           {isEl && <Stat label="Overhaul due" value={d.engines.overhaul_due} tone={d.engines.overhaul_due ? 'warn' : ''}
             sub={`${d.engines.alt_service_due} alternator services due${d.engines.alt_requested ? ` (${d.engines.alt_requested} requested by islands)` : ''}`} to="/electricity/engines?flag=overhaul" />}
           <Stat label="Work ongoing" value={d.work.length} to={`/work?service=${svc}`} />
-          <Stat label="Open incidents" value={d.incidents.length} tone={d.incidents.some((x) => x.severity === 'critical') ? 'alert' : ''} to={`/incidents?service=${svc}&status=open`} />
+          <Stat label="Open interruptions" value={d.incidents.length} tone={d.incidents.some((x) => x.severity === 'critical') ? 'alert' : ''} to={`/interruptions?service=${svc}&status=open`} />
           {isEl && <Stat label={`Reports for ${month(d.reports.expected_month)}`} value={d.reports.missing.length ? `${d.reports.missing.length} missing` : 'All in'}
             tone={d.reports.missing.length ? 'warn' : ''} to="/electricity/reports" />}
         </div>
@@ -141,11 +141,11 @@ function ServiceOverview({ svc }) {
                 <td><WorkState value={w.status} /></td>
               </tr>)}</tbody></table></div>}
           </Card>
-          <Card title={`Incidents (${d.incidents.length})`} actions={<Link to={`/incidents?service=${svc}`} className="btn small ghost">All</Link>}>
-            {d.incidents.length === 0 ? <Empty>No open incidents.</Empty> :
+          <Card title={`Interruptions (${d.incidents.length})`} actions={<Link to={`/interruptions?service=${svc}`} className="btn small ghost">All</Link>}>
+            {d.incidents.length === 0 ? <Empty>No open interruptions.</Empty> :
               <table><tbody>{d.incidents.map((x) => <tr key={x.id}>
                 <td><Severity value={x.severity} /></td>
-                <td className="wrap"><Link to={`/incidents/${x.id}`}>{x.title}</Link><br />
+                <td className="wrap"><Link to={`/interruptions/${x.id}`}>{x.title}</Link><br />
                   <small className="muted">{x.atoll_code} · {x.island_name} · {INCIDENT_CATEGORIES[x.category]} · {since(x.started_at)}</small></td>
               </tr>)}</tbody></table>}
           </Card>

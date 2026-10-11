@@ -44,7 +44,7 @@ How to work:
 - Islands are written with their atoll code, like "ADh. Fenfushi" or "K. Maafushi". Use find_island to turn a name into an id; if several islands match, ask which one.
 - Gensets are called "Genset 2", "G2" or "engine 2". Each powerhouse files a monthly condition report per genset (condition, running hours, faults); get_island and list_engines include the latest one.
 - Work orders are numbered WO-0001, WO-0002 and so on; the number is the work_id.
-- To record anything (a genset's status, an update on work, an incident, new work), call the matching tool. The person is then shown exactly what will be written and taps ✅ or ❌, so don't ask "shall I?" first. Do ask first when it's unclear which island, genset or work order they mean.
+- To record anything (a genset's status, an update on work, an interruption, new work), call the matching tool. The person is then shown exactly what will be written and taps ✅ or ❌, so don't ask "shall I?" first. Do ask first when it's unclear which island, genset or work order they mean.
 - Only propose one change at a time.
 - The person's access is enforced by the system: if a tool says something isn't allowed, tell them it needs other access or the website.
 - If the tools can't do what's asked, say so and point them to the website.
@@ -98,7 +98,7 @@ function buildTools(db) {
       },
     },
     get_overview: {
-      description: "The region at a glance: gensets running and available capacity, faults, work in progress, open incidents, what's due. Start here for general questions.",
+      description: "The region at a glance: gensets running and available capacity, faults, work in progress, open interruptions, what's due. Start here for general questions.",
       schema: z.object({}),
       run: (user, _, asUser) => get(asUser, user, '/dashboard'),
     },
@@ -143,7 +143,7 @@ function buildTools(db) {
       run: (user, { work_id }, asUser) => get(asUser, user, `/work/${work_id}`),
     },
     list_incidents: {
-      description: 'Incidents (outages, breakdowns, safety...), newest first.',
+      description: 'Interruptions (outages, breakdowns, safety...), newest first.',
       schema: z.object({
         status: z.enum(['open', 'resolved', 'closed']).optional(),
         island_id: id.optional(),
@@ -193,7 +193,7 @@ function buildTools(db) {
     },
     report_incident: {
       write: true,
-      description: "Report an incident: an outage, breakdown, safety or quality problem. The person confirms before it's reported.",
+      description: "Report an interruption: an outage, breakdown, safety or quality problem. The person confirms before it's reported.",
       schema: z.object({
         island_id: id,
         service: z.enum(SERVICES),
@@ -203,10 +203,10 @@ function buildTools(db) {
         description: z.string().max(5000).optional(),
         asset_id: id.optional(),
       }),
-      describe: async (user, x) => `Report an incident at <b>${esc(await islandName(x.island_id))}</b>: ${esc(x.title)}\n${x.service} · ${x.category} · ${x.severity}`,
+      describe: async (user, x) => `Report an interruption at <b>${esc(await islandName(x.island_id))}</b>: ${esc(x.title)}\n${x.service} · ${x.category} · ${x.severity}`,
       run: async (user, x, asUser) => {
         const body = check(await asUser(user.id, 'POST', '/incidents', { ...x, started_at: new Date().toISOString() }), [201]);
-        return { text: `Incident <b>${esc(body.ref)}</b> reported`, result: { ref: body.ref } };
+        return { text: `Interruption <b>${esc(body.ref)}</b> reported`, result: { ref: body.ref } };
       },
     },
     create_work: {

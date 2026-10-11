@@ -262,7 +262,7 @@ describe('operations', () => {
       severity: 'high', title: 'Island-wide blackout', started_at: '2026-09-28T10:00:00+05:00', customers_affected: 900 } });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     assert.equal(created.body.status, 'open');
-    assert.match(created.body.ref, /^INC-\d{6}$/);
+    assert.match(created.body.ref, /^INT-\d{6}$/);
 
     const wrongIsland = await call('POST', '/incidents', { token: admin, body: {
       service: 'electricity', island_id: maafushi.id, facility_id: dhigurahPowerhouse.id, category: 'outage',

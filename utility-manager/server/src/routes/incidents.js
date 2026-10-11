@@ -44,7 +44,7 @@ const listQuery = paging.extend({
 });
 
 const SELECT = `
-  select x.*, 'INC-' || lpad(x.id::text, 6, '0') as ref,
+  select x.*, 'INT-' || lpad(x.id::text, 6, '0') as ref,
          i.name as island_name, i.atoll_id, a.code as atoll_code,
          f.name as facility_name, s.tag as asset_tag, s.kind as asset_kind,
          ru.full_name as reported_by_name, vu.full_name as resolved_by_name,
@@ -77,7 +77,7 @@ export default async function incidentRoutes(app) {
   const SERVICE = { electricity: 'Electricity', water: 'Water', sewerage: 'Sewerage' };
   // Managers report and edit incidents; staff allowed to report them can edit
   // the ones they reported.
-  const reporter = { preHandler: requireAllowed('incidents', 'You are not allowed to report incidents. Ask an administrator.') };
+  const reporter = { preHandler: requireAllowed('incidents', 'You are not allowed to report interruptions. Ask an administrator.') };
   const canEdit = (user, x) => (hasRole(user, 'manager') || (allowed(user, 'incidents') && x.reported_by === user.id))
     && canWriteIsland(user, { id: x.island_id, atoll_id: x.atoll_id });
 
@@ -94,7 +94,7 @@ export default async function incidentRoutes(app) {
       `${SELECT} ${w.sql} order by (x.status = 'open') desc, x.started_at desc
        limit ${csv ? 20000 : q.limit} offset ${csv ? 0 : q.offset}`, w.values);
     if (csv) {
-      return sendCsv(reply, 'incidents.csv', rows, [
+      return sendCsv(reply, 'interruptions.csv', rows, [
         ['Ref', 'ref'], ['Atoll', 'atoll_code'], ['Island', 'island_name'], ['Service', 'service'],
         ['Facility', 'facility_name'], ['Asset', 'asset_tag'], ['Category', 'category'], ['Severity', 'severity'],
         ['Title', 'title'], ['Description', 'description'], ['Started', 'started_at'], ['Resolved', 'resolved_at'],
@@ -107,7 +107,7 @@ export default async function incidentRoutes(app) {
 
   app.get('/incidents/:id', async (req) => {
     const { id: incidentId } = parse(serialParam, req.params);
-    const row = one((await db.query(`${SELECT} where x.id = $1`, [incidentId])).rows, 'Incident');
+    const row = one((await db.query(`${SELECT} where x.id = $1`, [incidentId])).rows, 'Interruption');
     delete row.total_count;
     row.can_edit = canEdit(req.user, row);
     return row;
@@ -128,7 +128,7 @@ export default async function incidentRoutes(app) {
     reply.code(201);
     const x = one((await db.query(`${SELECT} where x.id = $1`, [rows[0].id])).rows);
     if (SERIOUS.includes(x.severity) && x.status === 'open') {
-      await telegram.alert(`🚨 <b>${x.severity === 'critical' ? 'Critical' : 'High'}: ${esc(x.title)}</b>\n${esc(x.atoll_code)}. ${esc(x.island_name)} · ${SERVICE[x.service]}\n<i>${esc(req.user.fullName)}</i> · ${telegram.link(`/incidents/${x.id}`, x.ref)}`);
+      await telegram.alert(`🚨 <b>${x.severity === 'critical' ? 'Critical' : 'High'}: ${esc(x.title)}</b>\n${esc(x.atoll_code)}. ${esc(x.island_name)} · ${SERVICE[x.service]}\n<i>${esc(req.user.fullName)}</i> · ${telegram.link(`/interruptions/${x.id}`, x.ref)}`);
     }
     return x;
   });
@@ -136,8 +136,8 @@ export default async function incidentRoutes(app) {
   app.patch('/incidents/:id', reporter, async (req) => {
     const { id: incidentId } = parse(serialParam, req.params);
     const body = parse(patchBody, req.body);
-    const current = one((await db.query('select x.*, i.atoll_id from incidents x join islands i on i.id = x.island_id where x.id = $1', [incidentId])).rows, 'Incident');
-    if (!canEdit(req.user, current)) throw forbidden('You can only edit incidents you reported');
+    const current = one((await db.query('select x.*, i.atoll_id from incidents x join islands i on i.id = x.island_id where x.id = $1', [incidentId])).rows, 'Interruption');
+    if (!canEdit(req.user, current)) throw forbidden('You can only edit interruptions you reported');
     await assertIslandWrite(db, req.user, { islandId: current.island_id });
     await checkLinks(db, current.island_id, body);
 
@@ -158,7 +158,7 @@ export default async function incidentRoutes(app) {
     const row = one((await db.query(`${SELECT} where x.id = $1`, [incidentId])).rows);
     delete row.total_count;
     if (current.status === 'open' && row.status !== 'open' && SERIOUS.includes(row.severity)) {
-      await telegram.alert(`✅ <b>Resolved: ${esc(row.title)}</b>\n${esc(row.atoll_code)}. ${esc(row.island_name)}${row.resolution ? `: ${esc(row.resolution.slice(0, 200))}` : ''}\n<i>${esc(req.user.fullName)}</i> · ${telegram.link(`/incidents/${row.id}`, row.ref)}`);
+      await telegram.alert(`✅ <b>Resolved: ${esc(row.title)}</b>\n${esc(row.atoll_code)}. ${esc(row.island_name)}${row.resolution ? `: ${esc(row.resolution.slice(0, 200))}` : ''}\n<i>${esc(req.user.fullName)}</i> · ${telegram.link(`/interruptions/${row.id}`, row.ref)}`);
     }
     return row;
   });

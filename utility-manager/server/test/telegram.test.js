@@ -236,8 +236,8 @@ test('alerts go to chats that turned them on; serious incidents from Telegram al
   await say(ADMIN_TG, '/alerts on', { id: GROUP, type: 'supergroup', title: 'SRD Managers' });
   assert.match(repliesTo(GROUP), /Alerts are on/);
 
-  await say(MANAGER_TG, '/incident Maafushi high power cut to the harbour area');
-  assert.match(repliesTo(MANAGER_TG), /Reported <b>INC-\d+<\/b>/);
+  await say(MANAGER_TG, '/interruption Maafushi high power cut to the harbour area');
+  assert.match(repliesTo(MANAGER_TG), /Reported <b>INT-\d+<\/b>/);
   assert.match(repliesTo(GROUP), /🚨 <b>High: power cut to the harbour area<\/b>/);
   const inc = (await db.query(`select service, severity, category from incidents order by id desc limit 1`)).rows[0];
   assert.deepEqual(inc, { service: 'electricity', severity: 'high', category: 'outage' });
@@ -272,7 +272,7 @@ test('the daily summary goes to alert chats', async () => {
   const text = repliesTo(GROUP);
   assert.match(text, /📋 <b>SRD summary/);
   assert.match(text, /gensets running/);
-  assert.match(text, /Serious incidents/);
+  assert.match(text, /Serious interruptions/);
   assert.doesNotMatch(text, /Condition reports missing/);
   assert.doesNotMatch(text, /Out of service/);
 });

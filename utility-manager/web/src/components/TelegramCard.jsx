@@ -36,7 +36,7 @@ export default function TelegramCard() {
         <p className="muted small">Or send it this message yourself: <code>/start {code.code}</code></p>
         <button className="btn ghost small" onClick={() => { setCode(null); state.reload(); }}>I've linked it</button>
       </> : <>
-        <p>Link your Telegram account to report gensets going down, incidents and work updates from your phone, and to look up any island's status.</p>
+        <p>Link your Telegram account to report gensets going down, interruptions and work updates from your phone, and to look up any island's status.</p>
         <button className="btn primary" disabled={getCode.busy} onClick={getCode.submit}>Link Telegram</button>
       </>}
     </Card>

@@ -16,9 +16,9 @@ export default function Incidents() {
   const state = useApi(`/incidents${qs(params)}`);
 
   return <>
-    <PageHead title="Incidents" icon="incident" actions={<>
+    <PageHead title="Interruptions" icon="incident" actions={<>
       <a className="btn ghost" href={csvUrl('/incidents', { ...params, offset: undefined })}>Export CSV</a>
-      {allowed('incidents') && <Link className="btn primary" to={`/incidents/new${qs({ island_id: filters.island_id })}`}>Report incident</Link>}
+      {allowed('incidents') && <Link className="btn primary" to={`/interruptions/new${qs({ island_id: filters.island_id })}`}>Report interruption</Link>}
     </>} />
     <div className="filters">
       <Select value={filters.status} onChange={(v) => setFilter('status', v)} placeholder="Any status" options={{ open: 'Open', resolved: 'Resolved', closed: 'Closed' }} aria-label="Status" />
@@ -33,12 +33,12 @@ export default function Incidents() {
     </div>
     <Async state={state}>{(page) => (
       <Card>
-        {page.items.length === 0 ? <Empty>No incidents match.</Empty> :
+        {page.items.length === 0 ? <Empty>No interruptions match.</Empty> :
           <table>
-            <thead><tr><th>Ref</th><th>Incident</th><th>Severity</th><th className="hide-sm">Started</th><th className="hide-sm">Duration</th><th>Status</th></tr></thead>
+            <thead><tr><th>Ref</th><th>Interruption</th><th>Severity</th><th className="hide-sm">Started</th><th className="hide-sm">Duration</th><th>Status</th></tr></thead>
             <tbody>{page.items.map((x) => <tr key={x.id}>
-              <td className="nowrap"><Link to={`/incidents/${x.id}`}>{x.ref}</Link></td>
-              <td className="wrap"><Link to={`/incidents/${x.id}`}>{x.title}</Link><br />
+              <td className="nowrap"><Link to={`/interruptions/${x.id}`}>{x.ref}</Link></td>
+              <td className="wrap"><Link to={`/interruptions/${x.id}`}>{x.title}</Link><br />
                 <small className="muted"><Service value={x.service} short /> {x.atoll_code} · {x.island_name}{x.asset_tag && ` · ${x.asset_kind} ${x.asset_tag}`} · {INCIDENT_CATEGORIES[x.category]}</small></td>
               <td><Severity value={x.severity} /></td>
               <td className="nowrap hide-sm">{dateTime(x.started_at)}</td>

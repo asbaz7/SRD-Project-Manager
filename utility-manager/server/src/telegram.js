@@ -61,7 +61,7 @@ Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator b
 /down Maafushi G3 radiator leak
 /up Maafushi G3
 /standby or /maintenance work the same way
-/incident Guraidhoo water high supply cut to north ward
+/interruption Guraidhoo water high supply cut to north ward
   <i>(service and severity are optional: electricity is assumed)</i>
 /update WO-12 seal arrived, fitting tomorrow
 /update WO-12 parts waiting for crankshaft
@@ -163,7 +163,7 @@ export function createTelegram({ db, config, log }) {
         ['work', 'Ongoing work'],
         ['down', 'Asset down: /down Maafushi G3 reason'],
         ['up', 'Asset running again: /up Maafushi G3'],
-        ['incident', 'Report an incident'],
+        ['interruption', 'Report an interruption'],
         ['update', 'Work update: /update WO-12 text'],
         ['done', 'Work completed: /done WO-12 note'],
         ['summary', "Today's summary"],
@@ -218,9 +218,9 @@ export function createTelegram({ db, config, log }) {
     const mw = (kw) => (kw >= 10000 ? `${(kw / 1000).toFixed(1)} MW` : `${Math.round(kw)} kW`);
     const lines = [`📋 <b>SRD summary: ${esc(day)}</b>`];
     if (!technical) {
-      lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open incidents`);
+      lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open interruptions`);
       const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
-      if (inc.length) lines.push('', '<b>Serious incidents</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
+      if (inc.length) lines.push('', '<b>Serious interruptions</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
       lines.push(...workLines(d.work));
       lines.push('', link('/', 'Open the dashboard'));
       return lines.join('\n');
@@ -233,15 +233,15 @@ export function createTelegram({ db, config, log }) {
       const v = d.services[s];
       if (v.assets) lines.push(`${SERVICE_ICON[s]} ${v.running}/${v.assets} ${SERVICE_LABEL[s].toLowerCase()} assets running${v.down ? ` · ${v.down} out of service` : ''}`);
     }
-    lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open incidents`);
+    lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open interruptions`);
     lines.push(...workLines(d.work));
     const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
-    if (inc.length) lines.push('', '<b>Serious incidents</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
+    if (inc.length) lines.push('', '<b>Serious interruptions</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
     lines.push('', link('/', 'Open the dashboard'));
     return lines.join('\n');
   }
 
-  // Technical chats get the full summary; others get work and incidents only.
+  // Technical chats get the full summary; others get work and interruptions only.
   async function daily(asUser) {
     if (!token) return;
     const { rows: chats } = await db.query('select chat_id, technical from telegram_chats where alerts');
@@ -366,7 +366,7 @@ export function createTelegram({ db, config, log }) {
 
   async function cmdIncident(user, words, asUser) {
     const r = words.length ? await takeIsland(words) : {};
-    if (!r.island) return words.length ? islandHelp(r) : 'e.g. <code>/incident Guraidhoo water high supply cut to north ward</code>';
+    if (!r.island) return words.length ? islandHelp(r) : 'e.g. <code>/interruption Guraidhoo water high supply cut to north ward</code>';
     let rest = r.rest;
     let service = null;
     let severity = 'medium';
@@ -381,7 +381,7 @@ export function createTelegram({ db, config, log }) {
       }
     }
     const title = rest.join(' ').trim();
-    if (title.length < 3) return 'Add a short description, e.g. <code>/incident Maafushi high power cut to the harbour area</code>';
+    if (title.length < 3) return 'Add a short description, e.g. <code>/interruption Maafushi high power cut to the harbour area</code>';
     const lower = title.toLowerCase();
     service ??= /\b(sewer|sewage|stp)/.test(lower) ? 'sewerage' : /\b(water|ro|desal)/.test(lower) && !/\b(power|electric|genset|engine)/.test(lower) ? 'water' : 'electricity';
     const category = /\b(outage|cut|blackout|no power|no water|trip|tripped|supply)/.test(lower) ? 'outage' : 'breakdown';
@@ -389,7 +389,7 @@ export function createTelegram({ db, config, log }) {
       service, island_id: r.island.id, category, severity, title: title.slice(0, 200), started_at: new Date().toISOString(),
     });
     if (res.status !== 201) return apiError(res);
-    return `🚨 Reported <b>${esc(res.body.ref)}</b>: ${esc(title)}\n${SERVICE_LABEL[service]} · ${severity} · ${esc(r.island.atoll_code)}. ${esc(r.island.name)}\n${link(`/incidents/${res.body.id}`, 'Open (add details there)')}`;
+    return `🚨 Reported <b>${esc(res.body.ref)}</b>: ${esc(title)}\n${SERVICE_LABEL[service]} · ${severity} · ${esc(r.island.atoll_code)}. ${esc(r.island.name)}\n${link(`/interruptions/${res.body.id}`, 'Open (add details there)')}`;
   }
 
   async function cmdWorkUpdate(user, words, asUser, forceStatus) {
@@ -440,8 +440,8 @@ export function createTelegram({ db, config, log }) {
       [chat.id, title, on, user.id, user.technical]));
     if (!on) return '🔕 Alerts are off for this chat.';
     return rows[0].technical
-      ? '🔔 Alerts are on for this chat: serious incidents, gensets and assets going down or back up, completed work, and a summary every morning. Send <code>/alerts off</code> to stop.'
-      : '🔔 Alerts are on for this chat: serious incidents, completed work, and a summary of work and incidents every morning. Send <code>/alerts off</code> to stop.';
+      ? '🔔 Alerts are on for this chat: serious interruptions, gensets and assets going down or back up, completed work, and a summary every morning. Send <code>/alerts off</code> to stop.'
+      : '🔔 Alerts are on for this chat: serious interruptions, completed work, and a summary of work and interruptions every morning. Send <code>/alerts off</code> to stop.';
   }
 
   async function cmdLink(code, from, chat) {
@@ -538,12 +538,12 @@ export function createTelegram({ db, config, log }) {
     if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
 
     const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance']);
-    if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /incident, /summary, and comment on work you have been added to with /update.');
+    if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /interruption, /summary, and comment on work you have been added to with /update.');
     try {
       let text;
       if (cmd === 'status') text = await cmdStatus(user, words, asUser);
       else if (STATUS_WORDS[cmd]) text = await cmdSetStatus(user, STATUS_WORDS[cmd], words, asUser);
-      else if (cmd === 'incident') text = await cmdIncident(user, words, asUser);
+      else if (cmd === 'interruption' || cmd === 'incident') text = await cmdIncident(user, words, asUser);
       else if (cmd === 'update') text = await cmdWorkUpdate(user, words, asUser);
       else if (cmd === 'done') text = await cmdWorkUpdate(user, words, asUser, 'completed');
       else if (cmd === 'work') text = await cmdWork(user, words, asUser);

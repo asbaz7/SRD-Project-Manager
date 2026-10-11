@@ -92,7 +92,7 @@ function IslandList({ islands, atolls, technical, filters, setFilter }) {
 function IslandCard({ i, technical }) {
   const flags = [
     technical && i.down_count > 0 && ['bad', `✕ ${i.down_count} genset${i.down_count === 1 ? '' : 's'} down`],
-    i.open_incidents > 0 && ['bad', `${i.open_incidents} open incident${i.open_incidents === 1 ? '' : 's'}`],
+    i.open_incidents > 0 && ['bad', `${i.open_incidents} open interruption${i.open_incidents === 1 ? '' : 's'}`],
     technical && i.licences_expired > 0 && ['bad', `${i.licences_expired === 1 ? 'Licence' : `${i.licences_expired} licences`} expired`],
     i.open_work > 0 && ['info', `🔧 ${i.open_work} open work`],
     i.active_projects > 0 && ['', `${i.active_projects} project${i.active_projects === 1 ? '' : 's'}`],

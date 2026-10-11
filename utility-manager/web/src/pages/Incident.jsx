@@ -22,7 +22,7 @@ function IncidentView({ incident: x, reload }) {
 
   if (editing) return <IncidentForm incident={x} onDone={() => { setEditing(false); reload(); }} />;
   return <>
-    <PageHead title={x.title} crumbs={[{ to: '/incidents', label: 'Incidents' }, { label: x.ref }]}
+    <PageHead title={x.title} crumbs={[{ to: '/interruptions', label: 'Interruptions' }, { label: x.ref }]}
       actions={writable && <button className="btn" onClick={() => setEditing(true)}>Edit</button>} />
     <ErrorBox error={error} />
     <div className="grid-2">
@@ -90,12 +90,12 @@ function IncidentForm({ incident, onDone }) {
       onDone();
     } else {
       const created = await api('/incidents', { method: 'POST', body: { ...body, island_id: f.island_id } });
-      navigate(`/incidents/${created.id}`, { replace: true });
+      navigate(`/interruptions/${created.id}`, { replace: true });
     }
   });
 
   return <>
-    <PageHead title={incident ? `Edit ${incident.ref}` : 'Report incident'} crumbs={[{ to: '/incidents', label: 'Incidents' }, { label: incident ? incident.ref : 'New' }]} />
+    <PageHead title={incident ? `Edit ${incident.ref}` : 'Report interruption'} crumbs={[{ to: '/interruptions', label: 'Interruptions' }, { label: incident ? incident.ref : 'New' }]} />
     <Card>
       <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <ErrorBox error={error} />
@@ -118,7 +118,7 @@ function IncidentForm({ incident, onDone }) {
         </>}
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={() => (incident ? onDone() : navigate(-1))}>Cancel</button>
-          <button className="btn primary" disabled={busy}>{incident ? 'Save changes' : 'Report incident'}</button>
+          <button className="btn primary" disabled={busy}>{incident ? 'Save changes' : 'Report interruption'}</button>
         </div>
       </form>
     </Card>

@@ -105,7 +105,7 @@ export const pct = (v) => `${Math.round(Number(v || 0) * 10) / 10}%`;
 // What a Staff user may do, ticked per person.
 export const PERMISSIONS = {
   documents: ['Send documents', 'Create documents for signature and manage the ones they sent'],
-  incidents: ['Report incidents', 'Report incidents and edit the ones they reported'],
+  incidents: ['Report interruptions', 'Report interruptions and edit the ones they reported'],
   work: ['Update work', 'Post updates and move work along (not create, complete or cancel it)'],
   projects: ['Create projects', 'Start projects and share them with chosen people'],
 };

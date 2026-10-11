@@ -25,7 +25,7 @@ export default function Island() {
       <PageHead title={island.name}
         crumbs={[{ to: '/islands', label: 'Islands' }, { to: `/islands?atoll_id=${island.atoll_id}`, label: `${island.atoll_code} · ${island.atoll_name}` }, { label: island.name }]}
         actions={<>
-          {allowed('incidents') && <Link className="btn" to={`/incidents/new?island_id=${island.id}`}>Report incident</Link>}
+          {allowed('incidents') && <Link className="btn" to={`/interruptions/new?island_id=${island.id}`}>Report interruption</Link>}
           {island.can_edit && island.technical && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
           {manage && island.technical && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
         </>} />
@@ -51,7 +51,7 @@ export default function Island() {
               sub={unset ? `${unset} status not set` : ''} />
           </>;
         })()}
-        <Stat label="Open incidents" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/incidents?island_id=${island.id}&status=open`} />
+        <Stat label="Open interruptions" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/interruptions?island_id=${island.id}&status=open`} />
         <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
 

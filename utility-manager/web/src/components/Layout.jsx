@@ -17,7 +17,7 @@ const MAIN = [
 ];
 const MORE = [
   { to: '/work', label: 'Work', icon: 'work' },
-  { to: '/incidents', label: 'Incidents', icon: 'incident' },
+  { to: '/interruptions', label: 'Interruptions', icon: 'incident' },
   { to: '/projects', label: 'Projects', icon: 'project' },
   { to: '/documents', label: 'Documents', icon: 'document' },
 ];
@@ -52,7 +52,7 @@ export default function Layout() {
   if (lastPath !== location.pathname) { setLastPath(location.pathname); setSheet(false); }
   const admin = ADMIN.filter((n) => can(n.role));
   // Non-technical staff don't have the service sections (engines, assets,
-  // plants); work, incidents and projects move up instead.
+  // plants); work, interruptions and projects move up instead.
   const main = technical ? MAIN : [MAIN[0], ISLANDS, ...MORE];
   const more = technical ? MORE : [];
   // Phones: four tabs (Overview and the services, or the main lists); the

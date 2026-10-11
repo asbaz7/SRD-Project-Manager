@@ -16,7 +16,7 @@ const greeting = () => {
 function attentionItems(d) {
   const items = [];
   for (const x of d.incidents.list.filter((i) => ['critical', 'high'].includes(i.severity))) {
-    items.push({ tone: 'bad', mark: '!', to: `/incidents/${x.id}`, text: x.title, sub: `${SERVICES[x.service]?.label} · ${x.atoll_code} ${x.island_name} · ${x.severity} · ${since(x.started_at)}` });
+    items.push({ tone: 'bad', mark: '!', to: `/interruptions/${x.id}`, text: x.title, sub: `${SERVICES[x.service]?.label} · ${x.atoll_code} ${x.island_name} · ${x.severity} · ${since(x.started_at)}` });
   }
   const waiting = d.documents?.waiting_for_me || [];
   if (waiting.length) {
@@ -106,11 +106,11 @@ export default function Dashboard() {
         </div>
 
         <div className="grid-2">
-          <Card title={`Open incidents (${d.incidents.open})`} actions={allowed('incidents') && <Link to="/incidents/new" className="btn small">Report incident</Link>}>
-            {d.incidents.list.length === 0 ? <Empty>No open incidents.</Empty> :
+          <Card title={`Open interruptions (${d.incidents.open})`} actions={allowed('incidents') && <Link to="/interruptions/new" className="btn small">Report interruption</Link>}>
+            {d.incidents.list.length === 0 ? <Empty>No open interruptions.</Empty> :
               <table><tbody>{d.incidents.list.map((x) => <tr key={x.id}>
                 <td><Severity value={x.severity} /></td>
-                <td className="wrap"><Link to={`/incidents/${x.id}`}>{x.title}</Link><br />
+                <td className="wrap"><Link to={`/interruptions/${x.id}`}>{x.title}</Link><br />
                   <small className="muted"><Service value={x.service} short />{x.atoll_code} · {x.island_name} · {INCIDENT_CATEGORIES[x.category]} · {since(x.started_at)}</small></td>
               </tr>)}</tbody></table>}
           </Card>
@@ -139,7 +139,7 @@ function ServiceTile({ svc, s, hero, facts }) {
       </div>
       <div className="hero">{hero}</div>
       <div className="tile-facts">{facts.map(([v, l, alert], i) => <div key={i} className={alert ? 'alert' : ''}><strong>{v}</strong><span>{l}</span></div>)}</div>
-      {s.open_incidents > 0 && <span className="flag bad">{s.open_incidents} open incident{s.open_incidents === 1 ? '' : 's'}</span>}
+      {s.open_incidents > 0 && <span className="flag bad">{s.open_incidents} open interruption{s.open_incidents === 1 ? '' : 's'}</span>}
     </Link>
   );
 }

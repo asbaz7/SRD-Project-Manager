@@ -22,6 +22,12 @@ import Work from './pages/Work.jsx';
 import WorkItem from './pages/WorkItem.jsx';
 import './styles.css';
 
+// Incidents were renamed interruptions: old links keep working.
+function Renamed({ from, to }) {
+  const { pathname, search } = useLocation();
+  return <Navigate to={`${to}${pathname.slice(from.length)}${search}`} replace />;
+}
+
 // Old addresses (bookmarks) go to their place in the sections.
 function Moved({ to }) {
   const { search } = useLocation();
@@ -53,9 +59,10 @@ createRoot(document.getElementById('root')).render(
             <Route path="islands" element={<Islands />} />
             <Route path="islands/:id" element={<Island />} />
             <Route path="assets/:id" element={<Asset />} />
-            <Route path="incidents" element={<Incidents />} />
-            <Route path="incidents/new" element={<Incident />} />
-            <Route path="incidents/:id" element={<Incident />} />
+            <Route path="interruptions" element={<Incidents />} />
+            <Route path="interruptions/new" element={<Incident />} />
+            <Route path="interruptions/:id" element={<Incident />} />
+            <Route path="incidents/*" element={<Renamed from="/incidents" to="/interruptions" />} />
             <Route path="projects" element={<Projects />} />
             <Route path="projects/new" element={<Project />} />
             <Route path="projects/:id" element={<Project />} />

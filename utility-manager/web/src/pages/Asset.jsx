@@ -175,11 +175,11 @@ export default function Asset() {
               <td className="wrap small">{h.note || '—'}<br /><span className="muted">{h.reported_by_name}</span></td>
             </tr>)}</tbody></table></div>}
         </Card>
-        <Card title="Incidents">
-          {a.incidents.length === 0 ? <Empty>No incidents linked.</Empty> :
+        <Card title="Interruptions">
+          {a.incidents.length === 0 ? <Empty>No interruptions linked.</Empty> :
             <table><tbody>{a.incidents.map((x) => <tr key={x.id}>
               <td><Severity value={x.severity} /></td>
-              <td className="wrap"><Link to={`/incidents/${x.id}`}>{x.title}</Link><br /><small className="muted">{INCIDENT_CATEGORIES[x.category]} · {dateTime(x.started_at)} · {x.status}</small></td>
+              <td className="wrap"><Link to={`/interruptions/${x.id}`}>{x.title}</Link><br /><small className="muted">{INCIDENT_CATEGORIES[x.category]} · {dateTime(x.started_at)} · {x.status}</small></td>
             </tr>)}</tbody></table>}
         </Card>
       </div>
