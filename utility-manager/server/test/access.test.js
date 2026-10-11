@@ -390,3 +390,34 @@ test('units: people belong to one; work and projects are assigned to one, and it
   assert.equal((await call('PATCH', `/projects/${p.id}`, T.office, { unit_id: elec.id })).body.unit_name, 'Electrical Unit');
   assert.equal((await call('GET', `/projects/${p.id}`, T.mate)).status, 404);
 });
+
+test('unit heads assign work in their unit and run it; the General Manager assigns anyone; others only themselves', async () => {
+  const [mech, elec] = (await call('GET', '/units', T.tech)).body;
+  // office (non-technical) heads Electrical; tech2 joins it; tech stays in Mechanical.
+  await db.query('update units set head_user_id = $1 where id = $2', [U.office, elec.id]);
+  await call('PATCH', `/users/${U.office}`, T.admin, { unit_id: elec.id });
+  await call('PATCH', `/users/${U.tech2}`, T.admin, { unit_id: elec.id });
+  const job = (token, extra) => call('POST', '/work', token, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Head test', ...extra });
+
+  // Not a head: may take work, not hand it to others.
+  assert.equal((await job(T.tech, { assigned_user_id: U.tech2 })).status, 403);
+  const own = (await job(T.tech, { assigned_user_id: U.tech })).body;
+  assert.equal(own.assigned_user_id, U.tech);
+  assert.equal((await call('PATCH', `/work/${own.id}`, T.tech, { assigned_user_id: U.tech2 })).status, 403);
+  // Saving other changes keeps the existing assignee without a check.
+  assert.equal((await call('PATCH', `/work/${own.id}`, T.tech, { title: 'Head test, renamed', assigned_user_id: U.tech })).status, 200);
+
+  // The (non-technical) head logs work for the unit, assigns its people, runs it.
+  const w = await job(T.office, { assigned_user_id: U.tech2 });
+  assert.equal(w.status, 201);
+  assert.equal(w.body.unit_name, 'Electrical Unit');
+  assert.equal((await job(T.office, { assigned_user_id: U.tech })).status, 403);
+  assert.equal((await job(T.office, { unit_id: mech.id })).status, 403);
+  assert.equal((await call('GET', `/work/${w.body.id}`, T.office)).body.can_run, true);
+  assert.equal((await call('POST', `/work/${w.body.id}/updates`, T.office, { body: 'Done', status: 'completed' })).status, 201);
+  assert.equal((await call('GET', '/auth/me', T.office)).body.headOf[0], elec.id);
+
+  // The General Manager assigns anyone.
+  await call('PATCH', `/users/${U.tech2}`, T.admin, { designation: 'General Manager', unit_id: null });
+  assert.equal((await job(T.tech2, { assigned_user_id: U.tech })).status, 201);
+});

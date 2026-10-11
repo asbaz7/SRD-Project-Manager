@@ -142,7 +142,7 @@ function Commenters({ work: w, reload }) {
 function WorkForm({ work, onDone }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { canWriteIsland, user } = useAuth();
+  const { canWriteIsland, user, technical } = useAuth();
   const islands = useApi('/islands');
   const people = useApi('/users/directory');
   const units = useApi('/units');
@@ -161,6 +161,11 @@ function WorkForm({ work, onDone }) {
   // assignee's) until another is chosen. The server does the same.
   const unitOf = (userId) => (people.data || []).find((p) => p.id === userId)?.unit_id;
   const unit = f.unit_id ?? (work ? '' : unitOf(user?.id) || unitOf(f.assigned_user_id) || '');
+  // Who this person may assign: the General Manager and administrators
+  // anyone; unit heads the people in their units; others only themselves.
+  const anyone = user?.role === 'admin' || user?.generalManager;
+  const assignable = (people.data || []).filter((p) => anyone || p.id === user?.id || user?.headOf?.includes(p.unit_id)
+    || p.id === work?.assigned_user_id);
   const finished = work && ['completed', 'cancelled'].includes(work.status);
   const destIsland = useApi(isMove && f.dest_island_id && !finished ? `/islands/${f.dest_island_id}` : null);
   const islandId = f.island_id || asset.data?.island_id || '';
@@ -231,9 +236,9 @@ function WorkForm({ work, onDone }) {
           placeholder={isMove ? 'Leave empty for "Move Genset 4 from … to …"' : 'e.g. Genset 3 top overhaul'} /></Field>
         <Field label="Details" wide><textarea rows="3" value={f.description || ''} onChange={set('description')} /></Field>
         <Field label="Unit" hint={work ? '' : 'Your unit, unless you choose another.'}><Select value={unit ? String(unit) : ''} onChange={set('unit_id')} placeholder="— no unit —"
-          options={(units.data || []).map((u) => [String(u.id), u.name])} /></Field>
-        <Field label="Assigned to"><Select value={f.assigned_user_id || ''} onChange={set('assigned_user_id')} placeholder="— nobody in SRD —"
-          options={(people.data || []).slice().sort((a, b) => b.technical - a.technical || a.full_name.localeCompare(b.full_name))
+          options={(units.data || []).filter((u) => technical || user?.headOf?.includes(u.id)).map((u) => [String(u.id), u.name])} /></Field>
+        <Field label="Assigned to" hint={anyone ? '' : user?.headOf?.length ? 'You can assign people in your unit.' : 'The General Manager or a unit head assigns work to others.'}><Select value={f.assigned_user_id || ''} onChange={set('assigned_user_id')} placeholder="— nobody in SRD —"
+          options={assignable.slice().sort((a, b) => b.technical - a.technical || a.full_name.localeCompare(b.full_name))
             .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}`])} /></Field>
         <Field label="Team or contractor" hint="Optional, e.g. the island's mechanical team or an outside firm."><input value={f.assigned_to || ''} onChange={set('assigned_to')} /></Field>
         {f.fault_report_month && !work && <p className="muted small wide">Logged from the fault in the {f.fault_report_month.slice(0, 7)} condition report: once this work is completed, that fault leaves the Needs attention list.</p>}

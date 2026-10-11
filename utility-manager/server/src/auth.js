@@ -73,6 +73,7 @@ export async function createApiToken() {
 async function loadApiToken(db, token) {
   const { rows } = await db.query(`
     select t.id as token_id, t.last_used_at, u.id, u.email, u.full_name, u.role, u.technical, u.permissions,
+           u.designation, u.unit_id, (select coalesce(array_agg(un.id order by un.id), '{}') from units un where un.head_user_id = u.id) as head_of,
            coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
                     filter (where sc.id is not null), '[]') as scopes
       from api_tokens t join users u on u.id = t.user_id and u.active
@@ -92,6 +93,7 @@ export async function loadSession(db, token) {
   if (token.startsWith(API_TOKEN_PREFIX)) return toUser(await loadApiToken(db, token));
   const { rows } = await db.query(
     `select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical, u.permissions,
+            u.designation, u.unit_id, (select coalesce(array_agg(un.id order by un.id), '{}') from units un where un.head_user_id = u.id) as head_of,
             s.last_seen_at, s.expires_at,
             coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
                      filter (where sc.id is not null), '[]') as scopes
@@ -123,6 +125,11 @@ function toUser(row) {
     technical: row.role === 'admin' || row.technical,
     // Staff: what this person may do beyond viewing (see allowed()).
     permissions: typeof row.permissions === 'string' ? row.permissions.replace(/[{}]/g, '').split(',').filter(Boolean) : (row.permissions || []),
+    // Units: the person's own, the ones they head, and whether they are the
+    // General Manager (who, like unit heads, assigns work to people).
+    unitId: row.unit_id ?? null,
+    headOf: (typeof row.head_of === 'string' ? row.head_of.replace(/[{}]/g, '').split(',').filter(Boolean) : (row.head_of || [])).map(Number),
+    generalManager: /^\s*general manager\s*$/i.test(row.designation || ''),
     mustChangePassword: row.must_change_password,
     viaToken: !!row.viaToken,
     scope: {

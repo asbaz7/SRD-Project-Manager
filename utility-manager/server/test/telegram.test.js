@@ -216,6 +216,22 @@ test('/status takes the atoll by code or name: Th Omadhoo, Thaa Omadhoo, Th. Oma
   assert.match((await tap(MANAGER_TG, workButton.callback_data)).at(-1).text, /ADh\. Omadhoo/);
 });
 
+test('a unit head hears on Telegram about new work for their unit', async () => {
+  const [mech] = (await call('GET', '/units', { token: admin })).body;
+  await db.query("update users set telegram_user_id = $1 where email = 'admin@srd.mv'", [ADMIN_TG]);
+  await db.query("update units set head_user_id = (select id from users where email = 'admin@srd.mv') where id = $1", [mech.id]);
+  await db.query("update users set technical = true where email = 'mgr@srd.mv'");
+  sent = [];
+  const res = await call('POST', '/work', { token: manager, body: { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Fuel leak', unit_id: mech.id } });
+  assert.equal(res.status, 201);
+  assert.match(repliesTo(ADMIN_TG), /Work for the Mechanical Unit: Fuel leak<\/b>[\s\S]*not assigned to anyone yet/);
+  // Not when the head logs it themselves.
+  sent = [];
+  await call('POST', '/work', { token: admin, body: { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Own job', unit_id: mech.id } });
+  assert.equal(repliesTo(ADMIN_TG), '');
+  await db.query('update units set head_user_id = null where id = $1', [mech.id]);
+});
+
 test('alerts go to chats that turned them on; serious incidents from Telegram alert the group', async () => {
   await say(ADMIN_TG, '/alerts on', { id: GROUP, type: 'supergroup', title: 'SRD Managers' });
   assert.match(repliesTo(GROUP), /Alerts are on/);

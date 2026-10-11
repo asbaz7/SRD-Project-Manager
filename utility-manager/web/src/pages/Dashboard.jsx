@@ -87,7 +87,7 @@ export default function Dashboard() {
             <ConditionMeter e={d.engines} />
             <p className="muted small">{d.engines.total} gensets · from the latest monthly condition reports</p>
           </Card>}
-          <Card title={`Work in progress (${d.work.length})`} actions={can('manager') && technical && <Link to="/work/new" className="btn small">Log work</Link>}>
+          <Card title={`Work in progress (${d.work.length})`} actions={can('manager') && (technical || user?.headOf?.length > 0) && <Link to="/work/new" className="btn small">Log work</Link>}>
             {d.work.length === 0 ? <Empty>No work in progress.</Empty> :
               <div className="scroll-y"><table><tbody>{d.work.map((w) => <tr key={w.id}>
                 <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />

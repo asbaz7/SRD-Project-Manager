@@ -95,11 +95,17 @@ const listQuery = paging.extend({
   format: z.enum(['json', 'csv']).default('json'),
 });
 
-// An assignee must be an active person (not a service account).
-async function checkAssignee(db, userId) {
-  if (!userId) return;
-  const { rows } = await db.query('select 1 from users where id = $1 and active and not service_account', [userId]);
+// An assignee must be an active person (not a service account). Work is
+// assigned to others by the General Manager (anyone), unit heads (people in
+// their unit) and administrators; anyone else may take it or leave it open.
+async function checkAssignee(db, user, userId, current = null) {
+  if (!userId || userId === current) return;
+  const { rows } = await db.query('select unit_id from users where id = $1 and active and not service_account', [userId]);
   if (!rows.length) throw badRequest('Assign the work to someone with an active account');
+  if (userId === user.id || user.role === 'admin' || user.generalManager) return;
+  if (user.headOf.includes(rows[0].unit_id)) return;
+  throw forbidden(user.headOf.length ? 'As a unit head you can assign work to people in your unit'
+    : 'Only the General Manager and unit heads assign work to others. You can take it yourself or leave it unassigned.');
 }
 
 // Resolves where a piece of work is: from the asset, the facility or the island.
@@ -171,22 +177,30 @@ export default async function workRoutes(app) {
   // Running a work item (create, edit, change status, post updates) is for
   // technical managers of its island and administrators. Others may only
   // comment, and only when added to it (work_commenters).
-  const canRun = (user, island) => user.role === 'admin'
-    || (hasRole(user, 'manager') && user.technical && canWriteIsland(user, island));
+  const canRun = (user, island, unitId) => user.role === 'admin'
+    || (hasRole(user, 'manager') && (user.technical || user.headOf.includes(unitId)) && canWriteIsland(user, island));
   async function workAccess(user, workId) {
     const { rows } = await db.query(`
-      select w.id, w.island_id, w.status, w.created_by, i.atoll_id,
+      select w.id, w.island_id, w.status, w.created_by, w.unit_id, i.atoll_id,
              exists (select 1 from work_commenters c where c.work_id = w.id and c.user_id = $2) as commenter
         from work_orders w join islands i on i.id = w.island_id where w.id = $1`, [workId, user.id]);
     const w = one(rows, 'Work');
-    const run = canRun(user, { id: w.island_id, atoll_id: w.atoll_id });
+    const run = canRun(user, { id: w.island_id, atoll_id: w.atoll_id }, w.unit_id);
     // Staff allowed to update work: post updates and move it along, but not
     // create, edit, complete or cancel it.
     const update = run || (user.role === 'staff' && allowed(user, 'work') && canWriteIsland(user, { id: w.island_id, atoll_id: w.atoll_id }));
     return { ...w, run, update, comment: update || w.commenter, share: run || (w.created_by === user.id && user.technical) };
   }
-  const technicalOnly = (user) => {
-    if (!user.technical) throw forbidden('Work is started and run by technical staff');
+  // Technical staff run work; a unit head also runs their unit's work.
+  const technicalOr = (user, unitId) => {
+    if (!user.technical && !user.headOf.includes(unitId)) throw forbidden('Work is started and run by technical staff, and by unit heads for their unit');
+  };
+  // New work in a unit, or work moved to one: its head hears about it.
+  const tellHead = async (workId, actor) => {
+    const { rows: [h] } = await db.query('select head_user_id, name from units where id = (select unit_id from work_orders where id = $1)', [workId]);
+    if (!h?.head_user_id || h.head_user_id === actor.id) return;
+    const w = one((await db.query(`${SELECT} where w.id = $1`, [workId])).rows);
+    await telegram.notifyUser(h.head_user_id, `📋 <b>Work for the ${esc(h.name)}: ${esc(w.title)}</b>\n${esc(w.atoll_code)}. ${esc(w.island_name)}${w.asset_tag ? ` · ${esc(assetName({ kind: w.asset_kind, tag: w.asset_tag }))}` : ''}\nFrom <i>${esc(actor.fullName)}</i> · ${w.assigned_user_name ? `assigned to ${esc(w.assigned_user_name)}` : 'not assigned to anyone yet'}\n${telegram.link(`/work/${w.id}`, w.ref)}`);
   };
 
   app.get('/work', async (req, reply) => {
@@ -235,9 +249,9 @@ export default async function workRoutes(app) {
   });
 
   app.post('/work', manager, async (req, reply) => {
-    technicalOnly(req.user);
     const b = parse(body, req.body);
-    await checkAssignee(db, b.assigned_user_id);
+    technicalOr(req.user, b.unit_id ?? req.user.unitId);
+    await checkAssignee(db, req.user, b.assigned_user_id);
     if (b.kind === 'relocation' && b.status === 'in_progress') b.status = 'planned';
     checkStatus(b.kind, b.status);
     const where = await locate(db, b);
@@ -265,6 +279,7 @@ export default async function workRoutes(app) {
       return res.rows;
     });
     if (move) await moveAlert(move, req.user, b.description);
+    await tellHead(rows[0].id, req.user);
     reply.code(201);
     const row = one((await db.query(`${SELECT} where w.id = $1`, [rows[0].id])).rows);
     delete row.total_count;
@@ -276,10 +291,11 @@ export default async function workRoutes(app) {
     const patch = parse(body.omit({ island_id: true, facility_id: true, service: true }).partial(), req.body);
     for (const k of Object.keys(patch)) if (!(k in (req.body || {}))) delete patch[k];
     const current = one((await db.query(
-      'select island_id, status, completed_on, kind, asset_id, dest_facility_id, dest_tag from work_orders where id = $1', [workId])).rows, 'Work');
-    technicalOnly(req.user);
+      'select island_id, status, completed_on, kind, asset_id, dest_facility_id, dest_tag, unit_id, assigned_user_id from work_orders where id = $1', [workId])).rows, 'Work');
+    technicalOr(req.user, current.unit_id);
+    if (patch.unit_id && patch.unit_id !== current.unit_id && !req.user.technical) technicalOr(req.user, patch.unit_id);
     await assertIslandWrite(db, req.user, { islandId: current.island_id });
-    await checkAssignee(db, patch.assigned_user_id);
+    await checkAssignee(db, req.user, patch.assigned_user_id, current.assigned_user_id);
     // Logged on the wrong engine: moving it to another one moves its
     // history entry too (see log_completed_work). Not for moves.
     if (patch.asset_id !== undefined) {
@@ -321,6 +337,7 @@ export default async function workRoutes(app) {
     delete row.total_count;
     if (move) await moveAlert(move, req.user);
     else if (patch.status === 'completed' && current.status !== 'completed') await completedAlert(workId, req.user);
+    if (patch.unit_id && patch.unit_id !== current.unit_id) await tellHead(workId, req.user);
     return row;
   });
 
