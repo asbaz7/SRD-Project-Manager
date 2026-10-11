@@ -286,7 +286,7 @@ export function createAgent({ db, config, log }) {
       const res = await client.messages.create({
         model,
         max_tokens: 8000,
-        output_config: { effort: 'medium' },
+        output_config: { effort: 'low' }, // lookups and short answers: low keeps replies quick
         system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }, { type: 'text', text: context(user) }],
         tools: defs,
         messages: conv.messages,
@@ -301,28 +301,23 @@ export function createAgent({ db, config, log }) {
       }
       conv.messages.push({ role: 'assistant', content: res.content });
 
-      const results = [];
+      // Look-ups asked for together run together; a change is only described here.
+      const caught = (p, id) => p.catch((err) => { if (!(err instanceof ToolError)) throw err; return result(id, err.message, true); });
+      const slots = [];
       let pending = null;
       for (const use of uses) {
         const tool = tools[use.name];
         const input = tool?.schema.safeParse(use.input);
-        if (!tool) results.push(result(use.id, `No tool called ${use.name}`, true));
-        else if (!input.success) results.push(result(use.id, `Invalid input: ${z.prettifyError(input.error)}`, true));
-        else if (tool.write && pending) results.push(result(use.id, 'One change at a time: propose this again once the first is confirmed or cancelled.', true));
-        else {
-          try {
-            if (tool.write) {
-              const summary = await tool.describe(user, input.data, asUser);
-              pending = { id: randomBytes(6).toString('hex'), tool_use_id: use.id, name: use.name, input: input.data, summary, at: Date.now() };
-            } else {
-              results.push(result(use.id, await tool.run(user, input.data, asUser)));
-            }
-          } catch (err) {
-            if (!(err instanceof ToolError)) throw err;
-            results.push(result(use.id, err.message, true));
-          }
-        }
+        if (!tool) slots.push(result(use.id, `No tool called ${use.name}`, true));
+        else if (!input.success) slots.push(result(use.id, `Invalid input: ${z.prettifyError(input.error)}`, true));
+        else if (tool.write && pending) slots.push(result(use.id, 'One change at a time: propose this again once the first is confirmed or cancelled.', true));
+        else if (tool.write) {
+          const summary = await caught(Promise.resolve().then(() => tool.describe(user, input.data, asUser)).then((text) => ({ text })), use.id);
+          if (summary.text !== undefined) pending = { id: randomBytes(6).toString('hex'), tool_use_id: use.id, name: use.name, input: input.data, summary: summary.text, at: Date.now() };
+          else slots.push(summary);
+        } else slots.push(caught(Promise.resolve().then(() => tool.run(user, input.data, asUser)).then((out) => result(use.id, out)), use.id));
       }
+      const results = await Promise.all(slots);
       if (pending) {
         // The other results wait with it: they go back together once the person answers.
         conv.pending = { ...pending, results };

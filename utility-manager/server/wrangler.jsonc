@@ -35,5 +35,9 @@
       "localConnectionString": "postgres://postgres:postgres@localhost:5432/srd"
     }
   ],
+  // Run next to the database (Supabase, AWS Mumbai) rather than next to the
+  // visitor: a page makes several queries one after another, and each one
+  // from Malé took about 120 ms; from Mumbai it is a few ms.
+  "placement": { "region": "aws:ap-south-1" },
   "observability": { "enabled": true }
 }
