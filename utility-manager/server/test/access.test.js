@@ -371,6 +371,14 @@ test('units: people belong to one; work and projects are assigned to one, and it
   assert.ok(!(await call('GET', '/work?unit=mine', T.office)).body.items.some((x) => x.id === w.id));
   assert.equal((await call('PATCH', `/work/${w.id}`, T.tech, { unit_id: elec.id })).body.unit_name, 'Electrical Unit');
 
+  // New work without a unit goes to its creator's, or else the assignee's.
+  const mine = (await call('POST', '/work', T.tech, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'No unit given' })).body;
+  assert.equal(mine.unit_name, 'Mechanical Unit');
+  const byAdmin = (await call('POST', '/work', T.admin, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'For tech', assigned_user_id: U.tech })).body;
+  assert.equal(byAdmin.unit_name, 'Mechanical Unit');
+  const chosen = (await call('POST', '/work', T.tech, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Chosen', unit_id: elec.id })).body;
+  assert.equal(chosen.unit_name, 'Electrical Unit');
+
   // Projects: members of its unit can view a private project, others can't;
   // only those who manage it can change the unit.
   const p = (await call('POST', '/projects', T.office, { service: 'water', island_id: maafushi.id, title: 'Unit project', unit_id: mech.id })).body;
