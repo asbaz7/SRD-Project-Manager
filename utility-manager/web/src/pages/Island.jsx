@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, WORK_KINDS, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
+import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { useApi, useRowLink } from '../hooks.js';
 
 export default function Island() {
   const { id } = useParams();
+  // Opened from a service page (Water, Sewerage...): only that service's plants and work.
+  const [params] = useSearchParams();
+  const only = SERVICES[params.get('service')] ? params.get('service') : null;
   const state = useApi(`/islands/${id}`);
   const rowLink = useRowLink();
   const { can, allowed } = useAuth();
@@ -16,6 +19,8 @@ export default function Island() {
 
   return <Async state={state}>{(island) => {
     const manage = can('manager') && island.can_edit;
+    const facilities = island.facilities.filter((f) => !only || f.service === only);
+    const openWork = island.open_work.filter((w) => !only || w.service === only);
     return <>
       <PageHead title={island.name}
         crumbs={[{ to: '/islands', label: 'Islands' }, { to: `/islands?atoll_id=${island.atoll_id}`, label: `${island.atoll_code} · ${island.atoll_name}` }, { label: island.name }]}
@@ -24,8 +29,9 @@ export default function Island() {
           {island.can_edit && island.technical && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
           {manage && island.technical && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
         </>} />
+      {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <Link to={`/islands/${island.id}`}>Show everything on {island.name}</Link></p>}
       <div className="stats">
-        {island.technical && <>
+        {island.technical && (!only || only === 'electricity') && <>
           <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} />
           <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
           <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
@@ -36,8 +42,8 @@ export default function Island() {
         <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
 
-      {island.open_work.length > 0 && <Card title={`Ongoing work (${island.open_work.length})`}>
-        <table><tbody>{island.open_work.map((w) => <tr key={w.id}>
+      {openWork.length > 0 && <Card title={`Ongoing work (${openWork.length})`}>
+        <table><tbody>{openWork.map((w) => <tr key={w.id}>
           <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
             <small className="muted">{w.ref} · {WORK_KINDS[w.kind]}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.target_on && ` · target ${date(w.target_on)}`}</small>
             {w.last_update && <div className="small">{w.last_update}</div>}</td>
@@ -45,8 +51,8 @@ export default function Island() {
         </tr>)}</tbody></table>
       </Card>}
 
-      {island.technical && island.facilities.length === 0 && <Empty>No facilities recorded for this island yet.</Empty>}
-      {island.facilities.map((f) => (
+      {island.technical && facilities.length === 0 && <Empty>No {only ? `${SERVICES[only].label.toLowerCase()} ` : ''}facilities recorded for this island yet.</Empty>}
+      {facilities.map((f) => (
         <Card key={f.id} className={f.active ? '' : 'inactive'}
           title={<><Service value={f.service} short /> {f.name} <span className="muted small">· {FACILITY_KINDS[f.kind]}{!f.active && ' · not in use'}</span></>}
           actions={<>

@@ -157,7 +157,7 @@ function Plants({ svc }) {
       return atolls.map((code) => (
         <Card key={code} title={`${code} · ${d.facilities.filter((f) => f.atoll_code === code).length} ${svc === 'electricity' ? 'powerhouses' : 'plants'}`}>
           <div className="facility-grid">{d.facilities.filter((f) => f.atoll_code === code).map((f) => (
-            <Link key={f.id} to={`/islands/${f.island_id}`} className="facility">
+            <Link key={f.id} to={`/islands/${f.island_id}?service=${svc}`} className="facility">
               <strong>{f.island_name}</strong>
               <span className="muted small">{f.name.toLowerCase().includes(FACILITY_KINDS[f.kind].toLowerCase().split(' ')[0]) ? f.name : `${f.name} · ${FACILITY_KINDS[f.kind]}`}</span>
               <div className="row">
