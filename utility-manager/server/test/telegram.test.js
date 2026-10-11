@@ -199,7 +199,7 @@ test('the daily summary goes to alert chats', async () => {
   assert.match(text, /📋 <b>SRD summary/);
   assert.match(text, /gensets running/);
   assert.match(text, /Serious incidents/);
-  assert.match(text, /and \d+ more/);
+  assert.doesNotMatch(text, /Condition reports missing/);
   assert.doesNotMatch(text, /Out of service/);
 });
 

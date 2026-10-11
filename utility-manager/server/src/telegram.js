@@ -232,12 +232,6 @@ export function createTelegram({ db, config, log }) {
     lines.push(...workLines(d.work));
     const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
     if (inc.length) lines.push('', '<b>Serious incidents</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
-    const missing = d.reports?.missing || [];
-    if (missing.length) {
-      const month = new Date(`${d.reports.expected_month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-      const names = missing.slice(0, 15).map((r) => `${esc(r.atoll_code)}. ${esc(r.island_name)}`).join(', ');
-      lines.push('', `<b>Condition reports missing for ${month}</b>`, names + (missing.length > 15 ? ` and ${missing.length - 15} more` : ''));
-    }
     lines.push('', link('/', 'Open the dashboard'));
     return lines.join('\n');
   }
