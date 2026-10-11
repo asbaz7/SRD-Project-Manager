@@ -22,6 +22,9 @@
   // Morning Telegram summary at 07:45 Maldives time (02:45 UTC).
   "triggers": { "crons": ["45 2 * * *"] },
   // Database connection: Hyperdrive config "srd-utility-db", pointing at the
+  // Supabase TRANSACTION pooler (port 6543, not 5432: session mode allows only
+  // 15 clients and Hyperdrive's own pool filled them, so pages failed with
+  // "max clients reached"),
   // srd-utility-manager Supabase project (created with
   // `npx wrangler hyperdrive create srd-utility-db --connection-string=…`).
   // Query caching is DISABLED on this config (`wrangler hyperdrive update <id>

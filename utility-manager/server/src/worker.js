@@ -6,7 +6,7 @@
 // against the database when deploying a new version.
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
-import { createPgDb } from './db-pg.js';
+import { connectionLimit, createPgDb, requestScope } from './db-pg.js';
 import { createLogger } from './logger.js';
 
 let app;
@@ -42,12 +42,12 @@ export default {
       console.error(JSON.stringify({ level: 'fatal', msg: 'app failed to start', err: { message: err.message, stack: err.stack } }));
       return Response.json({ error: 'The service is unavailable. Please try again shortly.' }, { status: 503 });
     }
-    return app.fetch(request, env, ctx);
+    return requestScope.run(connectionLimit(), () => app.fetch(request, env, ctx));
   },
 
   // Cron trigger (wrangler.jsonc): the morning Telegram summary.
   async scheduled(event, env, ctx) {
     app ??= await getApp(env);
-    ctx.waitUntil(app.daily().catch((err) => console.error(JSON.stringify({ level: 'error', msg: 'daily summary failed', err: { message: err.message } }))));
+    ctx.waitUntil(requestScope.run(connectionLimit(), () => app.daily()).catch((err) => console.error(JSON.stringify({ level: 'error', msg: 'daily summary failed', err: { message: err.message } }))));
   },
 };
