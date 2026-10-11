@@ -352,7 +352,7 @@ test('units: people belong to one; work and projects are assigned to one, and it
   T.mate = (await call('POST', '/auth/login', null, { email: 'mate@srd.mv', password: PASSWORD })).body.token;
   const units = (await call('GET', '/units', T.mate)).body;
   assert.deepEqual(units.map((u) => u.name), ['Mechanical Unit', 'Electrical Unit', 'General Maintenance Unit',
-    'Administration and Support Service Unit', 'Logistics Unit']);
+    'Administration and Support Service Unit', 'Logistics Unit', 'Water and Sewerage Unit']);
   const [mech, elec] = units;
 
   // An administrator sets a person's unit; the directory shows it.
