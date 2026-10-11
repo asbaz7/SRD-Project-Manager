@@ -20,14 +20,19 @@ const islandSummary = (vis) => `
          count(distinct f.id) filter (where f.active) as facility_count,
          coalesce(array_agg(distinct f.service::text) filter (where f.active), '{}') as services,
          count(s.id) filter (where s.kind = 'genset' and s.status <> 'decommissioned') as genset_count,
-         count(s.id) filter (where s.status = 'running') as running_count,
-         count(s.id) filter (where s.status in ('down', 'maintenance')) as down_count,
+         count(s.id) filter (where s.kind = 'genset' and s.status = 'running') as running_count,
+         count(s.id) filter (where s.kind = 'genset' and s.status in ('down', 'maintenance')) as down_count,
+         coalesce(array_agg(s.status::text order by length(s.tag), s.tag)
+           filter (where s.kind = 'genset' and s.status <> 'decommissioned'), '{}') as genset_states,
          count(s.id) filter (where s.kind = 'genset' and s.status = 'unknown') as no_report_count,
          coalesce(sum(s.rated_capacity) filter (where s.kind = 'genset' and s.status <> 'decommissioned'), 0) as installed_kw,
          (select count(*) from incidents x where x.island_id = i.id and x.status = 'open') as open_incidents,
          (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold') and ${vis.sql}) as active_projects,
          (select sum(fc.fuel_capacity_l) from facilities fc
-           where fc.island_id = i.id and fc.active and fc.service = 'electricity') as fuel_capacity_l
+           where fc.island_id = i.id and fc.active and fc.service = 'electricity') as fuel_capacity_l,
+         (select count(*) from work_orders w where w.island_id = i.id and w.status not in ('completed', 'cancelled')) as open_work,
+         (select count(*) from facilities fc where fc.island_id = i.id and fc.active and fc.service <> 'electricity'
+             and (fc.licence_status ~* 'expired' or fc.licence_expires_on < current_date)) as licences_expired
     from islands i
     join atolls a on a.id = i.atoll_id
     left join facilities f on f.island_id = i.id

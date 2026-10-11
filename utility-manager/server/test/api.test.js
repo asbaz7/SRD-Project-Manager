@@ -122,6 +122,8 @@ describe('asset register', () => {
     assert.equal(maafushi.genset_count, 8);
     assert.equal(maafushi.installed_kw, 9680);
     assert.equal(maafushi.fuel_capacity_l, 147302, 'fuel capacity from the old sheet');
+    assert.equal(maafushi.genset_states.length, 8, 'one state per genset, for the island cards');
+    assert.ok('open_work' in maafushi && 'licences_expired' in maafushi);
   });
 
   test('island detail lists facilities with their assets', async () => {
