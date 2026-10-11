@@ -148,6 +148,12 @@ describe('reading the report template', () => {
     assert.equal(matchIsland(islands, 'M. DHIHGARU').island.id, '4');
     assert.equal(matchIsland(islands, null, 'K.MAAFUSHI ENGINE CONDITION REPORT 2026.xlsx').island.id, '5');
     assert.equal(matchIsland(islands, 'XYZ').island, null);
+    // Any atoll code the islands carry, or the atoll's name.
+    const om = [{ id: 'a', name: 'Omadhoo', atoll_code: 'ADh' }, { id: 't', name: 'Omadhoo', atoll_code: 'Th' }, ...islands];
+    assert.equal(matchIsland(om, 'Th. Omadhoo').island.id, 't');
+    assert.equal(matchIsland(om, 'THAA OMADHOO').island.id, 't');
+    assert.equal(matchIsland(om, 'ADH.OMADHOO').island.id, 'a');
+    assert.deepEqual(matchIsland(om, 'Omadhoo').candidates.map((c) => c.id), ['a', 't']);
   });
 });
 

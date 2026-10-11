@@ -4,7 +4,10 @@
 //   - writes every dated maintenance event it contains into the history,
 //   - fills the genset register (make, serials, alternator) from the report.
 
-const ATOLL_ALIASES = { AA: 'AA', ADH: 'ADh', K: 'K', T: 'K', M: 'M', V: 'V' };
+// Atolls are written by code (the islands' own atoll codes: AA, ADh, Dh, F,
+// K, M, Th, V...) or by name; 'T' is an old spelling of Kaafu in reports.
+export const ATOLL_NAMES = { T: 'K', ALIFALIF: 'AA', ALIFDHAAL: 'ADh', ALIFDHAALU: 'ADh', DHAALU: 'Dh', FAAFU: 'F',
+  KAAFU: 'K', MEEMU: 'M', THAA: 'Th', VAAVU: 'V' };
 const letters = (s) => String(s || '').toUpperCase().replace(/[^A-Z]/g, '');
 
 function distance(a, b) {
@@ -21,11 +24,18 @@ function distance(a, b) {
   return dp[b.length];
 }
 
-// 'AA. FERIDHOO', 'K.GAAFARU', 'M.MULI', 'BODUFOLHUDHOO' -> { atoll, name }
-function splitName(text) {
+// 'AA. FERIDHOO', 'K.GAAFARU', 'Th Omadhoo', 'Thaa Omadhoo', 'BODUFOLHUDHOO' -> { atoll, name }
+function splitName(text, codes) {
   const s = String(text || '').toUpperCase().replace(/POWER\s*HOUSE|ENGINE CONDITION REPORTS?|\d{4}/g, ' ').trim();
-  const m = s.match(/^(AA|ADH|K|T|M|V)\s*[.\s]\s*(.+)$/);
-  return m ? { atoll: ATOLL_ALIASES[m[1]], name: letters(m[2]) } : { atoll: null, name: letters(s) };
+  const words = s.split(/[\s.]+/).filter(Boolean);
+  // The atoll is the first word, or the first two ("Alif Alif").
+  for (const n of [2, 1]) {
+    if (words.length <= n) continue;
+    const key = letters(words.slice(0, n).join(''));
+    const atoll = codes.get(key) || ATOLL_NAMES[key];
+    if (atoll) return { atoll, name: letters(words.slice(n).join('')) };
+  }
+  return { atoll: null, name: letters(s) };
 }
 
 /**
@@ -33,8 +43,9 @@ function splitName(text) {
  * the file name. Returns { island, candidates }.
  */
 export function matchIsland(islands, ...texts) {
+  const codes = new Map(islands.map((i) => [letters(i.atoll_code), i.atoll_code]));
   for (const text of texts.filter(Boolean)) {
-    const { atoll, name } = splitName(text);
+    const { atoll, name } = splitName(text, codes);
     if (name.length < 3) continue;
     const scored = islands
       .map((i) => {
@@ -49,7 +60,8 @@ export function matchIsland(islands, ...texts) {
     if (best && best.d <= limit && (scored.length < 2 || scored[1].d > best.d)) {
       return { island: strip(best), candidates: [] };
     }
-    const near = scored.filter((s) => s.d <= limit + 2).slice(0, 5).map(strip);
+    // Equally good matches (Omadhoo in ADh and Th), else the near misses.
+    const near = (best && best.d <= limit ? scored.filter((s) => s.d === best.d) : scored.filter((s) => s.d <= limit + 2)).slice(0, 5).map(strip);
     if (near.length) return { island: null, candidates: near };
   }
   return { island: null, candidates: [] };

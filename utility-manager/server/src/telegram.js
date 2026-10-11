@@ -10,7 +10,7 @@
 // PUBLIC_URL (for links). Without a token the bot is off and alerts are no-ops.
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { createAgent, toTelegram } from './agent.js';
-import { matchIsland } from './reportImport.js';
+import { ATOLL_NAMES, matchIsland } from './reportImport.js';
 
 const API = 'https://api.telegram.org';
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -266,14 +266,19 @@ export function createTelegram({ db, config, log }) {
   // "K. Maafushi G3 note" / "Maafushi G3 note" -> island + the rest.
   async function takeIsland(words) {
     const all = await islands();
-    const tries = words.length > 1 && /^[a-z]{1,3}\.?$/i.test(words[0]) ? [2, 1] : [1, 2];
+    // The island may follow an atoll ("Th Omadhoo", "Thaa Omadhoo", "Alif Alif
+    // Rasdhoo"); otherwise it is one word, or two ("Hulhumale Phase").
+    const key = (n) => words.slice(0, n).join('').toUpperCase().replace(/[^A-Z]/g, '');
+    const atoll = (n) => words.length > n && (all.some((i) => i.atoll_code.toUpperCase() === key(n)) || key(n) in ATOLL_NAMES);
+    const tries = atoll(2) ? [3, 2, 1] : atoll(1) ? [2, 1] : [1, 2];
+    let candidates = [];
     for (const n of tries) {
       if (words.length < n) continue;
-      const { island, candidates } = matchIsland(all, words.slice(0, n).join(' '));
-      if (island) return { island: all.find((i) => i.id === island.id), rest: words.slice(n) };
-      if (n === tries[tries.length - 1] && candidates.length) return { candidates };
+      const r = matchIsland(all, words.slice(0, n).join(' '));
+      if (r.island) return { island: all.find((i) => i.id === r.island.id), rest: words.slice(n) };
+      if (!candidates.length) candidates = r.candidates;
     }
-    return {};
+    return { candidates };
   }
 
   const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^(genset|gen|engine|eng|dg|g|unit|no)(?=\d)/, '');

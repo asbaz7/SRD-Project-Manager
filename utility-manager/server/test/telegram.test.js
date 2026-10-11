@@ -191,6 +191,22 @@ test('/status shows an island', async () => {
   assert.match(text, /https:\/\/srd\.example\/islands\//);
 });
 
+test('/status takes the atoll by code or name: Th Omadhoo, Thaa Omadhoo, Th. Omadhoo', async () => {
+  for (const [code, name] of [['ADh', 'Alif Dhaal'], ['Th', 'Thaa']]) {
+    await db.query('insert into atolls (code, name) values ($1, $2) on conflict (code) do nothing', [code, name]);
+    await db.query(`insert into islands (atoll_id, name) select id, 'Omadhoo' from atolls where code = $1
+                    on conflict (atoll_id, name) do nothing`, [code]);
+  }
+  for (const text of ['/status Th Omadhoo', '/status Th. Omadhoo', '/status Thaa Omadhoo', '/status th omadhoo']) {
+    await say(MANAGER_TG, text);
+    assert.match(repliesTo(MANAGER_TG), /<b>Th\. Omadhoo<\/b>/, text);
+  }
+  await say(MANAGER_TG, '/status ADh Omadhoo');
+  assert.match(repliesTo(MANAGER_TG), /<b>ADh\. Omadhoo<\/b>/);
+  await say(MANAGER_TG, '/status Omadhoo');
+  assert.match(repliesTo(MANAGER_TG), /^Which island\? ADh\. Omadhoo, Th\. Omadhoo$/);
+});
+
 test('alerts go to chats that turned them on; serious incidents from Telegram alert the group', async () => {
   await say(ADMIN_TG, '/alerts on', { id: GROUP, type: 'supergroup', title: 'SRD Managers' });
   assert.match(repliesTo(GROUP), /Alerts are on/);
