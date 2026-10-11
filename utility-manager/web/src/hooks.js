@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from './api.js';
 
 // Load a GET endpoint; re-runs when `path` changes. `path` null = skip.
@@ -68,4 +68,22 @@ export function useRowLink() {
       else navigate(to);
     },
   });
+}
+
+// After a deploy, a tab that was already open keeps running the old code.
+// On moving between pages (checked at most every 2 minutes), see whether the
+// site now serves a different build; if so, reload so the page uses it.
+export function useFreshVersion() {
+  const location = useLocation();
+  const last = useRef(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    const current = document.querySelector('script[type="module"][src*="/assets/"]')?.getAttribute('src');
+    if (!current || Date.now() - last.current < 120_000) return;
+    last.current = Date.now();
+    fetch('/', { cache: 'no-store' }).then((r) => (r.ok ? r.text() : null))
+      .then((html) => { if (html && html.includes('/assets/') && !html.includes(current)) window.location.reload(); })
+      .catch(() => {});
+  }, [location.pathname, location.search]);
 }

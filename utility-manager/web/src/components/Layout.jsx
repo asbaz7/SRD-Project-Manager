@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { ROLES } from '../format.js';
+import { useFreshVersion } from '../hooks.js';
 import { Icon } from './icons.jsx';
 
 // The region (Overview, Islands) and then the three service sections:
@@ -46,6 +47,7 @@ export default function Layout() {
   const { user, logout, can, technical } = useAuth();
   const [sheet, setSheet] = useState(false);
   const location = useLocation();
+  useFreshVersion();
   const [lastPath, setLastPath] = useState(location.pathname);
   if (lastPath !== location.pathname) { setLastPath(location.pathname); setSheet(false); }
   const admin = ADMIN.filter((n) => can(n.role));
