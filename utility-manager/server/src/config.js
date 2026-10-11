@@ -45,6 +45,9 @@ export function loadConfig(overrides = {}) {
     logLevel: env.LOG_LEVEL || (production ? 'info' : 'debug'),
     // Telegram bot token from @BotFather; the bot is off without it.
     telegramToken: (env.TELEGRAM_BOT_TOKEN || '').trim(),
+    // Anthropic API key for the Telegram assistant; it is off without one.
+    anthropicKey: (env.ANTHROPIC_API_KEY || '').trim(),
+    agentModel: env.AGENT_MODEL || 'claude-haiku-5-5',
     // The site's public address, for links in Telegram messages.
     publicUrl: env.PUBLIC_URL || '',
     ...overrides,

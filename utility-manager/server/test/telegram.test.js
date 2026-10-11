@@ -34,6 +34,12 @@ async function call(method, url, { token, body, headers = {} } = {}) {
 
 const login = async (email) => (await call('POST', '/auth/login', { body: { email, password: PASSWORD } })).body.token;
 
+// Claude's side of the conversation: each entry answers one request.
+let claudeScript = [];
+let claudeRequests = [];
+const toolUse = (name, input) => ({ type: 'tool_use', id: `toolu_${name}_${claudeRequests.length}`, name, input });
+const lastToolResults = (body) => body.messages.at(-1).content.filter((b) => b.type === 'tool_result');
+
 let messageId = 1;
 // Deliver a message to the bot the way Telegram would.
 async function say(fromId, text, chat = { id: fromId, type: 'private', first_name: 'Test' }) {
@@ -45,10 +51,37 @@ async function say(fromId, text, chat = { id: fromId, type: 'private', first_nam
   assert.equal(res.status, 200);
   return sent;
 }
+// A tap on an inline button under one of the bot's messages.
+async function tap(fromId, data, chatId = fromId) {
+  sent = [];
+  const res = await call('POST', '/telegram/webhook', {
+    headers: { 'x-telegram-bot-api-secret-token': webhookSecret(TOKEN) },
+    body: { update_id: messageId, callback_query: { id: `cb${messageId++}`, from: { id: fromId, is_bot: false, first_name: 'Test' },
+      message: { message_id: 1, chat: { id: chatId, type: 'private' } }, data } },
+  });
+  assert.equal(res.status, 200);
+  return sent;
+}
 const repliesTo = (chatId) => sent.filter((m) => m.chat_id === chatId).map((m) => m.text).join('\n---\n');
 
 before(async () => {
   globalThis.fetch = async (url, init) => {
+    if (String(url).startsWith('https://api.anthropic.com/')) {
+      const body = JSON.parse(init.body);
+      claudeRequests.push(body);
+      let content;
+      try {
+        content = claudeScript.shift()?.(body);
+        assert.ok(content, 'unexpected request to Claude');
+      } catch (err) {
+        // A 400 is not retried, so the failure shows up as it happened.
+        console.error('Claude stub:', err.message);
+        return Response.json({ type: 'error', error: { type: 'invalid_request_error', message: err.message } }, { status: 400 });
+      }
+      const toolUse = content.some((b) => b.type === 'tool_use');
+      return Response.json({ id: `msg_${claudeRequests.length}`, type: 'message', role: 'assistant', model: body.model, content,
+        stop_reason: toolUse ? 'tool_use' : 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } });
+    }
     if (!String(url).startsWith('https://api.telegram.org/')) return realFetch(url, init);
     const method = String(url).split('/').pop();
     const body = init?.body ? JSON.parse(init.body) : {};
@@ -63,7 +96,7 @@ before(async () => {
   await db.query("update facilities set reports_from = '2024-01-01' where kind = 'powerhouse'");
   app = await buildApp({
     db, logger: false,
-    config: loadConfig({ timezone: 'Indian/Maldives', webDist: '', telegramToken: TOKEN, publicUrl: 'https://srd.example' }),
+    config: loadConfig({ timezone: 'Indian/Maldives', webDist: '', telegramToken: TOKEN, anthropicKey: 'test-key', publicUrl: 'https://srd.example' }),
   });
   const hash = await hashPassword(PASSWORD);
   await db.query(`insert into users (email, full_name, role, password_hash, must_change_password) values
@@ -277,4 +310,97 @@ test('the morning summary lists ongoing work with its status and latest update',
   const text = repliesTo(GROUP);
   assert.match(text, /<b>Ongoing work<\/b> \(\d+\)/);
   assert.match(text, /WO-\d{4}<\/a> K\. Maafushi Genset 7: Genset 7 down: voltage issue · <b>In progress<\/b>\n   ↳ AVR replaced, testing tomorrow \(\d+ \w+\)/);
+});
+
+test('plain messages go to the assistant, which looks things up as the person asking', async () => {
+  await db.query("update users set telegram_user_id = $1, technical = true where email = 'mgr@srd.mv'", [MANAGER_TG]);
+  claudeRequests = [];
+  claudeScript = [
+    () => [toolUse('find_island', { name: 'maafushi' })],
+    (body) => {
+      const [r] = lastToolResults(body);
+      assert.equal(JSON.parse(r.content).island.id, maafushi.id);
+      return [toolUse('get_island', { island_id: maafushi.id })];
+    },
+    (body) => {
+      assert.match(lastToolResults(body)[0].content, /Powerhouse|facilities/i);
+      return [{ type: 'text', text: 'Maafushi: **all gensets running**.' }];
+    },
+  ];
+  await say(MANAGER_TG, 'how is maafushi doing?');
+  assert.equal(repliesTo(MANAGER_TG), 'Maafushi: <b>all gensets running</b>.');
+  assert.equal(claudeRequests[0].model, 'claude-haiku-5-5');
+  assert.match(claudeRequests[0].system.map((b) => b.text).join(' '), /Maafushi Manager \(manager/);
+
+  // A follow-up continues the same conversation.
+  claudeScript = [(body) => {
+    assert.equal(body.messages.length, 7);
+    assert.equal(body.messages.at(-1).content.at(-1).text, 'and the work there?');
+    return [{ type: 'text', text: 'No ongoing work.' }];
+  }];
+  await say(MANAGER_TG, 'and the work there?');
+  assert.equal(repliesTo(MANAGER_TG), 'No ongoing work.');
+  assert.equal(claudeScript.length, 0);
+});
+
+test('the assistant only writes after the person taps ✅', async () => {
+  const g3 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '3'`, [maafushi.id])).rows[0];
+  const statusOf = async () => (await db.query('select status from assets where id = $1', [g3.id])).rows[0].status;
+  await db.query("update assets set status = 'running' where id = $1", [g3.id]);
+
+  claudeScript = [() => [{ type: 'text', text: 'Got it.' }, toolUse('set_asset_status', { asset_id: g3.id, status: 'down', note: 'radiator leak' })]];
+  await say(MANAGER_TG, 'maafushi g3 radiator leak, stopped it');
+  const proposal = sent.find((m) => m.chat_id === MANAGER_TG);
+  assert.match(proposal.text, /Set <b>K\. Maafushi Genset 3<\/b> to <b>down<\/b>: radiator leak/);
+  const [yes, no] = proposal.reply_markup.inline_keyboard[0];
+  assert.match(yes.callback_data, /^ag:[0-9a-f]+:y$/);
+  assert.equal(await statusOf(), 'running');
+
+  // Someone else can't confirm it.
+  await tap(ADMIN_TG, yes.callback_data, MANAGER_TG);
+  assert.equal(await statusOf(), 'running');
+
+  await tap(MANAGER_TG, yes.callback_data);
+  assert.match(repliesTo(MANAGER_TG), /✅ Status saved: <b>down<\/b>/);
+  assert.equal(await statusOf(), 'down');
+  // Only once.
+  await tap(MANAGER_TG, yes.callback_data);
+  assert.equal(repliesTo(MANAGER_TG), '');
+
+  // ❌ changes nothing, and Claude hears how it went next time.
+  claudeScript = [() => [toolUse('set_asset_status', { asset_id: g3.id, status: 'running' })]];
+  await say(MANAGER_TG, 'g3 is back up');
+  const back = sent.find((m) => m.chat_id === MANAGER_TG).reply_markup.inline_keyboard[0][1];
+  await tap(MANAGER_TG, back.callback_data);
+  assert.match(repliesTo(MANAGER_TG), /Cancelled/);
+  assert.equal(await statusOf(), 'down');
+  claudeScript = [(body) => {
+    const results = body.messages.at(-2).content;
+    assert.match(results[0].content, /tapped ❌/);
+    return [{ type: 'text', text: 'OK.' }];
+  }];
+  await say(MANAGER_TG, 'thanks');
+  assert.equal(claudeScript.length, 0);
+});
+
+test('a proposed change lapses when the person writes something else instead', async () => {
+  claudeScript = [() => [toolUse('add_work_update', { work_id: 999999, text: 'hello' })], (body) => {
+    assert.match(lastToolResults(body)[0].content, /not found/i);
+    return [{ type: 'text', text: "I can't find WO-999999." }];
+  }];
+  await say(MANAGER_TG, 'update WO-999999 hello');
+  assert.match(repliesTo(MANAGER_TG), /can't find/);
+  assert.equal(sent[0].reply_markup, undefined);
+});
+
+test('in groups the assistant answers only when mentioned', async () => {
+  claudeScript = [];
+  await say(MANAGER_TG, 'how is maafushi', { id: GROUP, type: 'supergroup', title: 'SRD' });
+  assert.equal(sent.length, 0);
+  claudeScript = [(body) => {
+    assert.equal(body.messages.at(-1).content.at(-1).text, 'how is maafushi');
+    return [{ type: 'text', text: 'Fine.' }];
+  }];
+  await say(MANAGER_TG, '@srd_test_bot how is maafushi', { id: GROUP, type: 'supergroup', title: 'SRD' });
+  assert.equal(repliesTo(GROUP), 'Fine.');
 });

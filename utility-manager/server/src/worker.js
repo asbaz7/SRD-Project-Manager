@@ -24,6 +24,8 @@ async function getApp(env) {
     webDist: '',
     trustProxy: true,
     telegramToken: (env.TELEGRAM_BOT_TOKEN || '').trim(),
+    anthropicKey: (env.ANTHROPIC_API_KEY || '').trim(),
+    agentModel: env.AGENT_MODEL || 'claude-haiku-5-5',
     publicUrl: env.PUBLIC_URL || '',
   });
   if (!config.databaseUrl) throw new Error('Configure a HYPERDRIVE binding or a DATABASE_URL secret');

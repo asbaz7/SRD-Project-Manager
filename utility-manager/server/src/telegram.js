@@ -9,6 +9,7 @@
 // Configuration: the TELEGRAM_BOT_TOKEN secret (from @BotFather) and
 // PUBLIC_URL (for links). Without a token the bot is off and alerts are no-ops.
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { createAgent, toTelegram } from './agent.js';
 import { matchIsland } from './reportImport.js';
 
 const API = 'https://api.telegram.org';
@@ -48,6 +49,9 @@ export const webhookSecret = (token) => createHash('sha256').update(`srd-telegra
 
 const HELP = `<b>SRD Utility Bot</b>
 
+<b>Just ask</b>
+Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator back together, WO-1 done</i>. In a group, mention me or reply to me. Before anything is saved I show what I'll write, and you tap ✅ or ❌.
+
 <b>Look things up</b>
 /status Maafushi: gensets, plants, faults and work on an island
 /work: ongoing work (add an island to narrow it down)
@@ -75,6 +79,7 @@ export function createTelegram({ db, config, log }) {
   const publicUrl = (config.publicUrl || '').replace(/\/$/, '');
   const link = (path, label) => (publicUrl ? `<a href="${esc(publicUrl + path)}">${esc(label)}</a>` : esc(label));
   let me = null;
+  const agent = createAgent({ db, config, log });
 
   async function call(method, params = {}) {
     const res = await fetch(`${API}/bot${token}/${method}`, {
@@ -149,7 +154,7 @@ export function createTelegram({ db, config, log }) {
     await call('setWebhook', {
       url: `${publicUrl}/api/v1/telegram/webhook`,
       secret_token: webhookSecret(token),
-      allowed_updates: ['message'],
+      allowed_updates: ['message', 'callback_query'],
       drop_pending_updates: true,
     });
     await call('setMyCommands', {
@@ -443,16 +448,56 @@ export function createTelegram({ db, config, log }) {
     return `✅ Linked to <b>${esc(rows[0].full_name)}</b> (${rows[0].role}). What you report here is recorded under your name.\n\n${HELP}`;
   }
 
+  // A message in plain language, for the assistant. In groups only when the
+  // bot is mentioned or replied to, so it stays out of other conversations.
+  async function assistant(msg, asUser) {
+    const chat = msg.chat;
+    let text = msg.text.trim();
+    if (chat.type !== 'private') {
+      const bot = await botInfo();
+      const mention = new RegExp(`@${bot.username}\\b`, 'i');
+      if (!mention.test(text) && msg.reply_to_message?.from?.id !== bot.id) return;
+      text = text.replace(mention, '').trim();
+    }
+    const reply = (body, extra = {}) => send(chat.id, body, { reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true }, ...extra });
+    if (!agent) return chat.type === 'private' ? reply('Send /help to see what I can do.') : undefined;
+    if (!text) return;
+    const user = await linkedUser(msg.from.id);
+    if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
+    call('sendChatAction', { chat_id: chat.id, action: 'typing' }).catch(() => {});
+    try {
+      const out = await agent.reply(chat.id, user, text, asUser);
+      const body = [out.text && toTelegram(out.text), out.confirm?.summary].filter(Boolean).join('\n\n');
+      await reply(body, out.confirm ? { reply_markup: { inline_keyboard: [[
+        { text: '✅ Yes, save it', callback_data: `ag:${out.confirm.id}:y` }, { text: '❌ No', callback_data: `ag:${out.confirm.id}:n` },
+      ]] } } : {});
+    } catch (err) {
+      log.error({ err: { message: err.message, stack: err.stack } }, 'telegram assistant failed');
+      await reply('Sorry, I couldn\'t answer that just now. Please try again, or use a command (/help).');
+    }
+  }
+
+  // ✅ / ❌ under a proposed change: only the person it was proposed to can answer.
+  async function answerButton(cb, asUser) {
+    const m = /^ag:([0-9a-f]+):([yn])$/.exec(cb.data || '');
+    const msg = cb.message;
+    if (!m || !msg || !agent) return call('answerCallbackQuery', { callback_query_id: cb.id });
+    const user = await linkedUser(cb.from.id);
+    const text = user && await agent.confirm(msg.chat.id, user, m[1], m[2] === 'y', asUser);
+    if (!text) return call('answerCallbackQuery', { callback_query_id: cb.id, text: 'Nothing to confirm here: it was for someone else, or has already been answered.' });
+    await call('answerCallbackQuery', { callback_query_id: cb.id });
+    await call('editMessageReplyMarkup', { chat_id: msg.chat.id, message_id: msg.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    await send(msg.chat.id, text, { reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true } });
+  }
+
   // One incoming Telegram update. Returns nothing; replies are sent directly.
   async function handleUpdate(update, asUser) {
+    if (update.callback_query) return answerButton(update.callback_query, asUser);
     const msg = update.message;
     if (!msg?.text || !msg.from || msg.from.is_bot) return;
     const chat = msg.chat;
     const m = /^\/([a-z_]+)(?:@(\w+))?(?:\s+([\s\S]*))?$/i.exec(msg.text.trim());
-    if (!m) {
-      if (chat.type === 'private') await send(chat.id, 'Send /help to see what I can do.');
-      return;
-    }
+    if (!m) return assistant(msg, asUser);
     const [, rawCmd, mention, argText = ''] = m;
     if (mention && me && mention.toLowerCase() !== me.username.toLowerCase()) return;
     const cmd = rawCmd.toLowerCase();
