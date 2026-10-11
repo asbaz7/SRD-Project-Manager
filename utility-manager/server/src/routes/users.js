@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { createApiToken, hashPassword, passwordProblem, requireRole } from '../auth.js';
 import { badRequest } from '../errors.js';
-import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
+import { id, idParam, one, optText, parse, text, unitId, updateSet } from '../http.js';
 
 const role = z.enum(['admin', 'manager', 'staff', 'viewer']);
 const PERMISSIONS = ['documents', 'incidents', 'work', 'projects'];
@@ -21,6 +21,8 @@ const create = z.object({
   role,
   // Technical staff see engines, condition reports, assets and plants.
   technical: z.boolean().default(true),
+  // Everyone except the General Manager belongs to a unit.
+  unit_id: unitId.nullish(),
   // Staff only: what this person may do (managers and admins may do all).
   permissions: z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length).default([]),
   password: z.string().max(200),
@@ -35,12 +37,14 @@ const patch = create.omit({ email: true, password: true }).partial().extend({
 
 const LIST_SQL = `
   select u.id, u.email, u.full_name, u.designation, u.phone, u.role, u.technical, u.permissions, u.active, u.service_account,
+         u.unit_id, un.name as unit_name,
          u.must_change_password, u.last_login_at, u.created_at,
          coalesce(json_agg(json_build_object(
            'atoll_id', s.atoll_id, 'island_id', s.island_id,
            'label', coalesce(a.code, ia.code || ' · ' || i.name, 'Whole region')
          ) order by a.code, ia.code, i.name) filter (where s.id is not null), '[]') as scopes
     from users u
+    left join units un on un.id = u.unit_id
     left join user_scopes s on s.user_id = u.id
     left join atolls a on a.id = s.atoll_id
     left join islands i on i.id = s.island_id
@@ -59,15 +63,20 @@ export default async function userRoutes(app) {
   const admin = { preHandler: requireRole('admin') };
 
   app.get('/users', admin, async () => {
-    const { rows } = await db.query(`${LIST_SQL} group by u.id order by u.active desc, u.full_name`);
+    const { rows } = await db.query(`${LIST_SQL} group by u.id, un.name order by u.active desc, u.full_name`);
     return rows;
   });
 
   // Lightweight list for pickers (project owner, etc.), visible to everyone signed in.
   app.get('/users/directory', async () => {
-    const { rows } = await db.query("select id, full_name, designation, role, (technical or role = 'admin') as technical from users where active and not service_account order by full_name");
+    const { rows } = await db.query(`select u.id, u.full_name, u.designation, u.role, (u.technical or u.role = 'admin') as technical,
+                                            u.unit_id, un.name as unit_name
+                                       from users u left join units un on un.id = u.unit_id
+                                      where u.active and not u.service_account order by u.full_name`);
     return rows;
   });
+
+  app.get('/units', async () => (await db.query('select id, name from units order by sort_order, name')).rows);
 
   app.post('/users', admin, async (req, reply) => {
     const body = parse(create, req.body);
@@ -76,21 +85,23 @@ export default async function userRoutes(app) {
     const hash = await hashPassword(body.password);
     const user = await db.tx(req.user.id, async (t) => {
       const { rows } = await t.query(
-        `insert into users (email, full_name, designation, phone, role, technical, permissions, password_hash, must_change_password)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, true) returning id`,
+        `insert into users (email, full_name, designation, phone, role, technical, permissions, password_hash, must_change_password, unit_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, true, $9) returning id`,
         [body.email, body.full_name, body.designation, body.phone, body.role, body.technical,
-          body.role === 'staff' ? [...new Set(body.permissions)] : [], hash],
+          body.role === 'staff' ? [...new Set(body.permissions)] : [], hash, body.unit_id ?? null],
       );
       await writeScopes(t, rows[0].id, body.scopes);
       return rows[0];
     });
     reply.code(201);
-    return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id`, [user.id])).rows, 'User');
+    return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id, un.name`, [user.id])).rows, 'User');
   });
 
   app.patch('/users/:id', admin, async (req) => {
     const { id: userId } = parse(idParam, req.params);
     const body = parse(patch, req.body);
+    // Only fields actually sent are updated; defaults from the create schema don't apply.
+    for (const k of Object.keys(body)) if (!(k in (req.body || {}))) delete body[k];
     if (userId === req.user.id && (body.active === false || (body.role && body.role !== 'admin'))) {
       throw badRequest('You cannot deactivate or demote your own account');
     }
@@ -107,7 +118,7 @@ export default async function userRoutes(app) {
     await db.tx(req.user.id, async (t) => {
       if (fields.permissions) fields.permissions = [...new Set(fields.permissions)];
       if (fields.role && fields.role !== 'staff') fields.permissions = [];
-      const cols = ['full_name', 'designation', 'phone', 'role', 'technical', 'permissions', 'active', 'password_hash', 'must_change_password'];
+      const cols = ['full_name', 'designation', 'phone', 'role', 'technical', 'permissions', 'active', 'password_hash', 'must_change_password', 'unit_id'];
       if (Object.keys(fields).some((k) => cols.includes(k))) {
         const set = updateSet(fields, cols);
         one((await t.query(`update users set ${set.sql} where id = $1 returning id`, [userId, ...set.values])).rows, 'User');
@@ -120,7 +131,7 @@ export default async function userRoutes(app) {
         await t.query('delete from sessions where user_id = $1', [userId]);
       }
     });
-    return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id`, [userId])).rows, 'User');
+    return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id, un.name`, [userId])).rows, 'User');
   });
 
   // --- Access tokens for other systems (e.g. the Fleet Manager) --------------
@@ -161,6 +172,6 @@ export default async function userRoutes(app) {
       return rows[0];
     });
     reply.code(201);
-    return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id`, [user.id])).rows, 'User');
+    return one((await db.query(`${LIST_SQL} where u.id = $1 group by u.id, un.name`, [user.id])).rows, 'User');
   });
 }

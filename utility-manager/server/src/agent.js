@@ -132,6 +132,7 @@ function buildTools(db) {
         asset_id: id.optional(),
         service: z.enum(SERVICES).optional(),
         assignee: z.literal('me').optional().describe('Only work assigned to the person asking'),
+        unit: z.literal('mine').optional().describe("Only work assigned to the asking person's unit"),
         q: z.string().max(100).optional(),
       }),
       run: (user, input, asUser) => get(asUser, user, `/work${query({ ...input, limit: 30 })}`),

@@ -38,6 +38,7 @@ function ProjectView({ project: p, reload }) {
           <dt>Type</dt><dd>{PROJECT_TYPES[p.project_type] || '—'}</dd>
           {p.service && <><dt>Service</dt><dd><Service value={p.service} /></dd></>}
           <dt>Location</dt><dd>{p.island_id ? <Link to={`/islands/${p.island_id}`}>{p.atoll_code} · {p.island_name}</Link> : 'Regional'}{p.facility_name && ` · ${p.facility_name}`}</dd>
+          <dt>Unit</dt><dd>{p.unit_name || '—'}</dd>
           <dt>Owner</dt><dd>{p.owner_name || '—'}</dd>
           <dt>Contractor</dt><dd>{p.contractor || '—'}</dd>
           <dt>Budget</dt><dd>{p.budget != null ? `MVR ${num(p.budget, 2)}` : '—'}</dd>
@@ -70,7 +71,7 @@ function ProjectView({ project: p, reload }) {
     </Card>}
     <ProjectFiles project={p} reload={reload} />
     <Card title="Who has access">
-      <p className="small">{p.visibility === 'everyone' ? 'Everyone can view this project.' : 'Only the people below can see this project.'}
+      <p className="small">{p.visibility === 'everyone' ? 'Everyone can view this project.' : `Only the people below${p.unit_name ? ` and the ${p.unit_name}` : ''} can see this project.`}
         {' '}<span className="muted">Its creator{p.owner_name ? `, owner (${p.owner_name})` : ''} and administrators can always edit it.</span></p>
       {p.members.length > 0 && <ul className="people">{p.members.map((m) => <li key={m.user_id}>
         <span><strong>{m.full_name}</strong>{m.designation && <span className="muted"> · {m.designation}</span>}</span>
@@ -139,10 +140,11 @@ function ProjectForm({ project, onDone }) {
   const { canWriteIsland, user } = useAuth();
   const islands = useApi('/islands');
   const people = useApi('/users/directory');
+  const units = useApi('/units');
   const mine = useMemo(() => (islands.data || []).filter(canWriteIsland), [islands.data, canWriteIsland]);
   const [f, setF] = useState(project || {
     island_id: params.get('island_id') || '', project_type: '', title: '', description: '', status: 'planned',
-    progress_pct: 0, budget: '', contractor: '', start_date: '', target_date: '', owner_id: '',
+    progress_pct: 0, budget: '', contractor: '', start_date: '', target_date: '', owner_id: '', unit_id: '',
     visibility: 'members', members: [],
   });
   // Task breakdown: overall progress is the average (equal weighting).
@@ -163,7 +165,7 @@ function ProjectForm({ project, onDone }) {
       tasks: filled.map((t) => ({ name: t.name.trim(), progress: Math.min(100, Math.max(0, Number(t.progress) || 0)) })),
       budget: f.budget === '' || f.budget == null ? null : Number(f.budget),
       contractor: f.contractor || null, start_date: f.start_date || null, target_date: f.target_date || null,
-      ...(sharing ? { owner_id: f.owner_id || null, visibility: f.visibility, members: members.filter((m) => m.user_id) } : {}),
+      ...(sharing ? { owner_id: f.owner_id || null, unit_id: f.unit_id ? Number(f.unit_id) : null, visibility: f.visibility, members: members.filter((m) => m.user_id) } : {}),
     };
     if (project) {
       await api(`/projects/${project.id}`, { method: 'PATCH', body: { ...body, completed_on: f.completed_on || null } });
@@ -186,14 +188,16 @@ function ProjectForm({ project, onDone }) {
             placeholder={regional ? 'Regional (no single island)' : 'Choose island…'} required={!regional}
             options={(project ? islands.data || [] : mine).map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} /></Field>
           <Field label="Type"><Select value={f.project_type || ''} onChange={set('project_type')} placeholder="Choose…" options={PROJECT_TYPES} /></Field>
+          {sharing ? <Field label="Unit"><Select value={f.unit_id ? String(f.unit_id) : ''} onChange={set('unit_id')} placeholder="—" options={(units.data || []).map((u) => [String(u.id), u.name])} /></Field>
+            : <Field label="Unit"><input readOnly value={project?.unit_name || '—'} /></Field>}
           <Field label="Status"><Select value={f.status} onChange={set('status')} options={PROJECT_STATES} /></Field>
           <Field label={auto ? 'Progress (%) · Auto' : 'Progress (%)'}>
             {auto ? <input readOnly value={pct(overall)} title="Calculated from the task breakdown" />
               : <input type="number" min="0" max="100" step="0.1" value={f.progress_pct} onChange={set('progress_pct')} />}</Field>
+        </div>
+        <div className="row6">
           {sharing ? <Field label="Owner"><Select value={f.owner_id || ''} onChange={set('owner_id')} placeholder="—" options={(people.data || []).map((p) => [p.id, p.full_name])} /></Field>
             : <Field label="Owner"><input readOnly value={project?.owner_name || '—'} /></Field>}
-        </div>
-        <div className="row5">
           <Field label="Contractor"><input value={f.contractor || ''} onChange={set('contractor')} /></Field>
           <Field label="Budget (MVR)"><input type="number" min="0" step="any" value={f.budget ?? ''} onChange={set('budget')} /></Field>
           <Field label="Start date"><input type="date" value={f.start_date || ''} onChange={set('start_date')} /></Field>

@@ -57,6 +57,7 @@ function WorkView({ work: w, reload }) {
             <dt>To</dt><dd><Link to={`/islands/${w.dest_island_id}`}>{w.dest_atoll_code} · {w.dest_island_name}</Link>{w.dest_facility_name && ` · ${w.dest_facility_name}`} · as {ASSET_KINDS[w.asset_kind]} {w.dest_tag}</dd>
           </> : <><dt>Where</dt><dd><Link to={`/islands/${w.island_id}`}>{w.atoll_code} · {w.island_name}</Link>{w.facility_name && ` · ${w.facility_name}`}</dd></>}
           {w.asset_id && <><dt>Asset</dt><dd>{technical ? <Link to={`/assets/${w.asset_id}`}>{ASSET_KINDS[w.asset_kind]} {w.asset_tag}</Link> : `${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.asset_model && <span className="muted"> · {w.asset_model}</span>}</dd></>}
+          <dt>Unit</dt><dd>{w.unit_name || '—'}</dd>
           <dt>Assigned to</dt><dd>{[w.assigned_user_name, w.assigned_to].filter(Boolean).join(' · ') || '—'}</dd>
           {w.fault_report_month && <><dt>From</dt><dd>Fault in the {w.fault_report_month.slice(0, 7)} condition report</dd></>}
           <dt>Started</dt><dd>{date(w.started_on)}</dd>
@@ -144,6 +145,7 @@ function WorkForm({ work, onDone }) {
   const { canWriteIsland } = useAuth();
   const islands = useApi('/islands');
   const people = useApi('/users/directory');
+  const units = useApi('/units');
   const mine = useMemo(() => (islands.data || []).filter(canWriteIsland), [islands.data, canWriteIsland]);
   const presetAsset = params.get('asset_id');
   const asset = useApi(presetAsset && !work ? `/assets/${presetAsset}` : null);
@@ -151,7 +153,7 @@ function WorkForm({ work, onDone }) {
     island_id: params.get('island_id') || '', asset_id: presetAsset || '', kind: params.get('kind') || 'repair',
     service: params.get('service') || '',
     title: params.get('title') || '', description: params.get('description') || '', fault_report_month: params.get('fault_report_month') || '',
-    status: params.get('kind') === 'relocation' ? 'planned' : 'in_progress', assigned_to: '', assigned_user_id: '', started_on: '', target_on: '',
+    status: params.get('kind') === 'relocation' ? 'planned' : 'in_progress', assigned_to: '', assigned_user_id: '', unit_id: '', started_on: '', target_on: '',
     dest_island_id: '', dest_facility_id: '', dest_tag: '',
   });
   const isMove = f.kind === 'relocation';
@@ -176,6 +178,7 @@ function WorkForm({ work, onDone }) {
     const body = {
       kind: f.kind, title: f.title || (isMove ? `Move ${ASSET_KINDS[moving?.kind] || ''} ${moving?.tag || ''} from ${fromIsland} to ${destName}`.replace(/\s+/g, ' ') : f.title),
       description: f.description || null, status: f.status, assigned_to: f.assigned_to || null, assigned_user_id: f.assigned_user_id || null,
+      unit_id: f.unit_id ? Number(f.unit_id) : null,
       started_on: f.started_on || null, target_on: f.target_on || null,
       ...(isMove && !finished ? { dest_facility_id: f.dest_facility_id || null, dest_tag: f.dest_tag || moving?.tag || null } : {}),
     };
@@ -223,7 +226,12 @@ function WorkForm({ work, onDone }) {
         <Field label="What is the work" wide><input required={!isMove} maxLength="200" value={f.title} onChange={set('title')}
           placeholder={isMove ? 'Leave empty for "Move Genset 4 from … to …"' : 'e.g. Genset 3 top overhaul'} /></Field>
         <Field label="Details" wide><textarea rows="3" value={f.description || ''} onChange={set('description')} /></Field>
-        <Field label="Assigned to"><Select value={f.assigned_user_id || ''} onChange={set('assigned_user_id')} placeholder="— nobody in SRD —"
+        <Field label="Unit"><Select value={f.unit_id ? String(f.unit_id) : ''} onChange={set('unit_id')} placeholder="— no unit —"
+          options={(units.data || []).map((u) => [String(u.id), u.name])} /></Field>
+        <Field label="Assigned to"><Select value={f.assigned_user_id || ''} placeholder="— nobody in SRD —"
+          onChange={(v) => setF((prev) => ({ ...prev, assigned_user_id: v,
+            // Assigning a person sets their unit, unless one is already chosen.
+            unit_id: prev.unit_id || (people.data || []).find((p) => p.id === v)?.unit_id || '' }))}
           options={(people.data || []).slice().sort((a, b) => b.technical - a.technical || a.full_name.localeCompare(b.full_name))
             .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}`])} /></Field>
         <Field label="Team or contractor" hint="Optional, e.g. the island's mechanical team or an outside firm."><input value={f.assigned_to || ''} onChange={set('assigned_to')} /></Field>

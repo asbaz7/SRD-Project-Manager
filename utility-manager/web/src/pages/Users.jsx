@@ -18,9 +18,10 @@ export default function Users() {
       </p>
       <Async state={state}>{(users) => (
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Staff type</th><th className="hide-sm">Last sign-in</th><th /></tr></thead>
+          <thead><tr><th>Name</th><th className="hide-sm">Unit</th><th>Role</th><th>Staff type</th><th className="hide-sm">Last sign-in</th><th /></tr></thead>
           <tbody>{users.map((u) => <tr key={u.id} className={u.active ? '' : 'inactive'}>
             <td><strong>{u.full_name}</strong>{!u.active && ' (disabled)'}{u.service_account && <span className="pill doc-type"> service account</span>}<br /><small className="muted">{u.email}{u.designation && ` · ${u.designation}`}</small></td>
+            <td className="hide-sm small">{u.unit_name || (u.service_account || isGeneralManager(u.designation) ? <span className="muted">—</span> : <span className="bad">Not set</span>)}</td>
             <td>{ROLES[u.role]}{u.role === 'staff' && <><br /><small className="muted">{u.permissions?.length ? u.permissions.map((p) => PERMISSIONS[p]?.[0]).join(', ') : 'View only'}</small></>}</td>
             <td>{u.role === 'admin' ? <span className="muted">All</span> : u.technical ? 'Technical' : 'Non-technical'}</td>
             <td className="hide-sm small">{u.last_login_at ? date(u.last_login_at) : <span className="muted">never</span>}</td>
@@ -38,14 +39,17 @@ function UserForm({ user, onClose, onSaved }) {
   const [f, setF] = useState({
     email: user?.email || '', full_name: user?.full_name || '', designation: user?.designation || '', phone: user?.phone || '',
     role: user?.role || 'manager', technical: user?.technical ?? true, active: user?.active ?? true, password: '',
-    permissions: user?.permissions || [],
+    permissions: user?.permissions || [], unit_id: user?.unit_id ? String(user.unit_id) : '',
   });
+  const units = useApi('/units');
+  const gm = isGeneralManager(f.designation);
   const set = (k) => (v) => setF({ ...f, [k]: v?.target ? v.target.value : v });
 
   const { submit, busy, error } = useSubmit(async () => {
     // Head office staff only: everyone covers the whole region.
     const scopes = [{ region: true }];
     const body = { full_name: f.full_name, designation: f.designation || null, phone: f.phone || null, role: f.role, technical: f.technical, scopes,
+      unit_id: f.unit_id ? Number(f.unit_id) : null,
       permissions: f.role === 'staff' ? f.permissions : [] };
     if (user) await api(`/users/${user.id}`, { method: 'PATCH', body: { ...body, active: f.active, ...(f.password ? { password: f.password } : {}) } });
     else await api('/users', { method: 'POST', body: { ...body, email: f.email, password: f.password } });
@@ -59,6 +63,9 @@ function UserForm({ user, onClose, onSaved }) {
         <Field label="Full name"><input required value={f.full_name} onChange={set('full_name')} /></Field>
         <Field label="Email"><input type="email" required disabled={!!user} value={f.email} onChange={set('email')} /></Field>
         <Field label="Designation"><input value={f.designation} onChange={set('designation')} /></Field>
+        <Field label="Unit" hint={gm ? 'The General Manager is not in a unit.' : ''}>
+          <Select required={!gm} value={f.unit_id} onChange={set('unit_id')} placeholder={gm ? '— none —' : 'Choose…'}
+            options={(units.data || []).map((u) => [String(u.id), u.name])} /></Field>
         <Field label="Phone"><input value={f.phone} onChange={set('phone')} /></Field>
         <Field label="Role"><Select value={f.role} onChange={set('role')} options={ROLES} /></Field>
         {f.role === 'staff' && <fieldset className="wide scopes">
@@ -81,3 +88,6 @@ function UserForm({ user, onClose, onSaved }) {
     </Modal>
   );
 }
+
+// Everyone belongs to a unit except the General Manager.
+const isGeneralManager = (designation) => /^\s*general manager\s*$/i.test(designation || '');

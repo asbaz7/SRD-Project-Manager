@@ -4,7 +4,7 @@ import { sendCsv } from '../csv.js';
 import { zipSync } from 'fflate';
 import { badRequest, forbidden, notFound } from '../errors.js';
 import { esc } from '../telegram.js';
-import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
+import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, unitId, updateSet } from '../http.js';
 
 const STATES = ['planned', 'ongoing', 'on_hold', 'completed', 'cancelled'];
 
@@ -28,13 +28,15 @@ const body = z.object({
   target_date: date.nullish(),
   completed_on: date.nullish(),
   owner_id: id.nullish(),
+  // The unit doing it; its members can view the project.
+  unit_id: unitId.nullish(),
   // Who can see it: everyone, or only the people listed (plus the creator,
   // the owner and administrators).
   visibility: z.enum(['everyone', 'members']).optional(),
   members: z.array(z.object({ user_id: id, access: z.enum(['view', 'edit']) })).max(200).optional(),
 });
 const COLS = ['service', 'project_type', 'facility_id', 'title', 'description', 'status', 'progress_pct', 'budget',
-  'contractor', 'start_date', 'target_date', 'completed_on', 'owner_id', 'visibility'];
+  'contractor', 'start_date', 'target_date', 'completed_on', 'owner_id', 'visibility', 'unit_id'];
 const updateBody = z.object({
   body: text(5000),
   progress_pct: z.number().min(0).max(100).nullish(),
@@ -47,6 +49,7 @@ const listQuery = paging.extend({
   type: z.enum(PROJECT_TYPES).optional(),
   island_id: id.optional(),
   atoll_id: id.optional(),
+  unit: z.union([unitId, z.literal('mine')]).optional(),
   q: z.string().max(100).optional(),
   format: z.enum(['json', 'csv']).default('json'),
 });
@@ -54,7 +57,7 @@ const listQuery = paging.extend({
 const SELECT = `
   select p.*, 'PRJ-' || lpad(p.id::text, 4, '0') as ref,
          i.name as island_name, i.atoll_id, a.code as atoll_code, f.name as facility_name,
-         o.full_name as owner_name,
+         o.full_name as owner_name, un.name as unit_name,
          (p.target_date < current_date and p.status in ('planned', 'ongoing', 'on_hold')) as overdue,
          (select max(created_at) from project_updates u where u.project_id = p.id) as last_update_at,
          count(*) over () as total_count
@@ -62,7 +65,8 @@ const SELECT = `
     left join islands i on i.id = p.island_id
     left join atolls a on a.id = i.atoll_id
     left join facilities f on f.id = p.facility_id
-    left join users o on o.id = p.owner_id`;
+    left join users o on o.id = p.owner_id
+    left join units un on un.id = p.unit_id`;
 
 // Regional projects (no island) need region-wide rights to create.
 async function assertProjectCreate(db, user, islandId) {
@@ -75,7 +79,8 @@ export function projectVisible(user, n) {
   if (user.role === 'admin') return { sql: 'true', values: [] };
   return {
     sql: `(p.visibility = 'everyone' or p.created_by = $${n} or p.owner_id = $${n}
-           or exists (select 1 from project_members m where m.project_id = p.id and m.user_id = $${n}))`,
+           or exists (select 1 from project_members m where m.project_id = p.id and m.user_id = $${n})
+           or p.unit_id = (select unit_id from users where id = $${n}))`,
     values: [user.id],
   };
 }
@@ -85,12 +90,13 @@ export function projectVisible(user, n) {
 async function accessTo(db, user, projectId) {
   const { rows } = await db.query(`
     select p.visibility, p.created_by, p.owner_id,
-           (select access from project_members m where m.project_id = p.id and m.user_id = $2) as member
+           (select access from project_members m where m.project_id = p.id and m.user_id = $2) as member,
+           p.unit_id = (select unit_id from users where id = $2) as in_unit
       from projects p where p.id = $1`, [projectId, user.id]);
   const p = one(rows, 'Project');
   if (user.role === 'admin' || p.created_by === user.id || p.owner_id === user.id) return 'manage';
   if (p.member === 'edit') return 'edit';
-  if (p.member === 'view' || p.visibility === 'everyone') return 'view';
+  if (p.member === 'view' || p.visibility === 'everyone' || p.in_unit) return 'view';
   return null;
 }
 
@@ -156,6 +162,7 @@ export default async function projectRoutes(app) {
     const w = new Where(vis.values)
       .raw(vis.sql)
       .add('p.service = ?', q.service).add('p.project_type = ?', q.type).add('p.island_id = ?', q.island_id).add('i.atoll_id = ?', q.atoll_id)
+      .add(q.unit === 'mine' ? 'p.unit_id = (select unit_id from users where id = ?)' : 'p.unit_id = ?', q.unit === 'mine' ? req.user.id : q.unit)
       .add('(p.title ilike ? or p.contractor ilike ? or i.name ilike ?)', q.q && `%${q.q}%`);
     if (q.status === 'active') w.raw("p.status in ('planned', 'ongoing', 'on_hold')");
     else w.add('p.status = ?', q.status);
@@ -169,7 +176,7 @@ export default async function projectRoutes(app) {
         ['Ref', 'ref'], ['Atoll', 'atoll_code'], ['Island', 'island_name'], ['Type', 'project_type'], ['Service', 'service'],
         ['Title', 'title'], ['Status', 'status'], ['Progress %', 'progress_pct'], ['Budget', 'budget'],
         ['Contractor', 'contractor'], ['Start', 'start_date'], ['Target', 'target_date'],
-        ['Completed', 'completed_on'], ['Owner', 'owner_name'], ['Description', 'description'],
+        ['Completed', 'completed_on'], ['Unit', 'unit_name'], ['Owner', 'owner_name'], ['Description', 'description'],
       ]);
     }
     return pageOf(rows, q);
@@ -204,11 +211,11 @@ export default async function projectRoutes(app) {
     const rows = await db.tx(req.user.id, async (t) => {
       const res = await t.query(`
         insert into projects (service, island_id, facility_id, title, description, status, progress_pct, budget,
-                              contractor, start_date, target_date, completed_on, owner_id, created_by, visibility, project_type)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning id`,
+                              contractor, start_date, target_date, completed_on, owner_id, created_by, visibility, project_type, unit_id)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) returning id`,
       [b.service ?? null, b.island_id ?? null, b.facility_id ?? null, b.title, b.description, b.status, b.progress_pct,
         b.budget ?? null, b.contractor, b.start_date ?? null, b.target_date ?? null, b.completed_on ?? null,
-        b.owner_id ?? null, req.user.id, b.visibility ?? 'members', b.project_type ?? null]);
+        b.owner_id ?? null, req.user.id, b.visibility ?? 'members', b.project_type ?? null, b.unit_id ?? null]);
       await writeMembers(t, res.rows[0].id, (b.members || []).filter((m) => m.user_id !== req.user.id), req.user.id);
       if (b.tasks?.length) await writeTasks(t, res.rows[0].id, b.tasks);
       return res.rows;
@@ -223,7 +230,7 @@ export default async function projectRoutes(app) {
     const patch = parse(body.omit({ island_id: true }).partial(), req.body);
     for (const k of Object.keys(patch)) if (!(k in (req.body || {}))) delete patch[k];
     const before = one((await db.query('select status from projects where id = $1', [projectId])).rows, 'Project').status;
-    const sharing = patch.visibility !== undefined || patch.members !== undefined || patch.owner_id !== undefined;
+    const sharing = patch.visibility !== undefined || patch.members !== undefined || patch.owner_id !== undefined || patch.unit_id !== undefined;
     await assertAccess(db, req.user, projectId, sharing ? 'manage' : 'edit');
     const members = patch.members;
     delete patch.members;

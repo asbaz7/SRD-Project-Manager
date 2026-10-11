@@ -12,6 +12,7 @@ export function parse(schema, data) {
 }
 
 export const id = z.uuid();
+export const unitId = z.coerce.number().int().positive().max(32767);
 export const serial = z.coerce.number().int().positive();
 export const date = z.iso.date();
 export const datetime = z.iso.datetime({ offset: true });

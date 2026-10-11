@@ -445,6 +445,7 @@ input:disabled, select:disabled { opacity: .7; }
 /* Project form (department layout) */
 .project-form { display: grid; gap: 14px; }
 .project-form .row5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.project-form .row6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 .project-form .field.wide { grid-column: auto; }
 .project-form textarea { width: 100%; }
 .form-section { margin: 8px 0 -6px; font-size: 1rem; }
@@ -466,7 +467,7 @@ input:disabled, select:disabled { opacity: .7; }
 .task-progress li b { width: 56px; text-align: right; font-size: .9rem; }
 .task-progress li.done .overall-track > span { background: var(--good-fill); }
 @media (max-width: 900px) {
-  .project-form .row5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-form .row5, .project-form .row6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-head, .task-row { grid-template-columns: 28px minmax(0, 1fr) 80px 40px; gap: 6px; padding: 0 4px; }
   .overall-track.small { width: 70px; }
 }

@@ -344,3 +344,41 @@ test('access tokens: a service account for another system, revocable, changes si
   assert.equal((await call('GET', '/auth/me', token)).status, 401);
   assert.equal((await call('GET', '/engines', 'srd_not-a-real-token-at-all-0000000000000000000')).status, 401);
 });
+
+test('units: people belong to one; work and projects are assigned to one, and its members can view the project', async () => {
+  const { rows: [mate] } = await db.query(`insert into users (email, full_name, role, technical, password_hash, must_change_password)
+    values ('mate@srd.mv', 'mate', 'viewer', false, $1, false) returning id`, [await hashPassword(PASSWORD)]);
+  U.mate = mate.id;
+  T.mate = (await call('POST', '/auth/login', null, { email: 'mate@srd.mv', password: PASSWORD })).body.token;
+  const units = (await call('GET', '/units', T.mate)).body;
+  assert.deepEqual(units.map((u) => u.name), ['Mechanical Unit', 'Electrical Unit', 'General Maintenance Unit',
+    'Administration and Support Service Unit', 'Logistics Unit']);
+  const [mech, elec] = units;
+
+  // An administrator sets a person's unit; the directory shows it.
+  assert.equal((await call('PATCH', `/users/${U.tech}`, T.tech, { unit_id: mech.id })).status, 403);
+  assert.equal((await call('PATCH', `/users/${U.tech}`, T.admin, { unit_id: mech.id })).body.unit_name, 'Mechanical Unit');
+  assert.equal((await call('PATCH', `/users/${U.mate}`, T.admin, { unit_id: mech.id })).status, 200);
+  assert.equal((await call('PATCH', `/users/${U.office}`, T.admin, { unit_id: elec.id })).status, 200);
+  assert.equal((await call('GET', '/users/directory', T.mate)).body.find((u) => u.id === U.tech).unit_id, mech.id);
+  assert.equal((await call('PATCH', `/users/${U.tech2}`, T.admin, { unit_id: 999 })).status, 409);
+
+  // Work: assigned to a unit, filtered by unit or "my unit".
+  const w = (await call('POST', '/work', T.tech, { island_id: maafushi.id, service: 'electricity', kind: 'service', title: 'Unit work', unit_id: mech.id })).body;
+  assert.equal(w.unit_name, 'Mechanical Unit');
+  assert.ok((await call('GET', `/work?unit=${mech.id}`, T.mate)).body.items.some((x) => x.id === w.id));
+  assert.ok((await call('GET', '/work?unit=mine', T.tech)).body.items.some((x) => x.id === w.id));
+  assert.ok(!(await call('GET', '/work?unit=mine', T.office)).body.items.some((x) => x.id === w.id));
+  assert.equal((await call('PATCH', `/work/${w.id}`, T.tech, { unit_id: elec.id })).body.unit_name, 'Electrical Unit');
+
+  // Projects: members of its unit can view a private project, others can't;
+  // only those who manage it can change the unit.
+  const p = (await call('POST', '/projects', T.office, { service: 'water', island_id: maafushi.id, title: 'Unit project', unit_id: mech.id })).body;
+  assert.equal(p.unit_name, 'Mechanical Unit');
+  assert.equal((await call('GET', `/projects/${p.id}`, T.mate)).body.access, 'view');
+  assert.equal((await call('PATCH', `/projects/${p.id}`, T.mate, { title: 'x' })).status, 403);
+  assert.equal((await call('GET', `/projects/${p.id}`, T.tech2)).status, 404);
+  assert.ok((await call('GET', '/projects?unit=mine', T.tech)).body.items.some((x) => x.id === p.id));
+  assert.equal((await call('PATCH', `/projects/${p.id}`, T.office, { unit_id: elec.id })).body.unit_name, 'Electrical Unit');
+  assert.equal((await call('GET', `/projects/${p.id}`, T.mate)).status, 404);
+});

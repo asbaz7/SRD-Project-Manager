@@ -4,7 +4,7 @@ import { sendCsv } from '../csv.js';
 import { badRequest, forbidden } from '../errors.js';
 import { assetName, esc } from '../telegram.js';
 import { checkMovePlan, moveAsset } from '../assetMoves.js';
-import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
+import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, unitId, updateSet } from '../http.js';
 
 export const WORK_KINDS = ['overhaul', 'top_overhaul', 'alternator_service', 'repair', 'service', 'inspection', 'installation', 'relocation', 'other'];
 // Moving a genset (kind 'relocation') has its own stages instead of
@@ -49,6 +49,7 @@ const body = z.object({
   status: z.enum(WORK_STATES).default('in_progress'),
   assigned_to: optText(200),                // team or contractor
   assigned_user_id: id.nullish(),           // or one of SRD's users
+  unit_id: unitId.nullish(),                // and / or one of the department's units
   fault_report_month: date.nullish(),       // logged from this report's fault
   started_on: date.nullish(),
   target_on: date.nullish(),
@@ -57,13 +58,13 @@ const body = z.object({
   dest_facility_id: id.nullish(),
   dest_tag: z.string().trim().min(1).max(40).nullish(),
 });
-const COLS = ['kind', 'title', 'description', 'status', 'assigned_to', 'assigned_user_id', 'fault_report_month', 'started_on', 'target_on', 'completed_on', 'dest_facility_id', 'dest_tag'];
+const COLS = ['kind', 'title', 'description', 'status', 'assigned_to', 'assigned_user_id', 'unit_id', 'fault_report_month', 'started_on', 'target_on', 'completed_on', 'dest_facility_id', 'dest_tag'];
 
 const SELECT = `
   select w.*, 'WO-' || lpad(w.id::text, 4, '0') as ref,
          i.name as island_name, i.atoll_id, a.code as atoll_code, f.name as facility_name,
          s.tag as asset_tag, s.kind as asset_kind, s.make_model as asset_model,
-         cu.full_name as created_by_name, au.full_name as assigned_user_name,
+         cu.full_name as created_by_name, au.full_name as assigned_user_name, un.name as unit_name,
          df.name as dest_facility_name, di.id as dest_island_id, di.name as dest_island_name, da.code as dest_atoll_code,
          (w.target_on < current_date and ${OPEN}) as overdue,
          (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update,
@@ -76,6 +77,7 @@ const SELECT = `
     left join assets s on s.id = w.asset_id
     left join users cu on cu.id = w.created_by
     left join users au on au.id = w.assigned_user_id
+    left join units un on un.id = w.unit_id
     left join facilities df on df.id = w.dest_facility_id
     left join islands di on di.id = df.island_id
     left join atolls da on da.id = di.atoll_id`;
@@ -88,6 +90,7 @@ const listQuery = paging.extend({
   service: service.optional(),
   kind: z.enum(WORK_KINDS).optional(),
   assignee: z.union([id, z.literal('me')]).optional(),
+  unit: z.union([unitId, z.literal('mine')]).optional(),
   q: z.string().max(100).optional(),
   format: z.enum(['json', 'csv']).default('json'),
 });
@@ -192,7 +195,8 @@ export default async function workRoutes(app) {
       .add('(w.island_id = ? or df.island_id = ?)', q.island_id).add('i.atoll_id = ?', q.atoll_id).add('w.asset_id = ?', q.asset_id)
       .add('w.kind = ?', q.kind).add('w.service = ?', q.service)
       .add('(w.title ilike ? or w.description ilike ? or i.name ilike ? or w.assigned_to ilike ? or au.full_name ilike ?)', q.q && `%${q.q}%`)
-      .add('w.assigned_user_id = ?', q.assignee === 'me' ? req.user.id : q.assignee);
+      .add('w.assigned_user_id = ?', q.assignee === 'me' ? req.user.id : q.assignee)
+      .add(q.unit === 'mine' ? 'w.unit_id = (select unit_id from users where id = ?)' : 'w.unit_id = ?', q.unit === 'mine' ? req.user.id : q.unit);
     if (q.status === 'open') w.raw(OPEN);
     else if (q.status !== 'all') w.add('w.status = ?', q.status);
     const csv = q.format === 'csv';
@@ -204,7 +208,7 @@ export default async function workRoutes(app) {
     if (csv) {
       return sendCsv(reply, 'work.csv', rows, [
         ['Ref', 'ref'], ['Atoll', 'atoll_code'], ['Island', 'island_name'], ['Genset / asset', 'asset_tag'],
-        ['Type', 'kind'], ['Title', 'title'], ['Status', 'status'], ['Assigned to', (r) => [r.assigned_user_name, r.assigned_to].filter(Boolean).join(' · ')],
+        ['Type', 'kind'], ['Title', 'title'], ['Status', 'status'], ['Unit', 'unit_name'], ['Assigned to', (r) => [r.assigned_user_name, r.assigned_to].filter(Boolean).join(' · ')],
         ['Started', 'started_on'], ['Target', 'target_on'], ['Completed', 'completed_on'], ['Latest update', 'last_update'],
       ]);
     }
@@ -249,14 +253,14 @@ export default async function workRoutes(app) {
       const res = await t.query(`
         insert into work_orders (island_id, facility_id, asset_id, kind, title, description, status, assigned_to,
                                  started_on, target_on, completed_on, created_by, service, dest_facility_id, dest_tag,
-                                 assigned_user_id, fault_report_month)
+                                 assigned_user_id, fault_report_month, unit_id)
         values ($1, $2, $3, $4, $5, $6, $7, $8,
                 coalesce($9, case when $7 in ('in_progress', 'awaiting_parts', 'dismantling', 'in_transit', 'installing') then current_date end),
-                $10, case when $7 = 'completed' then coalesce($11, current_date) end, $12, $13, $14, $15, $16, $17)
+                $10, case when $7 = 'completed' then coalesce($11, current_date) end, $12, $13, $14, $15, $16, $17, $18)
         returning id`,
       [where.island_id, where.facility_id, where.asset_id, b.kind, b.title, b.description, b.status, b.assigned_to,
         b.started_on ?? null, b.target_on ?? null, b.completed_on ?? null, req.user.id, where.service,
-        plan ? plan.dest.id : null, plan ? plan.tag : null, b.assigned_user_id ?? null, b.fault_report_month ?? null]);
+        plan ? plan.dest.id : null, plan ? plan.tag : null, b.assigned_user_id ?? null, b.fault_report_month ?? null, b.unit_id ?? null]);
       if (plan) move = await applyMoveProgress(t, res.rows[0].id, null, req.user.id);
       return res.rows;
     });
