@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { ROLES } from '../format.js';
 import { useFreshVersion } from '../hooks.js';
+import { CrashGuard } from './Crash.jsx';
 import { Icon } from './icons.jsx';
 
 // The region (Overview, Islands) and then the three service sections:
@@ -80,7 +81,7 @@ export default function Layout() {
         <Brand />
         <NavLink to="/account" className="who-mini avatar" aria-label="My account">{initials(user.fullName)}</NavLink>
       </header>
-      <main className="page"><Outlet /></main>
+      <main className="page"><CrashGuard resetKey={location.pathname}><Outlet /></CrashGuard></main>
       <nav className="bottom-bar" aria-label="Main">
         {tabs.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>

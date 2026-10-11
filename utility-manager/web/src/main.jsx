@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth.jsx';
+import { CrashGuard } from './components/Crash.jsx';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
 import Account from './pages/Account.jsx';
@@ -40,41 +41,43 @@ function NotFound() {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route element={<RequireAuth><Layout /></RequireAuth>}>
-            <Route index element={<Dashboard />} />
-            <Route path="account" element={<Account />} />
-            {['electricity', 'water', 'sewerage'].map((svc) => [
-              <Route key={svc} path={svc} element={<Service svc={svc} />} />,
-              <Route key={`${svc}-tab`} path={`${svc}/:tab`} element={<Service svc={svc} />} />,
-            ])}
-            <Route path="engines" element={<Moved to="/electricity/engines" />} />
-            <Route path="reports" element={<Moved to="/electricity/reports" />} />
-            <Route path="work" element={<Work />} />
-            <Route path="work/new" element={<WorkItem />} />
-            <Route path="work/:id" element={<WorkItem />} />
-            <Route path="islands" element={<Islands />} />
-            <Route path="islands/:id" element={<Island />} />
-            <Route path="assets/:id" element={<Asset />} />
-            <Route path="interruptions" element={<Incidents />} />
-            <Route path="interruptions/new" element={<Incident />} />
-            <Route path="interruptions/:id" element={<Incident />} />
-            <Route path="incidents/*" element={<Renamed from="/incidents" to="/interruptions" />} />
-            <Route path="projects" element={<Projects />} />
-            <Route path="projects/new" element={<Project />} />
-            <Route path="projects/:id" element={<Project />} />
-            <Route path="documents" element={<Documents />} />
-            <Route path="documents/new" element={<Document />} />
-            <Route path="documents/:id" element={<Document />} />
-            <Route path="admin/users" element={<Users />} />
-            <Route path="admin/audit" element={<Audit />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+    <CrashGuard>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route element={<RequireAuth><Layout /></RequireAuth>}>
+              <Route index element={<Dashboard />} />
+              <Route path="account" element={<Account />} />
+              {['electricity', 'water', 'sewerage'].map((svc) => [
+                <Route key={svc} path={svc} element={<Service svc={svc} />} />,
+                <Route key={`${svc}-tab`} path={`${svc}/:tab`} element={<Service svc={svc} />} />,
+              ])}
+              <Route path="engines" element={<Moved to="/electricity/engines" />} />
+              <Route path="reports" element={<Moved to="/electricity/reports" />} />
+              <Route path="work" element={<Work />} />
+              <Route path="work/new" element={<WorkItem />} />
+              <Route path="work/:id" element={<WorkItem />} />
+              <Route path="islands" element={<Islands />} />
+              <Route path="islands/:id" element={<Island />} />
+              <Route path="assets/:id" element={<Asset />} />
+              <Route path="interruptions" element={<Incidents />} />
+              <Route path="interruptions/new" element={<Incident />} />
+              <Route path="interruptions/:id" element={<Incident />} />
+              <Route path="incidents/*" element={<Renamed from="/incidents" to="/interruptions" />} />
+              <Route path="projects" element={<Projects />} />
+              <Route path="projects/new" element={<Project />} />
+              <Route path="projects/:id" element={<Project />} />
+              <Route path="documents" element={<Documents />} />
+              <Route path="documents/new" element={<Document />} />
+              <Route path="documents/:id" element={<Document />} />
+              <Route path="admin/users" element={<Users />} />
+              <Route path="admin/audit" element={<Audit />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </CrashGuard>
   </StrictMode>,
 );
