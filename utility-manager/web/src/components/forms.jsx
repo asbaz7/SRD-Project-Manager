@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { useSubmit } from '../hooks.js';
-import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES } from '../format.js';
+import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, assetLabel } from '../format.js';
 import { ErrorBox, Field, Modal, Select } from './ui.jsx';
 
 const numOrNull = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
@@ -86,7 +86,7 @@ export function AssetForm({ facilityId, asset, onClose, onSaved }) {
     onSaved();
   });
   return (
-    <Modal title={asset ? `Edit ${ASSET_KINDS[asset.kind]} ${asset.tag}` : 'Add asset'} onClose={onClose}>
+    <Modal title={asset ? `Edit ${assetLabel(asset)}` : 'Add asset'} onClose={onClose}>
       <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <ErrorBox error={error} />
         <Field label="Type"><Select value={a.kind} onChange={(v) => setA({ ...a, kind: v, capacity_unit: DEFAULT_UNIT[v] || a.capacity_unit })} options={ASSET_KINDS} /></Field>

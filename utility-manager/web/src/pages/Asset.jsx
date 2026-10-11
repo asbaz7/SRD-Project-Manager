@@ -7,7 +7,7 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { AssetForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, dateTime, localDate, month, num, withUnit } from '../format.js';
+import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 const ago = (iso) => {
@@ -31,8 +31,8 @@ export default function Asset() {
     const e = a.engine || {};
     const openWork = a.work.filter((w) => !['completed', 'cancelled'].includes(w.status));
     return <>
-      <PageHead title={`${a.atoll_code} · ${a.island_name}${e.shared_island ? ` · ${a.facility_name}` : ''} · ${ASSET_KINDS[a.kind]} ${a.tag}`}
-        crumbs={[{ to: `/${a.service}${isEngine ? '/engines' : ''}`, label: isEngine ? 'Engines' : SERVICES[a.service]?.label || 'Assets' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${ASSET_KINDS[a.kind]} ${a.tag}` }]}
+      <PageHead title={`${a.atoll_code} · ${a.island_name}${e.shared_island ? ` · ${a.facility_name}` : ''} · ${assetLabel(a)}`}
+        crumbs={[{ to: `/${a.service}${isEngine ? '/engines' : ''}`, label: isEngine ? 'Engines' : SERVICES[a.service]?.label || 'Assets' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${assetLabel(a)}` }]}
         actions={manage && <>
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
@@ -226,7 +226,7 @@ function StatusForm({ asset, onClose, onSaved }) {
     await api('/assets/status', { method: 'POST', body: { items: [{ asset_id: asset.id, status: s.status, note: s.note || null }] } });
     onSaved();
   });
-  return <Modal title={`Status of ${ASSET_KINDS[asset.kind]} ${asset.tag}`} onClose={onClose}>
+  return <Modal title={`Status of ${assetLabel(asset)}`} onClose={onClose}>
     <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <ErrorBox error={error} />
       <Field label="Status"><Select required value={s.status} onChange={(v) => setS({ ...s, status: v })} placeholder="Choose…"
@@ -251,7 +251,7 @@ function EventForm({ asset, event, onClose, onSaved }) {
     else await api(`/assets/${asset.id}/maintenance`, { method: 'POST', body });
     onSaved();
   });
-  return <Modal title={`${event ? 'Edit maintenance record' : 'Maintenance record'} · ${ASSET_KINDS[asset.kind]} ${asset.tag}`} onClose={onClose}>
+  return <Modal title={`${event ? 'Edit maintenance record' : 'Maintenance record'} · ${assetLabel(asset)}`} onClose={onClose}>
     <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <ErrorBox error={error} />
       {fromWork && <p className="muted small wide">The date and type come from <Link to={`/work/${event.work_id}`}>{event.work_ref}</Link>. To change them, or move the record to another engine, edit the work order.</p>}
@@ -277,11 +277,11 @@ function MergeForm({ asset, onClose, onSaved }) {
   const found = useApi(q.trim().length >= 2 ? `/assets?kind=${asset.kind}&include_inactive=1&limit=20&q=${encodeURIComponent(q.trim())}` : null);
   const options = (found.data?.items || []).filter((x) => x.id !== asset.id);
   const { submit, busy, error } = useSubmit(async () => {
-    if (!window.confirm(`Merge ${pick.atoll_code}. ${pick.island_name} ${ASSET_KINDS[pick.kind]} ${pick.tag} into this record? Its history moves here and that record is removed. This can't be undone.`)) return;
+    if (!window.confirm(`Merge ${pick.atoll_code}. ${pick.island_name} ${assetLabel(pick)} into this record? Its history moves here and that record is removed. This can't be undone.`)) return;
     await api(`/assets/${asset.id}/merge`, { method: 'POST', body: { from_asset_id: pick.id, moved_on: f.moved_on, notes: f.notes || null } });
     onSaved();
   });
-  return <Modal title={`Merge a duplicate into ${ASSET_KINDS[asset.kind]} ${asset.tag}`} onClose={onClose}>
+  return <Modal title={`Merge a duplicate into ${assetLabel(asset)}`} onClose={onClose}>
     <form className="form" onSubmit={(e) => { e.preventDefault(); if (pick) submit(); }}>
       <ErrorBox error={error} />
       <p className="muted small wide">For a {ASSET_KINDS[asset.kind].toLowerCase()} that was decommissioned at another island and registered again here instead of being moved. The other record's running hours, reports, maintenance and status history come here, the move is recorded, and the other record is removed. To move a genset that is still on the other record, use Move there instead.</p>
@@ -290,7 +290,7 @@ function MergeForm({ asset, onClose, onSaved }) {
       <div className="wide">{options.length === 0 ? <p className="muted small">{q.trim().length >= 2 ? 'Nothing found.' : ''}</p> :
         <ul className="plain">{options.map((x) => <li key={x.id}><label className="check">
           <input type="radio" name="merge-pick" checked={pick?.id === x.id} onChange={() => setPick(x)} />
-          {x.atoll_code}. {x.island_name} · {x.facility_name} · {ASSET_KINDS[x.kind]} {x.tag}
+          {x.atoll_code}. {x.island_name} · {x.facility_name} · {assetLabel(x)}
           <span className="muted small"> · {x.make_model || '—'}{x.serial_no ? ` · S/N ${x.serial_no}` : ''} · {ASSET_STATUS[x.status]?.label || x.status}{x.active ? '' : ' · not in use'}</span>
         </label></li>)}</ul>}</div>
       <Field label="Moved here on" hint="Best known date; the first report from here if unsure."><input type="date" required max={localDate(0)} value={f.moved_on} onChange={(e) => setF({ ...f, moved_on: e.target.value })} /></Field>

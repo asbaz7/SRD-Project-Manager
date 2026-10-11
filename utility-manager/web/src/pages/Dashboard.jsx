@@ -4,7 +4,7 @@ import { qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Icon } from '../components/icons.jsx';
 import { Async, Card, ConditionMeter, Empty, PageHead, Progress, ProjectState, Select, Service, Severity, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, month, power, since } from '../format.js';
+import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, month, num, power, since } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
 const greeting = () => {
@@ -29,7 +29,7 @@ function attentionItems(d) {
   if (e.major_fault) items.push({ tone: 'serious', mark: e.major_fault, to: '/electricity/engines?condition=major_fault', text: `${e.major_fault} engine${e.major_fault === 1 ? '' : 's'} with a major fault`, sub: 'Still running — check before they fail' });
   for (const svc of ['water', 'sewerage']) {
     const down = (d.assets_down || []).filter((a) => a.service === svc);
-    if (down.length) items.push({ tone: 'bad', mark: down.length, to: `/${svc}`, text: `${down.length} ${SERVICES[svc].label.toLowerCase()} asset${down.length === 1 ? '' : 's'} out of service`, sub: down.slice(0, 3).map((a) => `${a.atoll_code} ${a.island_name} ${ASSET_KINDS[a.kind]} ${a.tag}`).join(' · ') });
+    if (down.length) items.push({ tone: 'bad', mark: down.length, to: `/${svc}`, text: `${down.length} ${SERVICES[svc].label.toLowerCase()} asset${down.length === 1 ? '' : 's'} out of service`, sub: down.slice(0, 3).map((a) => `${a.atoll_code} ${a.island_name} ${assetLabel(a)}`).join(' · ') });
   }
   if (d.reports?.missing.length) items.push({ tone: 'warn', mark: d.reports.missing.length, to: '/electricity/reports', text: `${d.reports.missing.length} condition report${d.reports.missing.length === 1 ? '' : 's'} missing for ${month(d.reports.expected_month)}`, sub: d.reports.missing.slice(0, 4).map((r) => `${r.atoll_code} ${r.island_name}`).join(' · ') + (d.reports.missing.length > 4 ? ' …' : '') });
   for (const w of d.work.filter((x) => x.overdue)) {
@@ -76,9 +76,16 @@ export default function Dashboard() {
             ]} />
           {['water', 'sewerage'].map((svc) => {
             const s = d.services[svc];
+            const unset = Number(s.unknown) === Number(s.assets);
             return <ServiceTile key={svc} svc={svc} s={s}
-              hero={s.assets ? <>{s.running}<small> of {s.assets} assets running</small></> : <small>No assets recorded yet</small>}
-              facts={[[s.facilities, `plant${s.facilities === 1 ? '' : 's'} · ${s.islands} islands`], [s.down, 'out of service', s.down > 0], [s.open_work, 'work ongoing']]} />;
+              hero={!Number(s.assets) ? <small>No assets recorded yet</small>
+                : svc === 'water' ? <>{num(s.ro_tpd)}<small> t/day RO · {num(s.storage_m3)} m³ storage</small></>
+                  : <>{num(s.pump_stations)}<small> pump stations · {s.facilities} systems</small></>}
+              facts={[
+                unset ? [s.facilities, `plants · ${s.islands} islands`] : [`${s.running}/${s.assets}`, Number(s.down) ? `running · ${s.down} out` : 'running', Number(s.down) > 0],
+                [s.licences_expired, 'licences expired', Number(s.licences_expired) > 0],
+                [s.open_work, 'work ongoing'],
+              ]} />;
           })}
         </div>}
 
@@ -91,7 +98,7 @@ export default function Dashboard() {
             {d.work.length === 0 ? <Empty>No work in progress.</Empty> :
               <div className="scroll-y"><table><tbody>{d.work.map((w) => <tr key={w.id}>
                 <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
-                  <small className="muted"><Service value={w.service} short />{w.atoll_code} · {w.island_name}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`} · {WORK_KINDS[w.kind]}</small>
+                  <small className="muted"><Service value={w.service} short />{w.atoll_code} · {w.island_name}{w.asset_tag && ` · ${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`} · {WORK_KINDS[w.kind]}</small>
                   {w.last_update && <div className="small">{w.last_update}</div>}</td>
                 <td><WorkState value={w.status} /></td>
               </tr>)}</tbody></table></div>}

@@ -24,7 +24,13 @@ export default async function serviceRoutes(app) {
                count(s.id) filter (where s.status = 'running') as running,
                count(s.id) filter (where s.status = 'standby') as standby,
                count(s.id) filter (where s.status in ('down', 'maintenance')) as down,
-               count(s.id) filter (where s.status = 'unknown') as unknown
+               count(s.id) filter (where s.status = 'unknown') as unknown,
+               -- Water: RO output (t/day = m3/day), rated and actual where known, and storage; sewerage: pump stations.
+               coalesce(sum(s.rated_capacity) filter (where s.kind = 'ro_unit'), 0) as ro_tpd,
+               coalesce(sum(coalesce(s.operating_capacity, s.rated_capacity)) filter (where s.kind = 'ro_unit'), 0) as ro_actual_tpd,
+               count(s.id) filter (where s.kind = 'ro_unit') as ro_units,
+               coalesce(sum(s.rated_capacity) filter (where s.kind = 'tank' and s.tag like 'ST-%'), 0) as storage_m3,
+               count(s.id) filter (where s.kind = 'pump') as pump_stations
           from facilities f
           join islands i on i.id = f.island_id and i.active
           left join assets s on s.facility_id = f.id and s.active and s.status <> 'decommissioned'
@@ -37,7 +43,11 @@ export default async function serviceRoutes(app) {
          group by s.capacity_unit order by sum(s.rated_capacity) desc`, [svc, atoll]),
       db.query(`
         select f.id, f.name, f.kind, f.fuel_capacity_l, f.water_capacity_m3, i.id as island_id, i.name as island_name,
-               f.licence_type, f.licence_expires_on, f.licence_status,
+               f.licence_type, f.licence_expires_on, f.licence_status, f.licence_issued_on,
+               coalesce(sum(s.rated_capacity) filter (where s.kind = 'ro_unit'), 0) as ro_tpd,
+               coalesce(sum(s.rated_capacity) filter (where s.kind = 'tank' and s.tag like 'ST-%'), 0) as storage_m3,
+               count(s.id) filter (where s.kind = 'pump') as pump_stations,
+               count(s.id) filter (where s.status = 'unknown') as unknown,
                a.code as atoll_code, r.report_month, f.reports_from,
                count(s.id) as assets,
                count(s.id) filter (where s.status = 'running') as running,

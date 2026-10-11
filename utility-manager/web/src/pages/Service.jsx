@@ -5,7 +5,7 @@ import { csvUrl, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Icon } from '../components/icons.jsx';
 import { AssetStatus, Async, Card, Condition, ConditionMeter, Empty, PageHead, Pager, Progress, ProjectState, Select, Severity, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, date, licenceState, month, num, power, since } from '../format.js';
+import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, licenceSummary, month, num, power, since, withUnit } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 import ConditionReports from './ConditionReports.jsx';
 import Engines from './Engines.jsx';
@@ -65,16 +65,25 @@ function ServiceOverview({ svc }) {
     <Async state={state}>{(d) => {
       const s = d.summary;
       const kw = d.capacity.find((c) => c.unit === 'kW');
+      const lic = licenceSummary(d.facilities);
       return <>
         <div className="stats">
-          <Stat label={isEl ? 'Gensets running' : 'Assets running'} value={`${s.running} of ${s.assets}`}
+          {!isEl && <Stat label={svc === 'water' ? 'RO capacity' : 'Pump stations'}
+            value={svc === 'water' ? `${num(s.ro_tpd)} t/day` : num(s.pump_stations)}
+            sub={svc === 'water'
+              ? <>{num(s.ro_units)} RO units{Number(s.ro_actual_tpd) !== Number(s.ro_tpd) && ` · ${num(s.ro_actual_tpd)} t/day actual`}<br />Storage {num(s.storage_m3)} m³</>
+              : <>{num(s.facilities)} sewerage systems · {num(s.islands)} islands</>} />}
+          {!isEl && <Stat label="Operating licences" value={lic.expired ? `${lic.expired} expired` : 'None expired'} tone={lic.expired ? 'alert' : ''}
+            sub={`${lic.expiring} expiring soon · ${lic.missing} not held · ${lic.valid} valid`} to={`/${svc}/plants`} />}
+          {isEl ? <Stat label="Gensets running" value={`${s.running} of ${s.assets}`}
             sub={<>{s.down} down{s.standby ? ` · ${s.standby} standby` : ''}{s.unknown ? ` · ${s.unknown} ${isEl ? 'no report' : 'unknown'}` : ''}<br />
               {kw ? `${power(kw.available)} of ${power(kw.rated)} available` : `${s.facilities} plants · ${s.islands} islands`}</>} />
+            : <Stat label="Systems in service" value={Number(s.unknown) === Number(s.assets) ? 'Not set' : `${s.running} of ${s.assets}`} tone={Number(s.down) ? 'alert' : ''}
+              sub={<>{num(s.down)} out of service{Number(s.unknown) ? ` · ${num(s.unknown)} status not set` : ''}</>} />}
           {isEl && <Stat label="Serious faults" value={d.engines.major_fault + d.engines.not_running} tone={d.engines.major_fault + d.engines.not_running ? 'alert' : ''}
             sub={`${d.engines.not_running} not running · ${d.engines.minor_fault} minor`} to="/electricity/engines?condition=faults" />}
           {isEl && <Stat label="Overhaul due" value={d.engines.overhaul_due} tone={d.engines.overhaul_due ? 'warn' : ''}
             sub={`${d.engines.alt_service_due} alternator services due${d.engines.alt_requested ? ` (${d.engines.alt_requested} requested by islands)` : ''}`} to="/electricity/engines?flag=overhaul" />}
-          {!isEl && <Stat label="Out of service" value={s.down} tone={s.down ? 'alert' : ''} />}
           <Stat label="Work ongoing" value={d.work.length} to={`/work?service=${svc}`} />
           <Stat label="Open incidents" value={d.incidents.length} tone={d.incidents.some((x) => x.severity === 'critical') ? 'alert' : ''} to={`/incidents?service=${svc}&status=open`} />
           {isEl && <Stat label={`Reports for ${month(d.reports.expected_month)}`} value={d.reports.missing.length ? `${d.reports.missing.length} missing` : 'All in'}
@@ -95,6 +104,14 @@ function ServiceOverview({ svc }) {
           </Card>
         </div>}
 
+        {!isEl && lic.list.length > 0 && <Card title={`Operating licences to renew (${lic.list.length})`} actions={<Link to={`/${svc}/plants`} className="btn small ghost">All plants</Link>}>
+          <table><tbody>{lic.list.map(({ f, st }) => <tr key={f.id}>
+            <td className="wrap"><Link to={`/islands/${f.island_id}?service=${svc}`}><strong>{f.atoll_code} · {f.island_name}</strong></Link><br />
+              <small className="muted">{[f.licence_type && `${LICENCE_TYPES[f.licence_type] || f.licence_type} licence`, f.licence_status].filter(Boolean).join(' · ') || 'No licence recorded'}</small></td>
+            <td className="nowrap"><span className={`flag ${st.tone}`}>{st.text}</span></td>
+          </tr>)}</tbody></table>
+        </Card>}
+
         <Card title={`Needs attention${d.attention.length ? ` (${d.attention.length})` : ''}`}>
           {d.attention.length === 0 ? <p className="all-clear"><Icon name="check" /> Everything with a status is in service.</p> :
             <ul className="attention-list scroll-y">{d.attention.map((a) => {
@@ -102,12 +119,12 @@ function ServiceOverview({ svc }) {
               // No work yet: log it from here, filled in from the fault.
               const fault = (a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || '';
               const logWork = canLog && !a.work_title && `/work/new${qs({ asset_id: a.id, kind: 'repair',
-                title: `${ASSET_KINDS[a.kind]} ${a.tag}: ${fault || (a.condition ? 'fault in condition report' : 'out of service')}`.slice(0, 200),
+                title: `${assetLabel(a)}: ${fault || (a.condition ? 'fault in condition report' : 'out of service')}`.slice(0, 200),
                 description: [a.status_text && `Report says: ${a.status_text}`, fault].filter(Boolean).join('\n') || undefined,
                 fault_report_month: a.condition_source === 'report' ? a.report_month : undefined })}`;
               return <li key={a.id} className={logWork ? 'with-action' : ''}><Link to={`/assets/${a.id}`}>
                 <span className={`dot ${serious ? 'bad' : 'serious'}`} aria-hidden="true">{serious ? '✕' : '■'}</span>
-                <span className="grow"><strong>{a.atoll_code} · {a.island_name} · {ASSET_KINDS[a.kind]} {a.tag}</strong>
+                <span className="grow"><strong>{a.atoll_code} · {a.island_name} · {assetLabel(a)}</strong>
                   <small>{a.condition ? <Condition value={a.condition} /> : <AssetStatus status={a.status} />}{' '}
                     {(a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || a.make_model || ''}{a.work_title && ` · 🔧 ${a.work_title}`}</small></span>
                 <Icon name="arrow" />
@@ -118,11 +135,11 @@ function ServiceOverview({ svc }) {
         <div className="grid-3">
           <Card title={`Work (${d.work.length})`} actions={<Link to={`/work?service=${svc}`} className="btn small ghost">All</Link>}>
             {d.work.length === 0 ? <Empty>No work in progress.</Empty> :
-              <table><tbody>{d.work.map((w) => <tr key={w.id}>
+              <div className="scroll-y"><table><tbody>{d.work.map((w) => <tr key={w.id}>
                 <td className="wrap"><Link to={`/work/${w.id}`}>{w.title}</Link><br />
-                  <small className="muted">{w.atoll_code} · {w.island_name}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`} · {WORK_KINDS[w.kind]}</small></td>
+                  <small className="muted">{w.atoll_code} · {w.island_name}{w.asset_tag && ` · ${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`} · {WORK_KINDS[w.kind]}</small></td>
                 <td><WorkState value={w.status} /></td>
-              </tr>)}</tbody></table>}
+              </tr>)}</tbody></table></div>}
           </Card>
           <Card title={`Incidents (${d.incidents.length})`} actions={<Link to={`/incidents?service=${svc}`} className="btn small ghost">All</Link>}>
             {d.incidents.length === 0 ? <Empty>No open incidents.</Empty> :
@@ -160,8 +177,12 @@ function Plants({ svc }) {
             <Link key={f.id} to={`/islands/${f.island_id}?service=${svc}`} className="facility">
               <strong>{f.island_name}</strong>
               <span className="muted small">{f.name.toLowerCase().includes(FACILITY_KINDS[f.kind].toLowerCase().split(' ')[0]) ? f.name : `${f.name} · ${FACILITY_KINDS[f.kind]}`}</span>
+              {svc === 'water' && Number(f.ro_tpd) > 0 && <span className="small">RO {num(f.ro_tpd)} t/day{Number(f.storage_m3) ? ` · storage ${num(f.storage_m3)} m³` : ''}</span>}
+              {svc === 'sewerage' && Number(f.pump_stations) > 0 && <span className="small">{num(f.pump_stations)} pump station{Number(f.pump_stations) === 1 ? '' : 's'}</span>}
               <div className="row">
-                <span>{f.running} of {f.assets} running</span>
+                <span>{svc !== 'electricity' && Number(f.assets) === 0 ? 'No systems recorded'
+                  : svc !== 'electricity' && Number(f.unknown) === Number(f.assets) ? `${f.assets} systems · status not set`
+                    : `${f.running} of ${f.assets} running`}</span>
                 {f.down > 0 && <span className="status bad">✕ {f.down} down</span>}
                 {f.serious > 0 && <span className="status serious">■ {f.serious} serious</span>}
                 {f.minor > 0 && <span className="status warn">▲ {f.minor} minor</span>}
@@ -198,11 +219,11 @@ function ServiceAssets({ svc }) {
           <table>
             <thead><tr><th>Asset</th><th>Status</th><th className="hide-sm">Plant</th><th className="num">Capacity</th></tr></thead>
             <tbody>{page.items.map((a) => <tr key={a.id}>
-              <td className="wrap"><Link to={`/assets/${a.id}`}><strong>{a.atoll_code} · {a.island_name} · {ASSET_KINDS[a.kind]} {a.tag}</strong></Link><br /><small className="muted">{a.make_model || '—'}</small></td>
+              <td className="wrap"><Link to={`/assets/${a.id}`}><strong>{a.atoll_code} · {a.island_name} · {assetLabel(a)}</strong></Link><br /><small className="muted">{a.make_model || '—'}</small></td>
               <td className="wrap"><AssetStatus status={a.status} />{a.status_note && <><br /><small className="muted">{a.status_note}</small></>}
                 {a.status_at && <><br /><small className="muted">{date(a.status_at)}</small></>}</td>
               <td className="hide-sm">{a.facility_name}</td>
-              <td className="num">{a.rated_capacity != null ? `${num(a.rated_capacity)} ${a.capacity_unit || ''}` : '—'}</td>
+              <td className="num">{withUnit(a.rated_capacity, a.capacity_unit || '')}</td>
             </tr>)}</tbody>
           </table>}
         <Pager page={page} onOffset={(o) => setFilter('offset', o)} />

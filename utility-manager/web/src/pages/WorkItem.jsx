@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Select, UpdateText, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, MOVE_STAGES, SERVICES, WORK_KINDS, WORK_STATES, date, dateTime, statesFor } from '../format.js';
+import { ASSET_KINDS, MOVE_STAGES, SERVICES, WORK_KINDS, WORK_STATES, assetLabel, date, dateTime, statesFor } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 export default function WorkItem() {
@@ -56,7 +56,7 @@ function WorkView({ work: w, reload }) {
             <dt>From</dt><dd><Link to={`/islands/${w.island_id}`}>{w.atoll_code} · {w.island_name}</Link>{w.facility_name && ` · ${w.facility_name}`}</dd>
             <dt>To</dt><dd><Link to={`/islands/${w.dest_island_id}`}>{w.dest_atoll_code} · {w.dest_island_name}</Link>{w.dest_facility_name && ` · ${w.dest_facility_name}`} · as {ASSET_KINDS[w.asset_kind]} {w.dest_tag}</dd>
           </> : <><dt>Where</dt><dd><Link to={`/islands/${w.island_id}`}>{w.atoll_code} · {w.island_name}</Link>{w.facility_name && ` · ${w.facility_name}`}</dd></>}
-          {w.asset_id && <><dt>Asset</dt><dd>{technical ? <Link to={`/assets/${w.asset_id}`}>{ASSET_KINDS[w.asset_kind]} {w.asset_tag}</Link> : `${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.asset_model && <span className="muted"> · {w.asset_model}</span>}</dd></>}
+          {w.asset_id && <><dt>Asset</dt><dd>{technical ? <Link to={`/assets/${w.asset_id}`}>{assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}</Link> : `${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`}{w.asset_model && <span className="muted"> · {w.asset_model}</span>}</dd></>}
           <dt>Unit</dt><dd>{w.unit_name || '—'}</dd>
           <dt>Assigned to</dt><dd>{[w.assigned_user_name, w.assigned_to].filter(Boolean).join(' · ') || '—'}</dd>
           {w.fault_report_month && <><dt>From</dt><dd>Fault in the {w.fault_report_month.slice(0, 7)} condition report</dd></>}
@@ -213,11 +213,11 @@ function WorkForm({ work, onDone }) {
           <Field label="Island"><Select required value={islandId} onChange={(v) => setF({ ...f, island_id: v, asset_id: '' })} placeholder="Choose island…"
             options={mine.map((i) => [i.id, `${i.atoll_code} · ${i.name}`])} /></Field>
           <Field label={isMove ? 'Genset / asset being moved' : 'Asset (optional)'} hint={isMove ? '' : 'Leave empty for work on the plant or island as a whole.'}>
-            <Select required={isMove} value={f.asset_id} onChange={(v) => setF({ ...f, asset_id: v, service: v ? assets.find((a) => a.id === v)?.service || f.service : f.service })} placeholder="— whole island —" options={assets.map((a) => [a.id, `${ASSET_KINDS[a.kind]} ${a.tag}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>
+            <Select required={isMove} value={f.asset_id} onChange={(v) => setF({ ...f, asset_id: v, service: v ? assets.find((a) => a.id === v)?.service || f.service : f.service })} placeholder="— whole island —" options={assets.map((a) => [a.id, `${assetLabel(a)}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>
         </>}
         {work && !isMove && <Field label="Asset" hint={work.asset_id ? 'Logged on the wrong one? Pick the right one here.' : 'Leave empty for work on the plant or island as a whole.'}>
           <Select value={f.asset_id || ''} onChange={set('asset_id')} placeholder={work.asset_id ? undefined : '— whole island —'}
-            options={assets.filter((a) => a.service === work.service).map((a) => [a.id, `${ASSET_KINDS[a.kind]} ${a.tag}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>}
+            options={assets.filter((a) => a.service === work.service).map((a) => [a.id, `${assetLabel(a)}${a.make_model ? ` · ${a.make_model}` : ''}`])} /></Field>}
         <Field label="Type"><Select value={f.kind} disabled={!!work && work.kind === 'relocation'}
           onChange={(v) => setF({ ...f, kind: v, status: v === 'relocation' ? 'planned' : (f.status in statesFor(v) ? f.status : 'in_progress') })} options={kinds} /></Field>
         <Field label={isMove ? 'Stage' : 'Status'}><Select value={f.status} onChange={set('status')} options={states} /></Field>

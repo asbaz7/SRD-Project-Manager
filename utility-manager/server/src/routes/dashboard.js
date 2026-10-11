@@ -30,7 +30,12 @@ export default async function dashboardRoutes(app) {
                count(s.id) filter (where s.status in ('down', 'maintenance')) as down,
                count(s.id) filter (where s.status = 'unknown') as unknown,
                coalesce(sum(s.rated_capacity) filter (where s.kind = 'genset'), 0) as installed_kw,
-               coalesce(sum(s.operating_capacity) filter (where s.kind = 'genset' and s.status in ('running', 'standby')), 0) as available_kw
+               coalesce(sum(s.operating_capacity) filter (where s.kind = 'genset' and s.status in ('running', 'standby')), 0) as available_kw,
+               -- Water: RO output (t/day = m3/day) and storage; sewerage: pump stations.
+               coalesce(sum(s.rated_capacity) filter (where s.kind = 'ro_unit'), 0) as ro_tpd,
+               coalesce(sum(s.rated_capacity) filter (where s.kind = 'tank' and s.tag like 'ST-%'), 0) as storage_m3,
+               count(s.id) filter (where s.kind = 'pump') as pump_stations,
+               count(distinct f.id) filter (where f.licence_status ilike '%expired%' or f.licence_expires_on < current_date) as licences_expired
           from facilities f
           join islands i on i.id = f.island_id and i.active
           left join assets s on s.facility_id = f.id and s.active and s.status <> 'decommissioned'
@@ -133,6 +138,7 @@ export default async function dashboardRoutes(app) {
 
     const byService = Object.fromEntries(['electricity', 'water', 'sewerage'].map((s) => [s, {
       facilities: 0, islands: 0, assets: 0, running: 0, standby: 0, down: 0, unknown: 0, installed_kw: 0, available_kw: 0, open_work: 0, open_incidents: 0,
+      ro_tpd: 0, storage_m3: 0, pump_stations: 0, licences_expired: 0,
     }]));
     for (const row of services.rows) Object.assign(byService[row.service], row);
     for (const row of open.rows) Object.assign(byService[row.service], { open_work: row.work, open_incidents: row.incidents });

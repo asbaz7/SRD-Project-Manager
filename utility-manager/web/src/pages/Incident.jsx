@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, ErrorBox, Field, PageHead, Select, Service, Severity } from '../components/ui.jsx';
-import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, SEVERITIES, dateTime, duration, fromLocalInput, num, toLocalInput } from '../format.js';
+import { ASSET_KINDS, INCIDENT_CATEGORIES, SERVICES, SEVERITIES, assetLabel, dateTime, duration, fromLocalInput, num, toLocalInput } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 export default function Incident() {
@@ -33,7 +33,7 @@ function IncidentView({ incident: x, reload }) {
           <dt>Service</dt><dd><Service value={x.service} /></dd>
           <dt>Category</dt><dd>{INCIDENT_CATEGORIES[x.category]}</dd>
           <dt>Location</dt><dd><Link to={`/islands/${x.island_id}`}>{x.atoll_code} · {x.island_name}</Link>{x.facility_name && ` · ${x.facility_name}`}</dd>
-          {x.asset_id && <><dt>Asset</dt><dd>{technical ? <Link to={`/assets/${x.asset_id}`}>{ASSET_KINDS[x.asset_kind]} {x.asset_tag}</Link> : `${ASSET_KINDS[x.asset_kind]} ${x.asset_tag}`}</dd></>}
+          {x.asset_id && <><dt>Asset</dt><dd>{technical ? <Link to={`/assets/${x.asset_id}`}>{assetLabel({ kind: x.asset_kind, tag: x.asset_tag, make_model: x.asset_model })}</Link> : `${assetLabel({ kind: x.asset_kind, tag: x.asset_tag, make_model: x.asset_model })}`}</dd></>}
           <dt>Started</dt><dd>{dateTime(x.started_at)}</dd>
           <dt>Resolved</dt><dd>{dateTime(x.resolved_at)}{x.resolved_by_name && ` · ${x.resolved_by_name}`}</dd>
           <dt>Duration</dt><dd>{duration(x.duration_minutes)}{x.status === 'open' && ' so far'}</dd>
@@ -105,7 +105,7 @@ function IncidentForm({ incident, onDone }) {
         </Field>
         <Field label="Service"><Select value={f.service} onChange={(v) => setF({ ...f, service: v, facility_id: '', asset_id: '' })} options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} /></Field>
         {technical && <><Field label="Facility (optional)"><Select value={f.facility_id || ''} onChange={(v) => setF({ ...f, facility_id: v, asset_id: '' })} placeholder="—" options={facilities.map((x) => [x.id, x.name])} /></Field>
-        <Field label="Asset (optional)"><Select value={f.asset_id || ''} onChange={set('asset_id')} placeholder="—" options={assets.map((a) => [a.id, `${ASSET_KINDS[a.kind]} ${a.tag} ${a.make_model ? `· ${a.make_model}` : ''}`])} /></Field></>}
+        <Field label="Asset (optional)"><Select value={f.asset_id || ''} onChange={set('asset_id')} placeholder="—" options={assets.map((a) => [a.id, `${assetLabel(a)} ${a.make_model ? `· ${a.make_model}` : ''}`])} /></Field></>}
         <Field label="Category"><Select value={f.category} onChange={set('category')} options={INCIDENT_CATEGORIES} /></Field>
         <Field label="Severity"><Select value={f.severity} onChange={set('severity')} options={SEVERITIES} /></Field>
         <Field label="Title" wide><input required maxLength="200" value={f.title} onChange={set('title')} placeholder="e.g. Genset 3 tripped, partial load shedding" /></Field>

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { csvUrl, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, PageHead, Pager, Select, Service, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, SERVICES, WORK_KINDS, WORK_STATES, date, dateTime } from '../format.js';
+import { ASSET_KINDS, SERVICES, WORK_KINDS, WORK_STATES, assetLabel, date, dateTime } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 
 export default function Work() {
@@ -38,7 +38,7 @@ export default function Work() {
             <thead><tr><th>Work</th><th>Status</th><th className="hide-sm">Assigned to</th><th className="hide-sm">Latest update</th><th className="hide-sm">Target</th></tr></thead>
             <tbody>{page.items.map((w) => <tr key={w.id}>
               <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
-                <small className="muted"><Service value={w.service} short />{w.ref} · {WORK_KINDS[w.kind]} · {w.atoll_code} · {w.island_name}{w.kind === 'relocation' && ` → ${w.dest_atoll_code} · ${w.dest_island_name}`}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.asset_model && ` · ${w.asset_model}`}</small></td>
+                <small className="muted"><Service value={w.service} short />{w.ref} · {WORK_KINDS[w.kind]} · {w.atoll_code} · {w.island_name}{w.kind === 'relocation' && ` → ${w.dest_atoll_code} · ${w.dest_island_name}`}{w.asset_tag && ` · ${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`}{w.asset_model && ` · ${w.asset_model}`}</small></td>
               <td><WorkState value={w.status} /></td>
               <td className="hide-sm small">{[w.assigned_user_name, w.assigned_to].filter(Boolean).join(' · ') || (!w.unit_name && <span className="muted">—</span>)}{w.unit_name && <><br /><span className="muted">{w.unit_name}</span></>}</td>
               <td className="wrap hide-sm small">{w.last_update || <span className="muted">—</span>}{w.last_update_at && <><br /><span className="muted">{dateTime(w.last_update_at)}</span></>}</td>

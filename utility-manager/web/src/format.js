@@ -35,6 +35,24 @@ export function licenceState(f) {
   return { tone: '', text: `Licence ${LICENCE_TYPES[f.licence_type] || f.licence_type}${expires ? ` to ${date(expires)}` : ''}` };
 }
 
+// "Genset 3", "RO unit RO-01"; assets of kind 'other' go by what they are
+// (Rainwater plant RW-01, Vacuum station VS-01, Sewage treatment plant STP-01).
+export function assetLabel(a) {
+  if (a.kind === 'other') return a.make_model ? `${a.make_model.replace(/\s*\(.*\)\s*$/, '')} ${a.tag}` : a.tag;
+  return `${ASSET_KINDS[a.kind] || ''} ${a.tag}`.trim();
+}
+
+// Licences over a list of plants: counts, and those needing action (expired
+// first, then expiring, then not held).
+export function licenceSummary(facilities) {
+  const rows = facilities.map((f) => ({ f, st: licenceState(f) })).filter((x) => x.st);
+  const by = (tone, pred = () => true) => rows.filter((x) => x.st.tone === tone && pred(x));
+  const expired = by('bad');
+  const expiring = by('warn', (x) => x.st.text.startsWith('Licence expires'));
+  const missing = by('warn', (x) => !x.st.text.startsWith('Licence expires'));
+  return { expired: expired.length, expiring: expiring.length, missing: missing.length, valid: by('').length, list: [...expired, ...expiring, ...missing] };
+}
+
 export const ASSET_KINDS = {
   genset: 'Genset', solar_inverter: 'Solar inverter', battery: 'Battery', transformer: 'Transformer',
   ro_unit: 'RO unit', pump: 'Pump', blower: 'Blower', tank: 'Tank', other: 'Other',
@@ -98,7 +116,8 @@ export function num(value, digits = 0) {
 }
 // 66472 kW -> '66.5 MW'; smaller figures stay in kW.
 export const power = (kw) => (kw == null ? '—' : kw >= 10000 ? `${num(kw / 1000, 1)} MW` : `${num(kw)} kW`);
-export const withUnit = (value, unit, digits) => (value == null ? '—' : `${num(value, digits)} ${unit}`);
+export const unitLabel = (unit) => String(unit || '').replace(/m3/g, 'm³');
+export const withUnit = (value, unit, digits) => (value == null ? '—' : `${num(value, digits)} ${unitLabel(unit)}`);
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric' });
 const dateTimeFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });

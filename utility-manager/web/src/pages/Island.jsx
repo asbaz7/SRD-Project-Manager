@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
+import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { useApi, useRowLink } from '../hooks.js';
 
 export default function Island() {
@@ -38,6 +38,19 @@ export default function Island() {
           <Stat label="Fuel capacity" value={island.fuel_capacity_l ? withUnit(island.fuel_capacity_l, 'L') : 'Not set'}
             sub={!island.fuel_capacity_l && manage ? 'Set it with Edit on the powerhouse' : ''} />
         </>}
+        {island.technical && (only === 'water' || only === 'sewerage') && (() => {
+          const systems = facilities.flatMap((f) => f.assets.filter((x) => x.active && x.status !== 'decommissioned'));
+          const sum = (pred) => systems.filter(pred).reduce((n, x) => n + Number(x.rated_capacity || 0), 0);
+          const unset = systems.filter((x) => x.status === 'unknown').length;
+          return <>
+            {only === 'water' ? <>
+              <Stat label="RO capacity" value={withUnit(sum((x) => x.kind === 'ro_unit'), 't/day')} sub={`${systems.filter((x) => x.kind === 'ro_unit').length} RO units`} />
+              <Stat label="Storage" value={withUnit(sum((x) => x.kind === 'tank' && x.tag.startsWith('ST-')), 'm3')} />
+            </> : <Stat label="Pump stations" value={systems.filter((x) => x.kind === 'pump').length} />}
+            <Stat label="Systems in service" value={unset === systems.length ? 'Not set' : `${systems.filter((x) => x.status === 'running').length} of ${systems.length}`}
+              sub={unset ? `${unset} status not set` : ''} />
+          </>;
+        })()}
         <Stat label="Open incidents" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/incidents?island_id=${island.id}&status=open`} />
         <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
@@ -45,7 +58,7 @@ export default function Island() {
       {openWork.length > 0 && <Card title={`Ongoing work (${openWork.length})`}>
         <table><tbody>{openWork.map((w) => <tr key={w.id}>
           <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
-            <small className="muted">{w.ref} · {WORK_KINDS[w.kind]}{w.asset_tag && ` · ${ASSET_KINDS[w.asset_kind]} ${w.asset_tag}`}{w.target_on && ` · target ${date(w.target_on)}`}</small>
+            <small className="muted">{w.ref} · {WORK_KINDS[w.kind]}{w.asset_tag && ` · ${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`}{w.target_on && ` · target ${date(w.target_on)}`}</small>
             {w.last_update && <div className="small">{w.last_update}</div>}</td>
           <td><WorkState value={w.status} /></td>
         </tr>)}</tbody></table>
@@ -84,7 +97,7 @@ export default function Island() {
             <table>
               <thead><tr><th>Asset</th><th>Status</th>{f.kind === 'powerhouse' && <><th>Condition</th><th className="num hide-sm">Since overhaul</th><th className="hide-sm">Last overhaul</th></>}<th className="num">Rated</th><th className="num hide-sm">Operating</th></tr></thead>
               <tbody>{current.map((a) => <tr key={a.id} {...rowLink(`/assets/${a.id}`)}>
-                <td className="wrap"><Link to={`/assets/${a.id}`}><strong>{ASSET_KINDS[a.kind]} {a.tag}</strong></Link><br /><small className="muted">{a.make_model || '—'}</small>
+                <td className="wrap"><Link to={`/assets/${a.id}`}><strong>{assetLabel(a)}</strong></Link><br /><small className="muted">{a.make_model || '—'}</small>
                   <div><Flags e={a} /></div></td>
                 <td className="wrap"><AssetStatus status={a.status} />
                   {a.status_note && <><br /><small className="muted">{a.status_note}</small></>}
@@ -103,7 +116,7 @@ export default function Island() {
             <span className="muted"> on {date(m.moved_on)}{m.source === 'merge' ? ' (records merged)' : ''}</span></span>)}</p>}
           {retired.length > 0 && <details className="small">
             <summary className="muted">Retired or not in use ({retired.length})</summary>
-            <ul className="plain">{retired.map((a) => <li key={a.id}><Link to={`/assets/${a.id}`}>{ASSET_KINDS[a.kind]} {a.tag}</Link>
+            <ul className="plain">{retired.map((a) => <li key={a.id}><Link to={`/assets/${a.id}`}>{assetLabel(a)}</Link>
               <span className="muted"> · {a.make_model || '—'}{a.serial_no ? ` · S/N ${a.serial_no}` : ''}{a.status_note ? ` · ${a.status_note}` : ''}</span></li>)}</ul>
           </details>}
             </>;
