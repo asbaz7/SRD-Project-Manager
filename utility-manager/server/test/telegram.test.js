@@ -365,7 +365,7 @@ test('plain messages go to the assistant, which looks things up as the person as
     },
     (body) => {
       assert.match(lastToolResults(body)[0].content, /Powerhouse|facilities/i);
-      return [{ type: 'text', text: 'Maafushi: **all gensets running**.' }];
+      return [{ type: 'thinking', thinking: 'All running.', signature: 'sig' }, { type: 'text', text: 'Maafushi: **all gensets running**.' }];
     },
   ];
   await say(MANAGER_TG, 'how is maafushi doing?');
@@ -380,6 +380,8 @@ test('plain messages go to the assistant, which looks things up as the person as
     // The island looked up for the first question isn't resent in full.
     assert.match(body.messages[4].content[0].content, /earlier result, shortened/);
     assert.ok(body.messages[4].content[0].content.length < 450);
+    // Past thinking isn't sent back: its signature wouldn't match the shortened history.
+    assert.ok(!JSON.stringify(body.messages).includes('"thinking"'));
     return [{ type: 'text', text: 'No ongoing work.' }];
   }];
   await say(MANAGER_TG, 'and the work there?');

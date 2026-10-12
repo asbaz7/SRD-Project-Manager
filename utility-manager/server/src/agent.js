@@ -305,18 +305,32 @@ export function createAgent({ db, config, log }) {
          from telegram_conversations where chat_id = $1 and user_id = $2`, [chatId, userId, QUIET_HOURS]);
     const row = rows[0];
     if (!row || row.stale || row.messages.length > MAX_MESSAGES) return { chatId, userId, messages: [], pending: null };
-    return { chatId, userId, messages: shrink(row.messages), pending: row.pending };
+    return { chatId, userId, messages: tidy(row.messages), pending: row.pending };
   }
 
-  const shrink = (messages) => messages.map((m) => (m.role !== 'user' || !Array.isArray(m.content) ? m : {
-    ...m,
-    content: m.content.map((b) => (b.type === 'tool_result' && typeof b.content === 'string' && b.content.length > KEEP_RESULT_CHARS
-      ? { ...b, content: `${b.content.slice(0, KEEP_RESULT_CHARS)}… (earlier result, shortened: look it up again for current figures)` } : b)),
-  }));
+  // Once a question is answered, its look-up results shrink to a stub and
+  // Claude's thinking is dropped: a thinking block is only valid with the
+  // exact tools and earlier messages it was made with, so after a shrink or
+  // a deploy it would be refused ("bound to a different conversation"), and
+  // past turns' thinking isn't used anyway. While a change waits for ✅ the
+  // history is left exactly as it is, since that turn isn't finished.
+  const tidy = (messages) => {
+    const last = messages.at(-1);
+    if (last?.role === 'assistant' && Array.isArray(last.content) && last.content.some((b) => b.type === 'tool_use')) return messages;
+    return messages.map((m) => {
+      if (!Array.isArray(m.content)) return m;
+      if (m.role === 'assistant') return { ...m, content: m.content.filter((b) => b.type !== 'thinking' && b.type !== 'redacted_thinking') };
+      return {
+        ...m,
+        content: m.content.map((b) => (b.type === 'tool_result' && typeof b.content === 'string' && b.content.length > KEEP_RESULT_CHARS
+          ? { ...b, content: `${b.content.slice(0, KEEP_RESULT_CHARS)}… (earlier result, shortened: look it up again for current figures)` } : b)),
+      };
+    }).filter((m) => !Array.isArray(m.content) || m.content.length);
+  };
   const save = (c) => db.query(
     `insert into telegram_conversations (chat_id, user_id, messages, pending, updated_at) values ($1, $2, $3, $4, now())
      on conflict (chat_id, user_id) do update set messages = excluded.messages, pending = excluded.pending, updated_at = now()`,
-    [c.chatId, c.userId, JSON.stringify(shrink(c.messages)), c.pending ? JSON.stringify(c.pending) : null]);
+    [c.chatId, c.userId, JSON.stringify(tidy(c.messages)), c.pending ? JSON.stringify(c.pending) : null]);
 
   const result = (toolUseId, content, isError = false) => ({
     type: 'tool_result', tool_use_id: toolUseId, content: typeof content === 'string' ? content : compact(content), ...(isError ? { is_error: true } : {}),
