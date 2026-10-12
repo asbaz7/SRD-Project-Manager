@@ -100,8 +100,16 @@ test('work: non-technical staff see their unit\'s, technical staff run it, chose
   // and work they are added to.
   assert.ok((await call('GET', '/work', T.tech2)).body.items.some((x) => x.id === w.id));
   assert.ok(!(await call('GET', '/work', T.clerk)).body.items.some((x) => x.id === w.id));
+  // Managers (office is one) also see all ongoing work.
+  assert.equal((await call('GET', `/work/${w.id}`, T.office)).status, 200);
+  assert.ok((await call('GET', '/dashboard', T.office)).body.work.some((x) => x.id === w.id));
+  await db.query("update users set role = 'staff' where id = $1", [U.office]);
   assert.equal((await call('GET', `/work/${w.id}`, T.office)).status, 404);
   assert.ok(!(await call('GET', '/dashboard', T.office)).body.work.some((x) => x.id === w.id));
+  await db.query("update users set role = 'manager' where id = $1", [U.office]);
+  await db.query("update work_orders set status = 'completed' where id = $1", [w.id]);
+  assert.equal((await call('GET', `/work/${w.id}`, T.office)).status, 404, 'finished work: back to their unit only');
+  await db.query("update work_orders set status = 'planned' where id = $1", [w.id]);
   const admin = "(select id from units where name = 'Administration and Support Service Unit')";
   await db.query(`update users set unit_id = ${admin} where id = $1`, [U.office]);
   await db.query(`update work_orders set unit_id = ${admin} where id = $1`, [w.id]);

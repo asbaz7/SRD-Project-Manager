@@ -96,13 +96,14 @@ const SELECT = `
     left join atolls da on da.id = di.atoll_id`;
 
 // SQL condition: the user may see work order w. Technical staff, the
-// General Manager and administrators see all work; others see their unit's
-// (and, for a head, the units they head), work assigned to them or that they
-// logged, and work they were added to. The user's id is $n.
+// General Manager and administrators see all work; managers also see all
+// ongoing work; others see their unit's (and, for a head, the units they
+// head), work assigned to them or that they logged, and work they were added
+// to. The user's id is $n.
 export function workVisible(user, n) {
   if (user.role === 'admin' || user.technical || user.generalManager) return { sql: 'true', values: [] };
   return {
-    sql: `(w.unit_id = (select unit_id from users where id = $${n})
+    sql: `(${user.role === 'manager' ? "w.status not in ('completed', 'cancelled') or " : ''}w.unit_id = (select unit_id from users where id = $${n})
            or w.unit_id in (select id from units where head_user_id = $${n})
            or w.assigned_user_id = $${n} or w.created_by = $${n}
            or exists (select 1 from work_commenters c where c.work_id = w.id and c.user_id = $${n}))`,
