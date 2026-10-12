@@ -11,7 +11,7 @@
 import { randomBytes } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { matchIsland } from './reportImport.js';
+import { ATOLL_NAMES, matchIsland } from './reportImport.js';
 
 const MAX_STEPS = 8;
 // A conversation starts afresh after this long without a message, or once it
@@ -19,7 +19,7 @@ const MAX_STEPS = 8;
 const QUIET_HOURS = 3;
 const MAX_MESSAGES = 60;
 const PENDING_TTL_MS = 60 * 60 * 1000;
-const RESULT_LIMIT = 15000;
+const RESULT_LIMIT = 40000;
 
 const ASSET_LABELS = {
   genset: 'Genset', solar_inverter: 'Solar inverter', battery: 'Battery', transformer: 'Transformer',
@@ -54,6 +54,7 @@ Style: this is a chat on a phone. Answer in a few short lines with the answer fi
 
 // ---- Tools ------------------------------------------------------------------
 const id = z.string().uuid();
+const atoll = z.string().max(40).optional().describe('Atoll code or name, e.g. "Dh" or "Dhaalu"');
 const workId = z.number().int().positive().describe('The number of the work order: 12 for WO-0012');
 
 function query(params) {
@@ -86,6 +87,22 @@ function buildTools(db) {
     return `${i.atoll_code}. ${i.name}`;
   };
   const get = (asUser, user, path) => asUser(user.id, 'GET', path).then((r) => check(r));
+  // "Dh", "Dhaalu", "dh atoll" → the atoll's id.
+  const atollId = async (text) => {
+    if (!text) return undefined;
+    const letters = (v) => String(v || '').toUpperCase().replace(/ATOLL/g, '').replace(/[^A-Z]/g, '');
+    const key = letters(text);
+    const list = (await db.query('select id, code, name from atolls order by code')).rows;
+    const a = list.find((x) => letters(x.code) === key || letters(x.name) === key || x.code === ATOLL_NAMES[key]);
+    if (!a) throw new ToolError(`No atoll "${text}". Atolls: ${list.map((x) => `${x.code} (${x.name})`).join(', ')}`);
+    return a.id;
+  };
+  // A page of results with the total, so Claude knows when it hasn't seen everything.
+  const listed = (page, slim = (x) => x) => {
+    const items = (page.items || page).map(slim);
+    const total = page.total ?? items.length;
+    return { total, shown: items.length, ...(total > items.length ? { more: 'Not all shown: narrow it by island, atoll, service or status' } : {}), items };
+  };
 
   return {
     // -- Look things up
@@ -111,13 +128,26 @@ function buildTools(db) {
       description: 'Gensets across the region (or one island) with capacity, model, latest condition report, running hours and service due dates. Filter to find e.g. all faults or overdue overhauls.',
       schema: z.object({
         island_id: id.optional(),
+        atoll,
         condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults', 'retired']).optional()
           .describe('faults = minor, major or not running'),
         flag: z.enum(['overhaul', 'alternator', 'work', 'stale']).optional()
           .describe('overhaul / alternator = service due; work = has open work; stale = report out of date'),
         q: z.string().max(100).optional().describe('Text search: tag, model, serial, island or fault'),
       }),
-      run: (user, input, asUser) => get(asUser, user, `/engines${query(input)}`),
+      run: async (user, { atoll: a, ...input }, asUser) => {
+        const d = await get(asUser, user, `/engines${query({ ...input, atoll_id: await atollId(a) })}`);
+        // One line's worth per genset: get_asset has the rest.
+        return { today: d.today, summary: d.summary, engines: d.engines.map((e) => ({
+          asset_id: e.id, genset: `${e.atoll_code}. ${e.island_name} ${e.tag}`, model: e.make_model, kw: e.rated_capacity,
+          operating_kw: e.operating_capacity !== e.rated_capacity ? e.operating_capacity : undefined, status: e.status,
+          condition: e.condition, report_month: e.report_month, report_stale: e.report_stale || undefined,
+          fault: (e.condition_source === 'status' ? e.condition_note : e.fault || e.status_text)?.slice(0, 120),
+          total_hours: e.total_hours, hours_to_overhaul: e.hours_to_overhaul, overhaul_due: e.overhaul_due || undefined,
+          last_overhaul_on: e.last_overhaul_on, alt_service_due: e.alt_service_due || undefined, next_alt_service: e.next_alt_service_due,
+          open_work: e.open_work.map((w) => `WO-${String(w.id).padStart(4, '0')} ${w.title} (${w.status})`),
+        })) };
+      },
     },
     get_asset: {
       description: 'One asset (genset, RO unit, pump...) in full, with its status history, maintenance and work.',
@@ -125,17 +155,25 @@ function buildTools(db) {
       run: (user, { asset_id }, asUser) => get(asUser, user, `/assets/${asset_id}`),
     },
     list_work: {
-      description: 'Work orders, ongoing by default, newest first.',
+      description: 'Work orders, ongoing by default, most active first. Each item is a summary: use get_work for the full description and all updates.',
       schema: z.object({
         status: z.enum(['open', 'all', ...WORK_STATES]).optional().describe('open (default) = not completed or cancelled'),
         island_id: id.optional(),
+        atoll,
         asset_id: id.optional(),
         service: z.enum(SERVICES).optional(),
         assignee: z.literal('me').optional().describe('Only work assigned to the person asking'),
         unit: z.literal('mine').optional().describe("Only work assigned to the asking person's unit"),
         q: z.string().max(100).optional(),
       }),
-      run: (user, input, asUser) => get(asUser, user, `/work${query({ ...input, limit: 30 })}`),
+      run: async (user, { atoll: a, ...input }, asUser) => listed(
+        await get(asUser, user, `/work${query({ ...input, atoll_id: await atollId(a), limit: 100 })}`),
+        (w) => ({
+          ref: w.ref, island: `${w.atoll_code}. ${w.island_name}`, title: w.title, status: w.status, service: w.service, kind: w.kind,
+          asset: w.asset_tag && `${w.asset_kind} ${w.asset_tag}`, unit: w.unit_name, assigned: [w.assigned_user_name, w.assigned_to].filter(Boolean).join(' · '),
+          target_on: w.target_on, overdue: w.overdue || undefined, fault_ref: w.external_ref,
+          last_update: w.last_update && w.last_update.slice(0, 160), last_update_at: w.last_update_at && String(w.last_update_at).slice(0, 10),
+        })),
     },
     get_work: {
       description: 'One work order in full, with all its updates.',
@@ -147,10 +185,11 @@ function buildTools(db) {
       schema: z.object({
         status: z.enum(['open', 'resolved', 'closed']).optional(),
         island_id: id.optional(),
+        atoll,
         service: z.enum(SERVICES).optional(),
         severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
       }),
-      run: (user, input, asUser) => get(asUser, user, `/incidents${query({ ...input, limit: 30 })}`),
+      run: async (user, { atoll: a, ...input }, asUser) => listed(await get(asUser, user, `/incidents${query({ ...input, atoll_id: await atollId(a), limit: 50 })}`)),
     },
 
     // -- Changes: describe() says what will be written; run() writes it once confirmed.
