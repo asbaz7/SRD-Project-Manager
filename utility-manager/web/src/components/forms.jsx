@@ -15,7 +15,7 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
   const { submit, busy, error } = useSubmit(async () => {
     const body = {
       service: f.service, kind: f.kind, name: f.name,
-      fuel_capacity_l: numOrNull(f.fuel_capacity_l), water_capacity_m3: numOrNull(f.water_capacity_m3),
+      water_capacity_m3: numOrNull(f.water_capacity_m3),
       commissioned_on: strOrNull(f.commissioned_on || ''), notes: f.notes || null,
       ...(f.service !== 'electricity' ? {
         handover_on: strOrNull(f.handover_on || ''), licence_type: f.licence_type || null, licence_issued_on: strOrNull(f.licence_issued_on || ''),
@@ -40,7 +40,6 @@ export function FacilityForm({ islandId, facility, onClose, onSaved }) {
         <Field label="Name" wide><input required value={f.name} onChange={set('name')} placeholder="e.g. Maafushi RO Plant" /></Field>
         <Field label="Service"><Select value={f.service} onChange={set('service')} options={Object.entries(SERVICES).map(([k, s]) => [k, s.label])} /></Field>
         <Field label="Type"><Select value={f.kind} onChange={set('kind')} options={FACILITY_KINDS} /></Field>
-        {f.service === 'electricity' && <Field label="Fuel capacity (L)"><input type="number" min="0" step="any" value={f.fuel_capacity_l ?? ''} onChange={set('fuel_capacity_l')} /></Field>}
         {f.service === 'water' && <Field label="Water storage capacity (m³)"><input type="number" min="0" step="any" value={f.water_capacity_m3 ?? ''} onChange={set('water_capacity_m3')} /></Field>}
         {f.service !== 'electricity' && <>
           <Field label="Handed over"><input type="date" value={f.handover_on?.slice(0, 10) ?? ''} onChange={set('handover_on')} /></Field>

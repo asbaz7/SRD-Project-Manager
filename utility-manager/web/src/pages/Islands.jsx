@@ -107,9 +107,8 @@ function IslandCard({ i, technical }) {
       <span className="small">{i.running_count} of {i.genset_count} running{i.no_report_count > 0 ? ` · ${i.no_report_count} no report` : ''}</span>
       <span className="kw">{power(Number(i.installed_kw))}</span>
     </div> : <div className="gensets muted small">No gensets recorded</div>)}
-    {(flags.length > 0 || (technical && i.fuel_capacity_l)) && <div className="flags">
+    {flags.length > 0 && <div className="flags">
       {flags.map(([tone, text]) => <span key={text} className={`flag ${tone}`}>{text}</span>)}
-      {technical && i.fuel_capacity_l && <span className="flag">⛽ {num(i.fuel_capacity_l)} L</span>}
     </div>}
   </Link>;
 }

@@ -19,7 +19,6 @@ const facilityBody = z.object({
   service,
   kind: z.enum(FACILITY_KINDS),
   name: text(150),
-  fuel_capacity_l: optNumber,
   water_capacity_m3: optNumber,
   commissioned_on: z.iso.date().nullish(),
   handover_on: z.iso.date().nullish(),
@@ -33,7 +32,7 @@ const facilityBody = z.object({
   notes: optText(),
   active: z.boolean().optional(),
 });
-const FACILITY_COLS = ['service', 'kind', 'name', 'fuel_capacity_l', 'water_capacity_m3', 'commissioned_on', 'handover_on',
+const FACILITY_COLS = ['service', 'kind', 'name', 'water_capacity_m3', 'commissioned_on', 'handover_on',
   'licence_type', 'licence_issued_on', 'licence_expires_on', 'licence_status', 'reports_from', 'notes', 'active'];
 
 const assetBody = z.object({

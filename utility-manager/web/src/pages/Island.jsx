@@ -35,8 +35,6 @@ export default function Island() {
           <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} />
           <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
           <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
-          <Stat label="Fuel capacity" value={island.fuel_capacity_l ? withUnit(island.fuel_capacity_l, 'L') : 'Not set'}
-            sub={!island.fuel_capacity_l && manage ? 'Set it with Edit on the powerhouse' : ''} />
         </>}
         {island.technical && (only === 'water' || only === 'sewerage') && (() => {
           const systems = facilities.flatMap((f) => f.assets.filter((x) => x.active && x.status !== 'decommissioned'));
@@ -73,7 +71,6 @@ export default function Island() {
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'facility', facility: f })}>Edit</button>}
           </>}>
           {(f.service === 'electricity' || f.water_capacity_m3) && <p className="muted small">
-            {f.service === 'electricity' && (f.fuel_capacity_l ? `Fuel capacity ${num(f.fuel_capacity_l)} L` : 'Fuel capacity not set')}
             {f.water_capacity_m3 && `Water storage ${num(f.water_capacity_m3)} m³`}
             {f.kind === 'powerhouse' && (() => {
               const r = island.reports.find((x) => x.facility_id === f.id);

@@ -29,8 +29,6 @@ const islandSummary = (vis, seen) => `
          coalesce(sum(s.rated_capacity) filter (where s.kind = 'genset' and s.status <> 'decommissioned'), 0) as installed_kw,
          (select count(*) from incidents x where x.island_id = i.id and x.status = 'open') as open_incidents,
          (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold') and ${vis.sql}) as active_projects,
-         (select sum(fc.fuel_capacity_l) from facilities fc
-           where fc.island_id = i.id and fc.active and fc.service = 'electricity') as fuel_capacity_l,
          (select count(*) from work_orders w where w.island_id = i.id and w.status not in ('completed', 'cancelled') and ${seen.sql}) as open_work,
          (select count(*) from facilities fc where fc.island_id = i.id and fc.active and fc.service <> 'electricity'
              and (fc.licence_status ~* 'expired' or fc.licence_expires_on < current_date)) as licences_expired

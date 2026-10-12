@@ -123,7 +123,6 @@ describe('asset register', () => {
     assert.equal(assets.total, 140);
     assert.equal(maafushi.genset_count, 8);
     assert.equal(maafushi.installed_kw, 9680);
-    assert.equal(maafushi.fuel_capacity_l, 147302, 'fuel capacity from the old sheet');
     assert.equal(maafushi.genset_states.length, 8, 'one state per genset, for the island cards');
     assert.ok('open_work' in maafushi && 'licences_expired' in maafushi);
   });
@@ -230,13 +229,6 @@ describe('scope of the system', () => {
     assert.equal((await call('POST', '/readings/import', { token: admin, body: { csv: 'a' } })).status, 404);
   });
 
-  test('fuel capacity shows per island and in total', async () => {
-    const island = (await call('GET', `/islands/${maafushi.id}`, { token: admin })).body;
-    assert.equal(island.fuel_capacity_l, 147302);
-    const dash = (await call('GET', '/dashboard', { token: admin })).body;
-    assert.equal(dash.fuel_storage.capacity_l, 147302);
-    assert.equal(dash.fuel_storage.not_set, 42);
-  });
 });
 
 describe('operations', () => {

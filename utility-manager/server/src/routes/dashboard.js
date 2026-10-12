@@ -20,7 +20,7 @@ export default async function dashboardRoutes(app) {
     const skip = Promise.resolve({ rows: [] });
     const today = await mvToday(db, config.timezone);
     const expected = expectedMonth(today);
-    const [services, incidents, projects, down, openIncidents, activeProjects, fuel, engines, reports, work, open] = await Promise.all([
+    const [services, incidents, projects, down, openIncidents, activeProjects, engines, reports, work, open] = await Promise.all([
       // Facility and asset counts per service (technical staff only, as are
       // assets down, fuel storage, engine condition and reports below).
       !technical ? skip : db.query(`
@@ -83,12 +83,6 @@ export default async function dashboardRoutes(app) {
          where p.status in ('planned', 'ongoing', 'on_hold') and ($1::uuid is null or i.atoll_id = $1) and ${vis.sql}
          order by (p.target_date < current_date) desc nulls last, p.target_date nulls last, p.id
          limit 20`, [atoll, ...vis.values]),
-      !technical ? skip : db.query(`
-        select coalesce(sum(f.fuel_capacity_l), 0) as capacity_l,
-               count(*) filter (where f.fuel_capacity_l is null) as not_set
-          from facilities f join islands i on i.id = f.island_id and i.active
-         where f.active and f.service = 'electricity' and f.kind = 'powerhouse'
-           and ($1::uuid is null or i.atoll_id = $1)`, [atoll]),
       // Engine condition from the latest reports.
       !technical ? skip : db.query(`
         select count(*) as total,
@@ -166,7 +160,6 @@ export default async function dashboardRoutes(app) {
         list: openIncidents.rows,
       },
       projects: { ...projects.rows[0], list: activeProjects.rows },
-      fuel_storage: technical ? fuel.rows[0] : null,
       engines: technical ? { ...engines.rows[0], ...(await dueCounts(db, today, atoll)) } : null,
       reports: technical ? {
         expected_month: expected,

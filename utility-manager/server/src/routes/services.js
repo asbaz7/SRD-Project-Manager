@@ -42,7 +42,7 @@ export default async function serviceRoutes(app) {
          where s.active and s.status <> 'decommissioned' and f.service = $1 and s.rated_capacity is not null and ${scope}
          group by s.capacity_unit order by sum(s.rated_capacity) desc`, [svc, atoll]),
       db.query(`
-        select f.id, f.name, f.kind, f.fuel_capacity_l, f.water_capacity_m3, i.id as island_id, i.name as island_name,
+        select f.id, f.name, f.kind, f.water_capacity_m3, i.id as island_id, i.name as island_name,
                f.licence_type, f.licence_expires_on, f.licence_status, f.licence_issued_on,
                coalesce(sum(s.rated_capacity) filter (where s.kind = 'ro_unit'), 0) as ro_tpd,
                coalesce(sum(s.rated_capacity) filter (where s.kind = 'tank' and s.tag like 'ST-%'), 0) as storage_m3,
