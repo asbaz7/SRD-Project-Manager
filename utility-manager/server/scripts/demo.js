@@ -66,7 +66,6 @@ async function build() {
                          from facilities f join islands i on i.id = f.island_id where i.name = $1 and f.service = 'sewerage'`, [island, tag]);
       }
     }
-    await t.query("update facilities set fuel_capacity_l = 50000 + floor(random() * 10) * 10000 where service = 'electricity'");
 
     // Asset status from this morning's round.
     await t.query(`
