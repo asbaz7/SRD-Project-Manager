@@ -47,14 +47,15 @@ How to work:
 - Look things up with the tools. Never guess figures, names, statuses or dates. If a tool returns an error or nothing, say so plainly.
 - Islands are written with their atoll code, like "ADh. Fenfushi" or "K. Maafushi". Use find_island to turn a name into an id; if several islands match, ask which one.
 - Gensets are called "Genset 2", "G2" or "engine 2". Each powerhouse files a monthly condition report per genset (condition, running hours, faults); get_island and list_engines include the latest one.
-- Work orders are numbered WO-0001, WO-0002 and so on; the number is the work_id.
+- Work orders (WO-0001, WO-0002…; the number is the work_id) are jobs on equipment: repairs, overhauls, services, genset moves. Use list_work / get_work for them.
+- Projects (PRJ-0001, PRJ-0002…; the number is the project_id) are separate from work orders: larger efforts such as installations, studies or the Powerhouse Takeover, with a progress % and often a task list (codes like TKO-001, priorities P1-P4). When someone asks about projects, use list_projects / get_project, never the work tools; when they ask about works, jobs or repairs, use list_work.
 - To record anything (a genset's status, an update on work, an interruption, new work), call the matching tool. The person is then shown exactly what will be written and taps ✅ or ❌, so don't ask "shall I?" first. Do ask first when it's unclear which island, genset or work order they mean.
 - Only propose one change at a time.
 - The person's access is enforced by the system: if a tool says something isn't allowed, tell them it needs other access or the website.
 - If the tools can't do what's asked, say so and point them to the website.
 - Messages may mix English and Dhivehi; answer in English.
 
-Style: this is a chat on a phone. Answer in a few short lines with the answer first and no preamble. Plain text: **bold** sparingly for names and key figures, short "•" lists are fine, no tables or headings. Refer to work by its WO number. Genset power is in kW.`;
+Style: this is a chat on a phone. Answer in a few short lines with the answer first and no preamble. Plain text: **bold** sparingly for names and key figures, short "•" lists are fine, no tables or headings. Refer to work by its WO number and projects by their PRJ number. Genset power is in kW.`;
 
 // ---- Tools ------------------------------------------------------------------
 const id = z.string().uuid();
@@ -183,6 +184,48 @@ function buildTools(db) {
       description: 'One work order in full, with all its updates.',
       schema: z.object({ work_id: workId }),
       run: (user, { work_id }, asUser) => get(asUser, user, `/work/${work_id}`),
+    },
+    list_projects: {
+      description: 'Projects (not work orders), active ones by default: planned, ongoing or on hold. Each item is a summary: use get_project for its tasks and updates.',
+      schema: z.object({
+        status: z.enum(['active', 'planned', 'ongoing', 'on_hold', 'completed', 'cancelled']).optional().describe('active (default) = planned, ongoing or on hold'),
+        island_id: id.optional(),
+        atoll,
+        q: z.string().max(100).optional().describe('Text search: title, contractor or island'),
+      }),
+      run: async (user, { atoll: a, status, ...input }, asUser) => listed(
+        await get(asUser, user, `/projects${query({ ...input, status: status || 'active', atoll_id: await atollId(a), limit: 100 })}`),
+        (p) => ({
+          ref: p.ref, project_id: p.id, title: p.title, where: p.island_name ? `${p.atoll_code}. ${p.island_name}` : 'Regional',
+          type: p.project_type, status: p.status, progress_pct: Number(p.progress_pct), unit: p.unit_name, owner: p.owner_name,
+          start_date: p.start_date, target_date: p.target_date, overdue: p.overdue || undefined,
+          last_update_at: p.last_update_at && String(p.last_update_at).slice(0, 10),
+        })),
+    },
+    get_project: {
+      description: 'One project in full: details, its tasks (for a tracker such as the Powerhouse Takeover: code, priority, status, progress, due date, who and remarks), the latest updates, and per-site access and checklist progress.',
+      schema: z.object({ project_id: z.number().int().positive().describe('The number of the project: 13 for PRJ-0013') }),
+      run: async (user, { project_id }, asUser) => {
+        const p = await get(asUser, user, `/projects/${project_id}`);
+        const open = (t) => !['Completed', 'Cancelled'].includes(t.status);
+        return {
+          ref: p.ref, title: p.title, status: p.status, progress_pct: Number(p.progress_pct), where: p.island_name ? `${p.atoll_code}. ${p.island_name}` : 'Regional',
+          type: p.project_type, unit: p.unit_name, owner: p.owner_name, contractor: p.contractor, budget: p.budget,
+          start_date: p.start_date, target_date: p.target_date, overdue: p.overdue || undefined, scope: p.description?.slice(0, 600),
+          can_edit: p.can_edit,
+          tasks: p.tasks.map((t) => (p.tracker ? {
+            code: t.code, task: t.name, priority: t.priority && `P${t.priority}`, status: t.status, progress: Number(t.progress),
+            dept: t.responsible_dept, site: t.island_name && `${t.atoll_code}. ${t.island_name}`,
+            assigned: [t.assigned_user_name, t.assigned_to].filter(Boolean).join(' · ') || undefined,
+            due: t.due_date, overdue: (t.overdue && open(t)) || undefined, completed: t.completed_date, remarks: t.remarks?.slice(0, 160),
+          } : { task: t.name, progress: Number(t.progress) })),
+          sites: p.sites?.length ? p.sites.map((x) => ({
+            site: `${x.atoll_code}. ${x.island_name}`, access: `${x.access_granted}/${x.access_total} granted`,
+            checklist: `${x.checklist_checked}/${x.checklist_total} checked`, not_available: x.checklist_missing || undefined,
+          })) : undefined,
+          updates: p.updates.slice(0, 5).map((u) => ({ at: String(u.created_at).slice(0, 10), by: u.created_by_name, text: u.body.slice(0, 300) })),
+        };
+      },
     },
     list_incidents: {
       description: 'Interruptions (outages, breakdowns, safety...), newest first.',

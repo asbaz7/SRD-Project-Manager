@@ -389,6 +389,29 @@ test('plain messages go to the assistant, which looks things up as the person as
   assert.equal(claudeScript.length, 0);
 });
 
+test('the assistant looks up projects with the project tools, not work', async () => {
+  await db.query("insert into projects (title, status, visibility, project_type) values ('Solar extension', 'ongoing', 'everyone', 'electrical')");
+  claudeScript = [
+    (body) => {
+      assert.ok(body.tools.some((t) => t.name === 'list_projects') && body.tools.some((t) => t.name === 'get_project'));
+      assert.match(body.system.map((b) => b.text).join(' '), /Projects \(PRJ-0001/);
+      return [toolUse('list_projects', {})];
+    },
+    (body) => {
+      const r = JSON.parse(lastToolResults(body)[0].content);
+      const p = r.items.find((x) => x.title === 'Solar extension');
+      assert.ok(p && /^PRJ-\d{4}$/.test(p.ref), JSON.stringify(r).slice(0, 200));
+      return [toolUse('get_project', { project_id: p.project_id })];
+    },
+    (body) => {
+      assert.match(lastToolResults(body)[0].content, /"title":"Solar extension"/);
+      return [{ type: 'text', text: 'One project.' }];
+    },
+  ];
+  await say(MANAGER_TG, 'what are the ongoing projects');
+  assert.equal(repliesTo(MANAGER_TG), 'One project.');
+});
+
 test('the assistant only writes after the person taps ✅', async () => {
   const g3 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '3'`, [maafushi.id])).rows[0];
   const statusOf = async () => (await db.query('select status from assets where id = $1', [g3.id])).rows[0].status;
