@@ -81,7 +81,8 @@ export function Tracker({ project: p, reload }) {
       <Card title="By responsible department">{depts.length ? grid(depts.map((d) => [d, d]), 'responsible_dept') : <Empty>No departments set.</Empty>}</Card>
     </div>
 
-    <Card title={`Tasks (${shown.length}${shown.length !== tasks.length ? ` of ${tasks.length}` : ''})`}>
+    <Card title={`Tasks (${shown.length}${shown.length !== tasks.length ? ` of ${tasks.length}` : ''})`}
+      actions={p.can_edit && <button className="btn small primary" onClick={() => setOpen('new')}>+ Add task</button>}>
       <div className="filters">
         <input type="search" placeholder="Search tasks…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search tasks" />
         <Select value={filters.status} onChange={(v) => setFilter('status', v)} placeholder="All statuses" options={Object.keys(TASK_STATUSES).map((s) => [s, s])} aria-label="Status" />
@@ -96,7 +97,7 @@ export function Tracker({ project: p, reload }) {
         </div>
       </div>
       {shown.length === 0 ? <Empty>No tasks match these filters.</Empty> : <div className="table-scroll"><table className="tracker-tasks">
-        <thead><tr><th>Task</th><th className="hide-sm">Responsible</th><th className="hide-sm">Assigned</th><th>Due</th><th>Status</th><th className="hide-sm">Progress</th></tr></thead>
+        <thead><tr><th>Task</th><th className="hide-sm">Responsible</th><th className="hide-sm">Assigned</th><th>Due</th><th>Status</th><th className="hide-sm">Progress</th>{p.can_edit && <th />}</tr></thead>
         <tbody>{shown.map((t) => <tr key={t.id} className={`row-link${t.priority === 1 && OPEN(t) ? ' p1' : ''}`} onClick={() => setOpen(t)}>
           <td className="wrap"><div className="task-title"><PriorityBadge value={t.priority} /><span className="muted small">{t.code}</span></div>
             <button className="link strong" onClick={(e) => { e.stopPropagation(); setOpen(t); }}>{t.name}</button>
@@ -107,15 +108,18 @@ export function Tracker({ project: p, reload }) {
           <td className={`small nowrap ${t.overdue ? 'bad' : ''}`}>{t.due_date ? date(t.due_date) : <span className="muted">—</span>}{t.overdue && <><br />overdue</>}</td>
           <td><TaskStatus value={t.status} />{t.completed_date && <><br /><small className="muted">{date(t.completed_date)}</small></>}</td>
           <td className="hide-sm"><Progress value={t.progress} /></td>
+          {p.can_edit && <td><button className="btn small" onClick={(e) => { e.stopPropagation(); setOpen(t); }}>Edit</button></td>}
         </tr>)}</tbody>
       </table></div>}
     </Card>
-    {open && <TaskForm project={p} task={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); }} />}
+    {open && <TaskForm project={p} task={open === 'new' ? null : open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); }} />}
   </>;
 }
 
-function TaskForm({ project: p, task: t, onClose, onSaved }) {
+// Edit a task, or add one (task null). Deleting asks first.
+function TaskForm({ project: p, task, onClose, onSaved }) {
   const writable = p.can_edit;
+  const t = task || { name: '', status: 'Not Started', progress: 0, priority: null, unit_id: p.unit_id };
   const islands = useApi(writable ? '/islands' : null);
   const people = useApi(writable ? '/users/directory' : null);
   const units = useApi(writable ? '/units' : null);
@@ -136,10 +140,16 @@ function TaskForm({ project: p, task: t, onClose, onSaved }) {
     // The server dates a task completed today unless a date is given.
     if (f.completed_date !== (t.completed_date || '')) body.completed_date = f.completed_date || null;
     if (f.status === 'Completed' && statusOf(t) !== 'Completed' && Number(f.progress) === Number(t.progress)) delete body.progress;
-    await api(`/projects/${p.id}/tasks/${t.id}`, { method: 'PATCH', body });
+    if (task) await api(`/projects/${p.id}/tasks/${t.id}`, { method: 'PATCH', body });
+    else await api(`/projects/${p.id}/tasks`, { method: 'POST', body });
     onSaved();
   });
-  const title = [t.code, t.priority && `P${t.priority} · ${PRIORITIES[t.priority]}`].filter(Boolean).join(' · ') || 'Task';
+  const remove = useSubmit(async () => {
+    if (!window.confirm(`Delete ${t.code || 'this task'}: "${t.name}"? This can't be undone (the audit trail keeps a record).`)) return;
+    await api(`/projects/${p.id}/tasks/${t.id}`, { method: 'DELETE' });
+    onSaved();
+  });
+  const title = task ? [t.code, t.priority && `P${t.priority} · ${PRIORITIES[t.priority]}`].filter(Boolean).join(' · ') || 'Task' : 'Add task';
 
   if (!writable) {
     return <Modal title={t.code || 'Task'} onClose={onClose}>
@@ -159,7 +169,7 @@ function TaskForm({ project: p, task: t, onClose, onSaved }) {
   }
   return <Modal title={title} onClose={onClose}>
     <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      <ErrorBox error={error} />
+      <ErrorBox error={error || remove.error} />
       <Field label="Task" wide><textarea required rows="2" maxLength="300" value={f.name} onChange={set('name')} /></Field>
       <Field label="Action to be taken" wide><textarea rows="2" value={f.action} onChange={set('action')} /></Field>
       <Field label="Status"><Select value={f.status} onChange={set('status')} options={Object.keys(TASK_STATUSES).map((s) => [s, s])} /></Field>
@@ -177,8 +187,10 @@ function TaskForm({ project: p, task: t, onClose, onSaved }) {
       {f.status === 'Completed' && <Field label="Completed on" hint={t.completed_date ? undefined : 'Today, unless you pick a date'}>
         <input type="date" value={f.completed_date} onChange={set('completed_date')} /></Field>}
       <Field label="Remarks" wide><textarea rows="3" value={f.remarks} onChange={set('remarks')} /></Field>
-      <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={busy}>Save</button></div>
+      <div className="form-actions">
+        {task && <button type="button" className="btn danger" disabled={remove.busy} onClick={remove.submit} style={{ marginRight: 'auto' }}>Delete task</button>}
+        <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={busy}>{task ? 'Save' : 'Add task'}</button></div>
     </form>
   </Modal>;
 }

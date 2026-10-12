@@ -378,6 +378,16 @@ describe('powerhouse takeover tracker', () => {
     res = await call('PATCH', `/projects/${project.id}/tasks/${a.id}`, { token: admin, body: { status: 'On Hold' } });
     assert.equal(res.body.completed_date, null, 'leaving Completed clears the date');
     assert.equal((await call('PATCH', `/projects/${project.id}/tasks/${a.id}`, { token: admin, body: { status: 'Done' } })).status, 400);
+    // Tasks can be added (numbered after the last) and deleted.
+    res = await call('POST', `/projects/${project.id}/tasks`, { token: admin, body: { name: 'Hand over the store keys', priority: 1, responsible_dept: 'Store' } });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    assert.equal(res.body.code, 'TKO-027');
+    assert.equal(res.body.status, 'Not Started');
+    assert.equal(res.body.unit_name, 'Administration and Support Service Unit');
+    assert.equal((await call('POST', `/projects/${project.id}/tasks`, { token: clerk, body: { name: 'x' } })).status, 403);
+    assert.equal((await call('DELETE', `/projects/${project.id}/tasks/${res.body.id}`, { token: clerk })).status, 403);
+    assert.equal((await call('DELETE', `/projects/${project.id}/tasks/${res.body.id}`, { token: admin })).status, 200);
+    assert.equal((await call('GET', `/projects/${project.id}`, { token: admin })).body.tasks.length, 26);
     // The whole-list editor can't overwrite tracked tasks.
     res = await call('PATCH', `/projects/${project.id}`, { token: admin, body: { tasks: [{ name: 'x', progress: 0 }] } });
     assert.equal(res.status, 400);

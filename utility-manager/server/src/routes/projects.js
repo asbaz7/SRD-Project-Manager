@@ -380,6 +380,37 @@ export default async function projectRoutes(app) {
     return one((await db.query(`${TASK_SELECT} where t.id = $1`, [itemId])).rows);
   });
 
+  // A new task: numbered after the project's last code (TKO-026 → TKO-027).
+  app.post('/projects/:id/tasks', async (req, reply) => {
+    const { id: projectId } = parse(serialParam, req.params);
+    const b = sent(trackerTask.required({ name: true }), req.body);
+    await assertAccess(db, req.user, projectId, 'edit');
+    const { rows: [last] } = await db.query(`
+      select max(position) as position, (select code from project_tasks where project_id = $1 and code ~ '^[A-Za-z]+-[0-9]+$'
+                                           order by substring(code from '[0-9]+$')::int desc limit 1) as code,
+             (select unit_id from projects where id = $1) as unit_id
+        from project_tasks where project_id = $1`, [projectId]);
+    const m = /^([A-Za-z]+-)(\d+)$/.exec(last.code || '');
+    const code = m ? `${m[1]}${String(Number(m[2]) + 1).padStart(m[2].length, '0')}` : null;
+    const row = { status: 'Not Started', progress: 0, unit_id: last.unit_id, ...b };
+    if (row.status === 'Completed') { row.progress = 100; row.completed_date ??= (await db.query(`select to_char(${TODAY}, 'YYYY-MM-DD') as d`)).rows[0].d; }
+    const cols = TASK_COLS.filter((k) => row[k] !== undefined);
+    const { rows: [{ id: taskId }] } = await db.tx(req.user.id, (t) => t.query(
+      `insert into project_tasks (project_id, position, code, ${cols.join(', ')})
+       values ($1, $2, $3, ${cols.map((_, i) => `$${i + 4}`).join(', ')}) returning id`,
+      [projectId, (last.position || 0) + 1, code, ...cols.map((k) => row[k])]));
+    reply.code(201);
+    return one((await db.query(`${TASK_SELECT} where t.id = $1`, [taskId])).rows);
+  });
+
+  app.delete('/projects/:id/tasks/:itemId', async (req) => {
+    const { id: projectId, itemId } = parse(itemParams, req.params);
+    await assertAccess(db, req.user, projectId, 'edit');
+    const { rowCount } = await db.tx(req.user.id, (t) => t.query('delete from project_tasks where id = $1 and project_id = $2', [itemId, projectId]));
+    if (!rowCount) throw notFound('Task');
+    return { ok: true };
+  });
+
   // One site's access list and checklists.
   app.get('/projects/:id/sites/:islandId', async (req) => {
     const { id: projectId, islandId } = parse(z.object({ id: z.coerce.number().int().positive(), islandId: id }), req.params);
