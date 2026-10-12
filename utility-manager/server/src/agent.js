@@ -15,8 +15,12 @@ import { ATOLL_NAMES, matchIsland } from './reportImport.js';
 
 const MAX_STEPS = 8;
 // A conversation starts afresh after this long without a message, or once it
-// grows long; history is only ever appended to, never trimmed.
+// grows long. Look-up results are kept only for the question they answered:
+// once it's answered they shrink to a stub (see save), or every later
+// question would resend them all (one chat reached 111,000 characters and
+// the API refused it).
 const QUIET_HOURS = 3;
+const KEEP_RESULT_CHARS = 300;
 const MAX_MESSAGES = 60;
 const PENDING_TTL_MS = 60 * 60 * 1000;
 const RESULT_LIMIT = 40000;
@@ -301,13 +305,18 @@ export function createAgent({ db, config, log }) {
          from telegram_conversations where chat_id = $1 and user_id = $2`, [chatId, userId, QUIET_HOURS]);
     const row = rows[0];
     if (!row || row.stale || row.messages.length > MAX_MESSAGES) return { chatId, userId, messages: [], pending: null };
-    return { chatId, userId, messages: row.messages, pending: row.pending };
+    return { chatId, userId, messages: shrink(row.messages), pending: row.pending };
   }
 
+  const shrink = (messages) => messages.map((m) => (m.role !== 'user' || !Array.isArray(m.content) ? m : {
+    ...m,
+    content: m.content.map((b) => (b.type === 'tool_result' && typeof b.content === 'string' && b.content.length > KEEP_RESULT_CHARS
+      ? { ...b, content: `${b.content.slice(0, KEEP_RESULT_CHARS)}… (earlier result, shortened: look it up again for current figures)` } : b)),
+  }));
   const save = (c) => db.query(
     `insert into telegram_conversations (chat_id, user_id, messages, pending, updated_at) values ($1, $2, $3, $4, now())
      on conflict (chat_id, user_id) do update set messages = excluded.messages, pending = excluded.pending, updated_at = now()`,
-    [c.chatId, c.userId, JSON.stringify(c.messages), c.pending ? JSON.stringify(c.pending) : null]);
+    [c.chatId, c.userId, JSON.stringify(shrink(c.messages)), c.pending ? JSON.stringify(c.pending) : null]);
 
   const result = (toolUseId, content, isError = false) => ({
     type: 'tool_result', tool_use_id: toolUseId, content: typeof content === 'string' ? content : compact(content), ...(isError ? { is_error: true } : {}),

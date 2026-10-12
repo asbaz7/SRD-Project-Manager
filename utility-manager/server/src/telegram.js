@@ -483,8 +483,10 @@ export function createTelegram({ db, config, log }) {
         { text: '✅ Yes, save it', callback_data: `ag:${out.confirm.id}:y` }, { text: '❌ No', callback_data: `ag:${out.confirm.id}:n` },
       ]] } } : {});
     } catch (err) {
-      log.error({ err: { message: err.message, stack: err.stack } }, 'telegram assistant failed');
-      await reply('Sorry, I couldn\'t answer that just now. Please try again, or use a command (/help).');
+      log.error({ err: { message: err.message, status: err.status, stack: err.stack } }, 'telegram assistant failed');
+      await reply(err.status === 429 || err.status === 529
+        ? 'I\'m getting a lot of questions right now. Please ask again in a minute, or use a command (/help).'
+        : 'Sorry, I couldn\'t answer that just now. Please try again, or use a command (/help).');
     }
   }
 

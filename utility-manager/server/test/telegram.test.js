@@ -377,6 +377,9 @@ test('plain messages go to the assistant, which looks things up as the person as
   claudeScript = [(body) => {
     assert.equal(body.messages.length, 7);
     assert.equal(body.messages.at(-1).content.at(-1).text, 'and the work there?');
+    // The island looked up for the first question isn't resent in full.
+    assert.match(body.messages[4].content[0].content, /earlier result, shortened/);
+    assert.ok(body.messages[4].content[0].content.length < 450);
     return [{ type: 'text', text: 'No ongoing work.' }];
   }];
   await say(MANAGER_TG, 'and the work there?');
