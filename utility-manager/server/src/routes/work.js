@@ -95,6 +95,21 @@ const SELECT = `
     left join islands di on di.id = df.island_id
     left join atolls da on da.id = di.atoll_id`;
 
+// SQL condition: the user may see work order w. Technical staff, the
+// General Manager and administrators see all work; others see their unit's
+// (and, for a head, the units they head), work assigned to them or that they
+// logged, and work they were added to. The user's id is $n.
+export function workVisible(user, n) {
+  if (user.role === 'admin' || user.technical || user.generalManager) return { sql: 'true', values: [] };
+  return {
+    sql: `(w.unit_id = (select unit_id from users where id = $${n})
+           or w.unit_id in (select id from units where head_user_id = $${n})
+           or w.assigned_user_id = $${n} or w.created_by = $${n}
+           or exists (select 1 from work_commenters c where c.work_id = w.id and c.user_id = $${n}))`,
+    values: [user.id],
+  };
+}
+
 const listQuery = paging.extend({
   status: z.enum(['open', 'all', ...WORK_STATES]).default('open'),
   island_id: id.optional(),
@@ -218,7 +233,8 @@ export default async function workRoutes(app) {
 
   app.get('/work', async (req, reply) => {
     const q = parse(listQuery, req.query);
-    const w = new Where()
+    const vis = workVisible(req.user, 1);
+    const w = new Where(vis.values).raw(vis.sql)
       .add('(w.island_id = ? or df.island_id = ?)', q.island_id).add('i.atoll_id = ?', q.atoll_id).add('w.asset_id = ?', q.asset_id)
       .add('w.kind = ?', q.kind).add('w.service = ?', q.service)
       .add('(w.title ilike ? or w.description ilike ? or i.name ilike ? or w.assigned_to ilike ? or au.full_name ilike ?)', q.q && `%${q.q}%`)
@@ -244,7 +260,8 @@ export default async function workRoutes(app) {
 
   app.get('/work/:id', async (req) => {
     const { id: workId } = parse(serialParam, req.params);
-    const work = one((await db.query(`${SELECT} where w.id = $1`, [workId])).rows, 'Work');
+    const vis = workVisible(req.user, 2);
+    const work = one((await db.query(`${SELECT} where w.id = $1 and ${vis.sql}`, [workId, ...vis.values])).rows, 'Work');
     delete work.total_count;
     const access = await workAccess(req.user, workId);
     work.can_run = access.run;

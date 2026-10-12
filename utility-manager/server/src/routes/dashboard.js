@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { id, parse } from '../http.js';
 import { expectedMonth, isMissing, reportState } from '../reportImport.js';
 import { dueCounts, mvToday } from './engines.js';
+import { workVisible } from './work.js';
 import { projectVisible } from './projects.js';
 
 // Everything the overview page needs in one call. Optional atoll filter.
@@ -14,6 +15,8 @@ export default async function dashboardRoutes(app) {
 
     const technical = req.user.technical;
     const vis = projectVisible(req.user, 2);
+    // Work the user may see (non-technical staff: their unit's).
+    const seen = workVisible(req.user, 2);
     const skip = Promise.resolve({ rows: [] });
     const today = await mvToday(db, config.timezone);
     const expected = expectedMonth(today);
@@ -123,17 +126,17 @@ export default async function dashboardRoutes(app) {
           join islands i on i.id = w.island_id
           join atolls a on a.id = i.atoll_id
           left join assets s on s.id = w.asset_id
-         where w.status not in ('completed', 'cancelled') and ($1::uuid is null or i.atoll_id = $1)
+         where w.status not in ('completed', 'cancelled') and ($1::uuid is null or i.atoll_id = $1) and ${seen.sql}
          order by array_position(array['in_progress','dismantling','in_transit','installing','awaiting_parts','on_hold','planned'], w.status), w.target_on nulls last
-         limit 30`, [atoll]),
+         limit 30`, [atoll, ...seen.values]),
       // Open work and incidents per section, for the overview tiles.
       db.query(`
         select svc.service::text as service,
                (select count(*) from work_orders w join islands i on i.id = w.island_id
-                 where w.service = svc.service and w.status not in ('completed', 'cancelled') and ($1::uuid is null or i.atoll_id = $1)) as work,
+                 where w.service = svc.service and w.status not in ('completed', 'cancelled') and ($1::uuid is null or i.atoll_id = $1) and ${seen.sql}) as work,
                (select count(*) from incidents x join islands i on i.id = x.island_id
                  where x.service = svc.service and x.status = 'open' and ($1::uuid is null or i.atoll_id = $1)) as incidents
-          from unnest(enum_range(null::service_type)) as svc(service)`, [atoll]),
+          from unnest(enum_range(null::service_type)) as svc(service)`, [atoll, ...seen.values]),
     ]);
 
     const byService = Object.fromEntries(['electricity', 'water', 'sewerage'].map((s) => [s, {

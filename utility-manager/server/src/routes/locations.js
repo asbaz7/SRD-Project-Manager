@@ -3,6 +3,7 @@ import { assertIslandWrite, canWriteIsland, hasRole, requireRole } from '../auth
 import { forbidden } from '../errors.js';
 import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
 import { projectVisible } from './projects.js';
+import { workVisible } from './work.js';
 
 const atollBody = z.object({ code: text(10), name: text(100), active: z.boolean().optional() });
 const islandBody = z.object({
@@ -15,7 +16,7 @@ const islandBody = z.object({
 
 // Per-island rollup used by the atoll and island lists.
 // Counts only the projects the user may see (see projectVisible).
-const islandSummary = (vis) => `
+const islandSummary = (vis, seen) => `
   select i.id, i.name, i.population, i.notes, i.active, a.id as atoll_id, a.code as atoll_code, a.name as atoll_name,
          count(distinct f.id) filter (where f.active) as facility_count,
          coalesce(array_agg(distinct f.service::text) filter (where f.active), '{}') as services,
@@ -30,7 +31,7 @@ const islandSummary = (vis) => `
          (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold') and ${vis.sql}) as active_projects,
          (select sum(fc.fuel_capacity_l) from facilities fc
            where fc.island_id = i.id and fc.active and fc.service = 'electricity') as fuel_capacity_l,
-         (select count(*) from work_orders w where w.island_id = i.id and w.status not in ('completed', 'cancelled')) as open_work,
+         (select count(*) from work_orders w where w.island_id = i.id and w.status not in ('completed', 'cancelled') and ${seen.sql}) as open_work,
          (select count(*) from facilities fc where fc.island_id = i.id and fc.active and fc.service <> 'electricity'
              and (fc.licence_status ~* 'expired' or fc.licence_expires_on < current_date)) as licences_expired
     from islands i
@@ -80,14 +81,14 @@ export default async function locationRoutes(app) {
     if (q.atoll_id) { values.push(q.atoll_id); where.push(`i.atoll_id = $${values.length}`); }
     if (q.q) { values.push(`%${q.q}%`); where.push(`i.name ilike $${values.length}`); }
     const { rows } = await db.query(
-      `${islandSummary(vis)} where ${where.join(' and ')} group by i.id, a.id order by a.code, i.name`, values);
+      `${islandSummary(vis, workVisible(req.user, 1))} where ${where.join(' and ')} group by i.id, a.id order by a.code, i.name`, values);
     return rows;
   });
 
   app.get('/islands/:id', async (req) => {
     const { id: islandId } = parse(idParam, req.params);
     const vis = projectVisible(req.user, 2);
-    const island = one((await db.query(`${islandSummary(vis)} where i.id = $1 group by i.id, a.id`, [islandId, ...vis.values])).rows, 'Island');
+    const island = one((await db.query(`${islandSummary(vis, workVisible(req.user, 2))} where i.id = $1 group by i.id, a.id`, [islandId, ...vis.values])).rows, 'Island');
     const [{ rows: facilities }, { rows: assets }] = await Promise.all([
       db.query(`select f.* from facilities f where f.island_id = $1 order by f.active desc, f.service, f.name`, [islandId]),
       db.query(`select s.*, u.full_name as status_by_name,
@@ -116,8 +117,8 @@ export default async function locationRoutes(app) {
                   left join lateral (select u.body, u.created_at, uu.full_name as by_name from work_updates u
                                        left join users uu on uu.id = u.created_by
                                       where u.work_id = w.id order by u.created_at desc limit 1) lu on true
-                 where w.island_id = $1 and w.status not in ('completed', 'cancelled')
-                 order by w.created_at desc`, [islandId]),
+                 where w.island_id = $1 and w.status not in ('completed', 'cancelled') and ${workVisible(req.user, 2).sql}
+                 order by w.created_at desc`, [islandId, ...workVisible(req.user, 2).values]),
       // Assets that left this island's facilities: shown as events where
       // they were, the record itself lives on where they went.
       db.query(`select m.id, m.asset_id, m.from_facility_id, m.from_tag, m.to_tag, m.moved_on, m.source, s.kind,

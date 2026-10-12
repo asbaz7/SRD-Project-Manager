@@ -91,13 +91,21 @@ test('the staff type is set when creating a user, and the session reflects it', 
   assert.equal((await call('GET', '/auth/me', T.office)).body.technical, false);
 });
 
-test('work: everyone can see it, technical staff run it, chosen people can comment', async () => {
+test('work: non-technical staff see their unit\'s, technical staff run it, chosen people can comment', async () => {
   // Only technical staff start work.
   assert.equal((await call('POST', '/work', T.office, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'x' })).status, 403);
   const w = (await call('POST', '/work', T.tech, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Replace radiator' })).body;
 
-  // Everyone can see it.
-  assert.ok((await call('GET', '/work', T.clerk)).body.items.some((x) => x.id === w.id));
+  // Technical staff see all work; non-technical staff only their unit's,
+  // and work they are added to.
+  assert.ok((await call('GET', '/work', T.tech2)).body.items.some((x) => x.id === w.id));
+  assert.ok(!(await call('GET', '/work', T.clerk)).body.items.some((x) => x.id === w.id));
+  assert.equal((await call('GET', `/work/${w.id}`, T.office)).status, 404);
+  assert.ok(!(await call('GET', '/dashboard', T.office)).body.work.some((x) => x.id === w.id));
+  const admin = "(select id from units where name = 'Administration and Support Service Unit')";
+  await db.query(`update users set unit_id = ${admin} where id = $1`, [U.office]);
+  await db.query(`update work_orders set unit_id = ${admin} where id = $1`, [w.id]);
+  assert.ok((await call('GET', '/dashboard', T.office)).body.work.some((x) => x.id === w.id));
   let view = (await call('GET', `/work/${w.id}`, T.office)).body;
   assert.equal(view.can_run, false);
   assert.equal(view.can_comment, false);
@@ -109,6 +117,7 @@ test('work: everyone can see it, technical staff run it, chosen people can comme
   // The technical creator adds the office manager and a viewer.
   assert.equal((await call('POST', `/work/${w.id}/commenters`, T.tech, { user_id: U.office })).status, 201);
   assert.equal((await call('POST', `/work/${w.id}/commenters`, T.tech, { user_id: U.clerk })).status, 201);
+  assert.ok((await call('GET', '/work', T.clerk)).body.items.some((x) => x.id === w.id), 'added: now in their list');
   view = (await call('GET', `/work/${w.id}`, T.office)).body;
   assert.equal(view.can_comment, true);
   assert.deepEqual(view.commenters.map((c) => c.full_name).sort(), ['clerk', 'office']);
