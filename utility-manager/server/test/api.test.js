@@ -1,7 +1,9 @@
 // End-to-end API tests against an in-memory Postgres (PGlite).
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { after, before, describe, test } from 'node:test';
 import { buildApp } from '../src/app.js';
+import { createSession } from '../src/auth.js';
 import { hashPassword } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
@@ -290,10 +292,11 @@ describe('operations', () => {
     assert.equal(detail.updates.length, 1);
     const patched = await call('PATCH', `/projects/${p.body.id}`, { token: admin, body: { contractor: 'ABC Pvt Ltd' } });
     assert.equal(patched.body.progress_pct, 40, 'PATCH does not reset unspecified fields');
+    // (Besides the Powerhouse Takeover, added by migration 041.)
     const active = (await call('GET', '/projects?status=active', { token: admin })).body;
-    assert.equal(active.total, 1);
+    assert.deepEqual(active.items.map((x) => x.title).filter((t) => t !== 'Powerhouse Takeover'), ['Genset 9 installation']);
     const dash = (await call('GET', '/dashboard', { token: admin })).body;
-    assert.deepEqual(dash.projects.list.map((x) => x.title), ['Genset 9 installation']);
+    assert.deepEqual(dash.projects.list.map((x) => x.title).filter((t) => t !== 'Powerhouse Takeover'), ['Genset 9 installation']);
   });
 
   test('audit log records who changed what', async () => {
@@ -304,5 +307,96 @@ describe('operations', () => {
     assert.equal(update.changes.status.to, 'resolved');
     const users = await call('GET', '/audit?entity=users', { token: admin });
     assert.ok(users.body.items.every((e) => !JSON.stringify(e.changes).includes('scrypt')), 'password hashes are never logged');
+  });
+});
+
+describe('powerhouse takeover tracker', () => {
+  let project, clerk, outsider;
+  before(async () => {
+    // The test data has no F, Dh or Th islands: add one, then run the seed
+    // again (it is keyed, so nothing is duplicated) to give it its lists.
+    const atoll = (await call('POST', '/atolls', { token: admin, body: { code: 'F', name: 'Faafu' } })).body;
+    const island = (await call('POST', '/islands', { token: admin, body: { atoll_id: atoll.id, name: 'Nilandhoo' } })).body;
+    await call('POST', '/facilities', { token: admin, body: { island_id: island.id, service: 'electricity', kind: 'powerhouse', name: 'Nilandhoo Powerhouse' } });
+    const seed = readFileSync(new URL('../migrations/041_powerhouse_takeover.sql', import.meta.url), 'utf8');
+    await db.exec(seed);
+    await db.exec(seed);
+    const list = (await call('GET', '/projects?q=Powerhouse%20Takeover', { token: admin })).body;
+    assert.equal(list.items.filter((p) => p.title === 'Powerhouse Takeover').length, 1);
+    project = list.items.find((p) => p.title === 'Powerhouse Takeover');
+    const unit = (await db.query("select id from units where name = 'Administration and Support Service Unit'")).rows[0].id;
+    for (const [email, unitId] of [['clerk@srd.mv', unit], ['outsider@srd.mv', null]]) {
+      const res = await call('POST', '/users', { token: admin, body: { email, full_name: email, role: 'staff', password: 'Temporary123', ...(unitId ? { unit_id: unitId } : { designation: 'General Manager' }) } });
+      assert.equal(res.status, 201, JSON.stringify(res.body));
+    }
+    // Sessions made directly: the login limit is used up by earlier tests.
+    const session = async (email) => {
+      await db.query('update users set must_change_password = false where email = $1', [email]);
+      const { rows: [u] } = await db.query('select id from users where email = $1', [email]);
+      return (await createSession(db, u.id, { ttlHours: 1, ip: null, userAgent: 'test' })).token;
+    };
+    clerk = await session('clerk@srd.mv');
+    outsider = await session('outsider@srd.mv');
+  });
+
+  test('seeded from the workbook: 26 tasks, owned by the Admin unit, one set of lists per site', async () => {
+    assert.ok(project, 'project exists');
+    const p = (await call('GET', `/projects/${project.id}`, { token: admin })).body;
+    assert.equal(p.tracker, true);
+    assert.equal(p.tasks.length, 26);
+    assert.equal(p.tasks[0].code, 'TKO-001');
+    assert.equal(p.tasks[0].unit_name, 'Administration and Support Service Unit');
+    assert.ok(p.tasks.every((t) => t.status === 'Not Started' && t.priority >= 1));
+    assert.equal(p.tasks.filter((t) => t.priority === 1).length, 17);
+    assert.equal(p.visibility, 'members');
+    assert.equal(p.sites.length, 1, 'the F island added above');
+    assert.ok(p.sites.every((s) => ['F', 'Dh', 'Th'].includes(s.atoll_code) && s.access_total === 10 && s.checklist_total === 55));
+  });
+
+  test('Admin unit members can view; others cannot; viewers cannot change tasks', async () => {
+    assert.equal((await call('GET', `/projects/${project.id}`, { token: clerk })).status, 200);
+    assert.equal((await call('GET', `/projects/${project.id}`, { token: outsider })).status, 404);
+    const p = (await call('GET', `/projects/${project.id}`, { token: clerk })).body;
+    const res = await call('PATCH', `/projects/${project.id}/tasks/${p.tasks[0].id}`, { token: clerk, body: { status: 'In Progress' } });
+    assert.equal(res.status, 403);
+  });
+
+  test('tasks are updated one at a time; completing sets 100% and the date; progress is the average', async () => {
+    const p = (await call('GET', `/projects/${project.id}`, { token: admin })).body;
+    const [a, b, c] = p.tasks;
+    let res = await call('PATCH', `/projects/${project.id}/tasks/${a.id}`, { token: admin, body: { status: 'Completed' } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.progress, 100);
+    assert.ok(res.body.completed_date);
+    assert.equal(res.body.code, 'TKO-001', 'the code stays');
+    res = await call('PATCH', `/projects/${project.id}/tasks/${b.id}`, { token: admin, body: { progress: 50, due_date: '2020-01-01', remarks: 'Waiting on HR' } });
+    assert.equal(res.body.status, 'In Progress', 'started work moves to In Progress');
+    assert.equal(res.body.overdue, true);
+    res = await call('PATCH', `/projects/${project.id}/tasks/${c.id}`, { token: admin, body: { status: 'Cancelled' } });
+    const after = (await call('GET', `/projects/${project.id}`, { token: admin })).body;
+    assert.equal(Number(after.progress_pct), Math.round((150 / 25) * 10) / 10, 'average of the 25 tasks not cancelled');
+    res = await call('PATCH', `/projects/${project.id}/tasks/${a.id}`, { token: admin, body: { status: 'On Hold' } });
+    assert.equal(res.body.completed_date, null, 'leaving Completed clears the date');
+    assert.equal((await call('PATCH', `/projects/${project.id}/tasks/${a.id}`, { token: admin, body: { status: 'Done' } })).status, 400);
+    // The whole-list editor can't overwrite tracked tasks.
+    res = await call('PATCH', `/projects/${project.id}`, { token: admin, body: { tasks: [{ name: 'x', progress: 0 }] } });
+    assert.equal(res.status, 400);
+  });
+
+  test('each site has its access list and checklists', async () => {
+    const p = (await call('GET', `/projects/${project.id}`, { token: admin })).body;
+    const site = (await call('GET', `/projects/${project.id}/sites/${p.sites[0].island_id}`, { token: admin })).body;
+    assert.equal(site.access_items.length, 10);
+    assert.equal(site.checklist.filter((x) => x.list === 'diesel').length, 13);
+    assert.equal(site.checklist.filter((x) => x.list === 'safety_ppe').length, 18);
+    const paper = site.checklist.find((x) => x.item === 'A4 paper');
+    let res = await call('PATCH', `/projects/${project.id}/checklist/${paper.id}`, { token: admin, body: { available_qty: 5 } });
+    assert.equal(Number(res.body.shortfall), 10);
+    res = await call('PATCH', `/projects/${project.id}/access/${site.access_items[0].id}`, { token: admin, body: { status: 'Granted', granted_to: 'Site manager' } });
+    assert.equal(res.body.status, 'Granted');
+    assert.ok(res.body.granted_on);
+    const again = (await call('GET', `/projects/${project.id}`, { token: admin })).body.sites.find((s) => s.island_id === p.sites[0].island_id);
+    assert.equal(again.access_granted, 1);
+    assert.equal(again.stationery_short, 1);
   });
 });

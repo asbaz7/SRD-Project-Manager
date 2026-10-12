@@ -4,7 +4,8 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Progress, ProjectState, Select, Service, UpdateText } from '../components/ui.jsx';
 import { PROJECT_STATES, PROJECT_TYPES, date, dateTime, num, pct } from '../format.js';
-import { useApi, useSubmit } from '../hooks.js';
+import { useApi, useFilters, useSubmit } from '../hooks.js';
+import { Sites, Tracker } from './ProjectTracker.jsx';
 
 export default function Project() {
   const { id } = useParams();
@@ -26,10 +27,22 @@ function ProjectView({ project: p, reload }) {
     reload();
   });
 
+  const [filters, setFilter] = useFilters();
   if (editing) return <ProjectForm project={p} onDone={() => { setEditing(false); reload(); }} />;
+  // A tracker project opens on its tasks; its details, updates, files and
+  // sharing are on the Details tab.
+  const tab = p.tracker ? filters.tab || 'tracker' : 'details';
+  const tabs = p.tracker && <nav className="tabs" aria-label="Project sections">
+    {[['tracker', `Tasks (${p.tasks.length})`], ...(p.sites.length ? [['sites', `Sites (${p.sites.length})`]] : []), ['details', 'Details & updates']].map(([k, l]) =>
+      <button key={k} type="button" className={`tab${tab === k ? ' active' : ''}`} onClick={() => setFilter({ tab: k === 'tracker' ? '' : k, site: '', status: '', priority: '', dept: '', unit: '', overdue: '', open: '', mine: '', q: '' })}>{l}</button>)}
+  </nav>;
+  const head = <PageHead title={p.title} crumbs={[{ to: '/projects', label: 'Projects' }, { label: p.ref }]}
+    subtitle={p.tracker ? [p.unit_name, p.owner_name && `Owner: ${p.owner_name}`].filter(Boolean).join(' · ') : undefined}
+    actions={writable && <button className="btn" onClick={() => setEditing(true)}>{p.can_manage ? 'Edit & sharing' : 'Edit'}</button>} />;
+  if (tab === 'tracker') return <>{head}{tabs}<Tracker project={p} reload={reload} /></>;
+  if (tab === 'sites') return <>{head}{tabs}<Sites project={p} /></>;
   return <>
-    <PageHead title={p.title} crumbs={[{ to: '/projects', label: 'Projects' }, { label: p.ref }]}
-      actions={writable && <button className="btn" onClick={() => setEditing(true)}>{p.can_manage ? 'Edit & sharing' : 'Edit'}</button>} />
+    {head}{tabs}
     <div className="grid-2">
       <Card title="Details">
         <dl className="facts">
@@ -58,7 +71,7 @@ function ProjectView({ project: p, reload }) {
       </Card>}
     </div>
     {p.description && <Card title="Scope of Project"><p className="pre">{p.description}</p></Card>}
-    {p.tasks.length > 0 && <Card title="Task Breakdown" actions={writable && <button className="btn small" onClick={() => setEditing(true)}>Update tasks</button>}>
+    {p.tasks.length > 0 && !p.tracker && <Card title="Task Breakdown" actions={writable && <button className="btn small" onClick={() => setEditing(true)}>Update tasks</button>}>
       <ol className="task-progress">{p.tasks.map((t) => <li key={t.id} className={Number(t.progress) >= 100 ? 'done' : ''}>
         <span className="muted">{t.position}</span><span className="grow">{t.name}</span>
         <span className="overall-track small"><span style={{ width: `${t.progress}%` }} /></span><b>{pct(t.progress)}</b>
@@ -162,7 +175,7 @@ function ProjectForm({ project, onDone }) {
     const body = {
       title: f.title, project_type: f.project_type || null, description: f.description || null, status: f.status,
       ...(auto ? {} : { progress_pct: Number(f.progress_pct) || 0 }),
-      tasks: filled.map((t) => ({ name: t.name.trim(), progress: Math.min(100, Math.max(0, Number(t.progress) || 0)) })),
+      ...(project?.tracker ? {} : { tasks: filled.map((t) => ({ name: t.name.trim(), progress: Math.min(100, Math.max(0, Number(t.progress) || 0)) })) }),
       budget: f.budget === '' || f.budget == null ? null : Number(f.budget),
       contractor: f.contractor || null, start_date: f.start_date || null, target_date: f.target_date || null,
       ...(sharing ? { owner_id: f.owner_id || null, unit_id: f.unit_id ? Number(f.unit_id) : null, visibility: f.visibility, members: members.filter((m) => m.user_id) } : {}),
@@ -209,6 +222,8 @@ function ProjectForm({ project, onDone }) {
         <textarea rows="4" value={f.description || ''} onChange={set('description')} aria-label="Scope of project"
           placeholder="What the project covers" />
 
+        {project?.tracker ? <><h3 className="form-section">Tasks</h3>
+          <p className="muted small">This project's {project.tasks.length} tasks are updated one at a time on its Tasks tab.</p></> : <>
         <h3 className="form-section">Task Breakdown</h3>
         <p className="muted small">Edit task names and percentages, add new tasks, or remove tasks as required.</p>
         <div className="task-table">
@@ -229,7 +244,7 @@ function ProjectForm({ project, onDone }) {
             <div className="overall-track"><span style={{ width: `${overall}%` }} /></div>
           </div>
           <div className="overall-figure"><b>{pct(overall)}</b><small className="muted">{auto ? 'Automatically calculated' : 'Entered by hand'}</small></div>
-        </div>
+        </div></>}
 
         {sharing && <div className="sharing-row">
           <span>Who can see and edit this project</span>

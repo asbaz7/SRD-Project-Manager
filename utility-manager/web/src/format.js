@@ -61,6 +61,19 @@ export const INCIDENT_CATEGORIES = {
   outage: 'Supply outage', breakdown: 'Breakdown', maintenance: 'Maintenance', quality: 'Quality issue', safety: 'Safety', other: 'Other',
 };
 export const SEVERITIES = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+// Project task tracker (Powerhouse Takeover): the workbook's lists.
+export const TASK_STATUSES = {
+  'Not Started': { key: 'not-started' }, 'In Progress': { key: 'in-progress' }, 'On Hold': { key: 'on-hold' },
+  Completed: { key: 'completed' }, Cancelled: { key: 'cancelled' },
+};
+export const PRIORITIES = {
+  1: 'Critical Reliability & Safety', 2: 'Operational Reliability', 3: 'System Improvement & Infrastructure',
+  4: 'Efficiency, Monitoring, Training & Staff Capacity Building',
+};
+export const DEPARTMENTS = ['HR', 'IT', 'Finance', 'Corporate', 'Corporate (Safety Unit)', 'CS Billing', 'Store', 'Department', 'Powerhouse', 'T&D', 'Water'];
+export const ACCESS_STATUSES = ['Not Requested', 'Requested', 'Granted', 'Rejected'];
+export const AVAILABILITY = ['Available', 'Not Available', 'Partial', 'Requested'];
+export const CHECKLISTS = { diesel: 'Diesel checklist', safety_ppe: 'Safety PPE', stationery: 'Stationery' };
 export const PROJECT_STATES = { planned: 'Planned', ongoing: 'Ongoing', on_hold: 'On hold', completed: 'Completed', cancelled: 'Cancelled' };
 export const CONDITIONS = {
   ok: { label: 'OK', icon: '●', tone: 'ok' },
