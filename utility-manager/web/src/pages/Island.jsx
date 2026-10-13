@@ -32,7 +32,7 @@ export default function Island() {
       {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <Link to={`/islands/${island.id}`}>Show everything on {island.name}</Link></p>}
       <div className="stats">
         {island.technical && (!only || only === 'electricity') && <>
-          <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} />
+          <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} sub={island.disconnected_count > 0 ? `${island.disconnected_count} disconnected` : ''} />
           <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
           <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
         </>}

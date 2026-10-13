@@ -274,6 +274,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .gdot.standby { background: var(--info); }
 .gdot.maintenance { background: var(--warn-fill); }
 .gdot.down { background: var(--bad-fill); }
+.gdot.disconnected { background: transparent; box-shadow: inset 0 0 0 1.5px var(--none-fill); }
 .gensets .kw { margin-left: auto; font-weight: 650; font-variant-numeric: tabular-nums; }
 .island-card .flags { margin: 0; }
 

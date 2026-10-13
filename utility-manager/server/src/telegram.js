@@ -22,8 +22,8 @@ const ASSET_LABELS = {
 };
 const SERVICE_ICON = { electricity: '⚡', water: '💧', sewerage: '♻️' };
 const SERVICE_LABEL = { electricity: 'Electricity', water: 'Water', sewerage: 'Sewerage' };
-const STATUS_WORDS = { up: 'running', running: 'running', standby: 'standby', down: 'down', maintenance: 'maintenance' };
-const STATUS_ICON = { running: '🟢', standby: '⚪', down: '🔴', maintenance: '🟠', decommissioned: '⚫', unknown: '❔' };
+const STATUS_WORDS = { up: 'running', running: 'running', standby: 'standby', down: 'down', maintenance: 'maintenance', disconnected: 'disconnected', disconnect: 'disconnected' };
+const STATUS_ICON = { running: '🟢', standby: '⚪', down: '🔴', maintenance: '🟠', disconnected: '⊘', decommissioned: '⚫', unknown: '❔' };
 const CONDITION_LABEL = { ok: 'OK', minor_fault: 'minor fault', major_fault: 'major fault', not_running: 'not running' };
 const WORK_STATE_WORDS = {
   planned: 'planned', progress: 'in_progress', in_progress: 'in_progress', started: 'in_progress',
@@ -60,7 +60,7 @@ Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator b
 <b>Report</b> (managers)
 /down Maafushi G3 radiator leak
 /up Maafushi G3
-/standby or /maintenance work the same way
+/standby, /maintenance or /disconnected work the same way
 /interruption Guraidhoo water high supply cut to north ward
   <i>(service and severity are optional: electricity is assumed)</i>
 /update WO-12 seal arrived, fitting tomorrow
@@ -325,7 +325,7 @@ export function createTelegram({ db, config, log }) {
       for (const a of assets) {
         // One state per line: out of service says so; running gensets show
         // a fault from the report if any. The reason once; work by reference.
-        const out = ['down', 'maintenance', 'decommissioned'].includes(a.status);
+        const out = ['down', 'maintenance', 'disconnected', 'decommissioned'].includes(a.status);
         const fault = !out && ['minor_fault', 'major_fault'].includes(a.condition) ? CONDITION_LABEL[a.condition] : null;
         const state = a.status === 'maintenance' ? 'in maintenance' : fault ? `${a.status}, ${fault}` : a.status;
         const note = (a.condition_source === 'status' ? a.condition_note : null) || a.status_note || a.fault;
@@ -539,7 +539,7 @@ export function createTelegram({ db, config, log }) {
     const user = await linkedUser(msg.from.id);
     if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
 
-    const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance']);
+    const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance', 'disconnected', 'disconnect']);
     if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /interruption, /summary, and comment on work you have been added to with /update.');
     try {
       let text;

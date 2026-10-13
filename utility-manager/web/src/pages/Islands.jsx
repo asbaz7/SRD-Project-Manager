@@ -104,7 +104,7 @@ function IslandCard({ i, technical }) {
     </div>
     {technical && (i.genset_count > 0 ? <div className="gensets">
       <span className="gdots" aria-hidden="true">{(i.genset_states || []).map((st, n) => <span key={n} className={`gdot ${st}`} title={ASSET_STATUS[st]?.label} />)}</span>
-      <span className="small">{i.running_count} of {i.genset_count} running{i.no_report_count > 0 ? ` · ${i.no_report_count} no report` : ''}</span>
+      <span className="small">{i.running_count} of {i.genset_count} running{i.disconnected_count > 0 ? ` · ${i.disconnected_count} disconnected` : ''}{i.no_report_count > 0 ? ` · ${i.no_report_count} no report` : ''}</span>
       <span className="kw">{power(Number(i.installed_kw))}</span>
     </div> : <div className="gensets muted small">No gensets recorded</div>)}
     {flags.length > 0 && <div className="flags">

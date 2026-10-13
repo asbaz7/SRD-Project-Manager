@@ -23,6 +23,7 @@ const islandSummary = (vis, seen) => `
          count(s.id) filter (where s.kind = 'genset' and s.status <> 'decommissioned') as genset_count,
          count(s.id) filter (where s.kind = 'genset' and s.status = 'running') as running_count,
          count(s.id) filter (where s.kind = 'genset' and s.status in ('down', 'maintenance')) as down_count,
+         count(s.id) filter (where s.kind = 'genset' and s.status = 'disconnected') as disconnected_count,
          coalesce(array_agg(s.status::text order by length(s.tag), s.tag)
            filter (where s.kind = 'genset' and s.status <> 'decommissioned'), '{}') as genset_states,
          count(s.id) filter (where s.kind = 'genset' and s.status = 'unknown') as no_report_count,

@@ -12,7 +12,7 @@ import {
 
 const FACILITY_KINDS = ['powerhouse', 'solar_plant', 'water_plant', 'water_storage', 'sewerage_plant', 'sewerage_system', 'pump_station', 'other'];
 const ASSET_KINDS = ['genset', 'solar_inverter', 'battery', 'transformer', 'ro_unit', 'pump', 'blower', 'tank', 'other'];
-const STATUSES = ['running', 'standby', 'down', 'maintenance', 'decommissioned', 'unknown'];
+const STATUSES = ['running', 'standby', 'down', 'maintenance', 'disconnected', 'decommissioned', 'unknown'];
 
 const facilityBody = z.object({
   island_id: id,
@@ -319,7 +319,8 @@ export default async function assetRoutes(app) {
       if (!a || a.status === item.status) continue;
       const name = `${a.atoll_code}. ${a.island_name} ${assetName(a)}`;
       if (item.status === 'down') lines.push(`🔴 <b>${esc(name)} is down</b>${item.note ? `: ${esc(item.note)}` : ''}${work[item.asset_id] ? ` · 🔧 ${telegram.link(`/work/${work[item.asset_id].id}`, work[item.asset_id].ref)}` : ''}`);
-      else if (item.status === 'running' && ['down', 'maintenance'].includes(a.status)) lines.push(`🟢 <b>${esc(name)} is running again</b>${item.note ? `: ${esc(item.note)}` : ''}`);
+      else if (item.status === 'disconnected') lines.push(`⊘ <b>${esc(name)} is disconnected</b>${item.note ? `: ${esc(item.note)}` : ''}`);
+      else if (item.status === 'running' && ['down', 'maintenance', 'disconnected'].includes(a.status)) lines.push(`🟢 <b>${esc(name)} is running again</b>${item.note ? `: ${esc(item.note)}` : ''}`);
     }
     if (lines.length) await telegram.alert(`${lines.join('\n')}\n<i>${esc(req.user.fullName)}</i>${lines.length === 1 ? ` · ${telegram.link(`/assets/${body.items[0].asset_id}`, 'Open')}` : ''}`, { technical: true });
     return { ok: true, count: body.items.length, work: Object.entries(work).map(([assetId, w]) => ({ asset_id: assetId, ...w })) };

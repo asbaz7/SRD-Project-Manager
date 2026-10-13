@@ -245,7 +245,7 @@ function buildTools(db) {
       description: "Record an asset's status (e.g. a genset going down or back up). The person confirms before it's saved. A note is required when it goes down.",
       schema: z.object({
         asset_id: id,
-        status: z.enum(['running', 'standby', 'down', 'maintenance']),
+        status: z.enum(['running', 'standby', 'down', 'maintenance', 'disconnected']).describe('disconnected = installed but not connected to the network: not a fault'),
         note: z.string().max(1000).optional().describe('What happened, in their words'),
       }),
       describe: async (user, { asset_id, status, note }, asUser) => {

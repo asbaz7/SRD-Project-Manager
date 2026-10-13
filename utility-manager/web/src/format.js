@@ -11,6 +11,7 @@ export const ASSET_STATUS = {
   standby: { label: 'Standby', icon: '○', tone: 'info' },
   down: { label: 'Down', icon: '✕', tone: 'bad' },
   maintenance: { label: 'Maintenance', icon: '⚙', tone: 'warn' },
+  disconnected: { label: 'Disconnected', icon: '⊘', tone: 'none' },
   decommissioned: { label: 'Decommissioned', icon: '–', tone: 'none' },
   unknown: { label: 'No status', icon: '?', tone: 'none' },
 };
