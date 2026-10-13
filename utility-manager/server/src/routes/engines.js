@@ -127,6 +127,8 @@ const listQuery = z.object({
   atoll_id: id.optional(),
   island_id: id.optional(),
   condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults', 'retired']).optional(),
+  // The genset's own status (running, down, disconnected...), as set on it.
+  status: z.enum(['running', 'standby', 'down', 'maintenance', 'disconnected', 'unknown']).optional(),
   flag: z.enum(['overhaul', 'alternator', 'work', 'stale']).optional(),
   q: z.string().max(100).optional(),
   sort: z.enum(['island', 'condition', 'hours_since_overhaul', 'total_hours', 'last_overhaul', 'last_alt_service', 'next_service']).default('island'),
@@ -147,7 +149,7 @@ export default async function engineRoutes(app) {
   app.get('/engines', async (req, reply) => {
     const q = parse(listQuery, req.query);
     const w = new Where().raw("s.kind = 'genset' and s.active")
-      .add('i.atoll_id = ?', q.atoll_id).add('i.id = ?', q.island_id)
+      .add('i.atoll_id = ?', q.atoll_id).add('i.id = ?', q.island_id).add('s.status = ?', q.status)
       .add('(s.tag ilike ? or s.make_model ilike ? or i.name ilike ? or f.name ilike ? or s.serial_no ilike ? or c.fault ilike ?)', q.q && `%${q.q}%`);
     // Retired (decommissioned) engines only when asked for.
     if (q.condition === 'retired') w.raw("s.status = 'decommissioned'");

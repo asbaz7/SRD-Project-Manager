@@ -130,18 +130,27 @@ function buildTools(db) {
       run: (user, { island_id }, asUser) => get(asUser, user, `/islands/${island_id}`),
     },
     list_engines: {
-      description: 'Gensets across the region (or one island) with capacity, model, latest condition report, running hours and service due dates. Filter to find e.g. all faults or overdue overhauls.',
+      description: 'Gensets across the region (or one atoll or island) with capacity, status, latest condition report, running hours and what is due. Filter rather than reading the whole region: by status (e.g. all disconnected or down gensets), by condition (e.g. all faults) or by flag (e.g. overdue overhauls).',
       schema: z.object({
         island_id: id.optional(),
         atoll,
+        status: z.enum(['running', 'standby', 'down', 'maintenance', 'disconnected', 'unknown']).optional()
+          .describe("The genset's status as set on it; disconnected = installed but not connected to the network"),
         condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults', 'retired']).optional()
-          .describe('faults = minor, major or not running'),
+          .describe('From the condition reports. faults = minor, major or not running'),
         flag: z.enum(['overhaul', 'alternator', 'work', 'stale']).optional()
           .describe('overhaul / alternator = service due; work = has open work; stale = report out of date'),
         q: z.string().max(100).optional().describe('Text search: tag, model, serial, island or fault'),
       }),
       run: async (user, { atoll: a, ...input }, asUser) => {
         const d = await get(asUser, user, `/engines${query({ ...input, atoll_id: await atollId(a) })}`);
+        // Long lists (the whole region is ~280 gensets): one short line each,
+        // so all of them fit; get_island / get_asset have the rest.
+        if (d.engines.length > 60) {
+          return { today: d.today, summary: d.summary, note: 'Short form: island, genset, kW, status, condition, open work. Filter or use get_island for more.',
+            engines: d.engines.map((e) => [`${e.atoll_code}. ${e.island_name} ${e.tag}`, `${e.rated_capacity ?? '?'} kW`, e.status,
+              e.condition || 'no report', e.overhaul_due && 'overhaul due', ...e.open_work.map((w) => `WO-${String(w.id).padStart(4, '0')}`)].filter(Boolean).join(' · ')) };
+        }
         // One line's worth per genset: get_asset has the rest.
         return { today: d.today, summary: d.summary, engines: d.engines.map((e) => ({
           asset_id: e.id, genset: `${e.atoll_code}. ${e.island_name} ${e.tag}`, model: e.make_model, kw: e.rated_capacity,
@@ -149,7 +158,7 @@ function buildTools(db) {
           condition: e.condition, report_month: e.report_month, report_stale: e.report_stale || undefined,
           fault: (e.condition_source === 'status' ? e.condition_note : e.fault || e.status_text)?.slice(0, 120),
           total_hours: e.total_hours, hours_to_overhaul: e.hours_to_overhaul, overhaul_due: e.overhaul_due || undefined,
-          last_overhaul_on: e.last_overhaul_on, alt_service_due: e.alt_service_due || undefined, next_alt_service: e.next_alt_service_due,
+          alt_service_due: e.alt_service_due || undefined,
           open_work: e.open_work.map((w) => `WO-${String(w.id).padStart(4, '0')} ${w.title} (${w.status})`),
         })) };
       },
