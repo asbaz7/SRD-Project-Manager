@@ -316,6 +316,39 @@ test('non-technical staff cannot use the technical bot commands', async () => {
   assert.match(repliesTo(4004), /needs technical access/);
 });
 
+test('/hours records the monthly running hours, with or without a condition', async () => {
+  const at = async (tag) => (await db.query(`select s.id, c.total_hours, c.condition, c.fault, c.source from assets s
+    join facilities f on f.id = s.facility_id join islands i on i.id = f.island_id
+    left join engine_conditions c on c.asset_id = s.id where i.name = 'Maafushi' and s.kind = 'genset' and s.tag = $1 and s.active`, [tag])).rows[0];
+  await say(ADMIN_TG, '/hours Maafushi G1 12,345 G2 23456');
+  let reply = repliesTo(ADMIN_TG);
+  assert.match(reply, /Hours recorded for <b>K\. Maafushi<\/b>/, reply);
+  assert.match(reply, /Genset 1: 12,345 h/);
+  assert.match(reply, /Still to do for .*: Genset /, 'the others are still due');
+  assert.deepEqual(((g) => [Number(g.total_hours), g.source])(await at('1')), [12345, 'update']);
+
+  // With a condition: it and the fault are recorded.
+  await say(ADMIN_TG, '/hours Maafushi G3 30000 minor oil leak at the front seal');
+  reply = repliesTo(ADMIN_TG);
+  assert.match(reply, /Genset 3: 30,000 h · minor fault: oil leak at the front seal/, reply);
+  assert.deepEqual(((g) => [g.condition, g.fault])(await at('3')), ['minor_fault', 'oil leak at the front seal']);
+  // Hours only again: the condition stays.
+  await say(ADMIN_TG, '/hours Maafushi G3 30100');
+  assert.deepEqual(((g) => [Number(g.total_hours), g.condition])(await at('3')), [30100, 'minor_fault']);
+
+  // A fault needs a description; lower hours need "newmeter"; the genset must exist.
+  await say(ADMIN_TG, '/hours Maafushi G3 30200 major');
+  assert.match(repliesTo(ADMIN_TG), /Say what's wrong/);
+  await say(ADMIN_TG, '/hours Maafushi G1 100');
+  assert.match(repliesTo(ADMIN_TG), /less than the last reading \(12345\)/);
+  await say(ADMIN_TG, '/hours Maafushi G1 100 newmeter');
+  assert.match(repliesTo(ADMIN_TG), /Genset 1: 100 h \(new meter\)/);
+  await say(ADMIN_TG, '/hours Maafushi G99 5');
+  assert.match(repliesTo(ADMIN_TG), /Which genset\?/);
+  await say(4004, '/hours Maafushi G1 5');
+  assert.match(repliesTo(4004), /needs technical access/);
+});
+
 test('genset move stages can be posted from Telegram', async () => {
   const isl = (await call('GET', '/islands', { token: admin })).body;
   const huraa = isl.find((i) => i.name === 'Huraa');

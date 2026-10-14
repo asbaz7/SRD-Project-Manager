@@ -763,6 +763,18 @@ describe('monthly genset updates', () => {
     ]);
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.equal(res.body.month, thisMonth());
+    // Not every genset yet: the powerhouse is still due, and says which.
+    const rest = form.gensets.slice(2);
+    assert.equal(res.body.complete, rest.length === 0);
+    assert.deepEqual(res.body.still_due, rest.map((g) => g.tag));
+    if (rest.length) {
+      const due = (await call('GET', '/condition-reports', { token: admin })).body.powerhouses.find((p) => p.facility_id === ph);
+      assert.equal(due.state, 'never');
+      // The others, hours only: condition stays as last recorded.
+      const done = await send(admin, rest.map((g, i) => ({ asset_id: g.id, total_hours: 100 + i })));
+      assert.equal(done.status, 200, JSON.stringify(done.body));
+      assert.equal(done.body.complete, true);
+    }
 
     const a1 = (await call('GET', `/assets/${g1.id}`, { token: admin })).body;
     assert.equal(a1.condition.condition, 'ok');
@@ -799,7 +811,7 @@ describe('monthly genset updates', () => {
     await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g3.id, status: 'disconnected', note: 'Not connected to the panel' }] } });
     const r = await send(admin, [
       { asset_id: g2.id, total_hours: 5100, condition: 'not_running', fault: 'Crankshaft' },
-      { asset_id: g3.id, total_hours: 10, condition: 'not_running', fault: 'Disconnected' },
+      { asset_id: g3.id, total_hours: 1000, condition: 'not_running', fault: 'Disconnected' },
     ]);
     assert.equal(r.status, 200, JSON.stringify(r.body));
     const status = async (id) => (await db.query('select status, status_note from assets where id = $1', [id])).rows[0];

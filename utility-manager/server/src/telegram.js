@@ -53,6 +53,9 @@ Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator b
 /down Maafushi G3 radiator leak
 /up Maafushi G3
 /standby, /maintenance or /disconnected work the same way
+/hours Maafushi G1 12345 G2 23456  <i>(monthly running hours; condition stays as it was)</i>
+/hours Maafushi G3 12345 minor oil leak  <i>(with its condition: ok, minor, major or down, and the fault)</i>
+  <i>(add</i> newmeter <i>after the hours if the meter was replaced)</i>
 /interruption Guraidhoo water high supply cut to north ward
   <i>(service and severity are optional: electricity is assumed)</i>
 /update WO-12 seal arrived, fitting tomorrow
@@ -155,6 +158,7 @@ export function createTelegram({ db, config, log }) {
         ['work', 'Ongoing work'],
         ['down', 'Asset down: /down Maafushi G3 reason'],
         ['up', 'Asset running again: /up Maafushi G3'],
+        ['hours', 'Monthly hours: /hours Maafushi G1 12345 G2 23456'],
         ['interruption', 'Report an interruption'],
         ['update', 'Work update: /update WO-12 text'],
         ['done', 'Work completed: /done WO-12 note'],
@@ -302,6 +306,60 @@ export function createTelegram({ db, config, log }) {
   };
 
   const apiError = (res) => esc(res.body?.error || `Something went wrong (${res.status})`);
+
+  // /hours: the monthly update from a phone. One or more gensets with their
+  // running hours; a condition word (ok, minor, major, down) after the hours
+  // sets the condition and the rest of the message is the fault. Without one
+  // the condition stays as last recorded. "newmeter" after the hours: the
+  // meter was replaced, so a lower reading is accepted.
+  const CONDITION_WORDS = { ok: 'ok', fine: 'ok', running: 'ok', minor: 'minor_fault', major: 'major_fault',
+    down: 'not_running', notrunning: 'not_running', stopped: 'not_running' };
+  const HOURS_EXAMPLE = 'e.g. <code>/hours Maafushi G1 12345 G2 23456</code> or <code>/hours Maafushi G3 12345 minor oil leak</code>';
+  async function cmdHours(user, words, asUser) {
+    if (words.length < 3) return HOURS_EXAMPLE;
+    const r = await takeIsland(words);
+    if (!r.island) return islandHelp(r);
+    const { rows: ph } = await db.query(`select id, name from facilities where island_id = $1 and kind = 'powerhouse' and service = 'electricity' and active order by created_at`, [r.island.id]);
+    if (!ph.length) return `${esc(r.island.name)} has no powerhouse registered.`;
+    const items = [];
+    let rest = r.rest;
+    let facilityId = null;
+    while (rest.length) {
+      const a = await takeAsset(r.island.id, rest);
+      const gensets = (a.options || []).filter((x) => x.kind === 'genset').map((x) => esc(assetName(x))).join(', ');
+      if (a.ambiguous) return `More than one matches: ${a.ambiguous.map((x) => esc(assetName(x))).join(', ')}. Use the full tag.`;
+      if (!a.asset || a.asset.kind !== 'genset') return gensets ? `Which genset? ${esc(r.island.name)} has: ${gensets}. ${HOURS_EXAMPLE}` : HOURS_EXAMPLE;
+      const hours = Number(String(a.rest[0] ?? '').replace(/,/g, ''));
+      if (!a.rest.length || !Number.isFinite(hours) || hours < 0) return `How many hours on ${esc(assetName(a.asset))}? ${HOURS_EXAMPLE}`;
+      const { rows: [f] } = await db.query('select facility_id from assets where id = $1', [a.asset.id]);
+      if (facilityId && f.facility_id !== facilityId) return 'One powerhouse at a time, please.';
+      facilityId = f.facility_id;
+      const item = { asset_id: a.asset.id, tag: a.asset.tag, total_hours: hours };
+      rest = a.rest.slice(1);
+      if (norm(rest[0] ?? '') === 'newmeter') { item.meter_replaced = true; rest = rest.slice(1); }
+      const cond = CONDITION_WORDS[norm(rest[0] ?? '')];
+      if (cond) {
+        item.condition = cond;
+        // The fault: the rest of the message (so a condition ends the list).
+        const fault = rest.slice(1).join(' ').trim();
+        if (cond !== 'ok') {
+          if (!fault) return `Say what's wrong with ${esc(assetName(a.asset))}, e.g. <code>/hours ${esc(r.island.name)} ${esc(a.asset.tag)} ${hours} minor oil leak</code>`;
+          item.fault = fault.slice(0, 2000);
+        }
+        rest = [];
+      }
+      if (items.some((x) => x.asset_id === item.asset_id)) return `${esc(assetName(a.asset))} is listed twice.`;
+      items.push(item);
+    }
+    const res = await asUser(user.id, 'POST', `/facilities/${facilityId}/genset-update`, { items: items.map(({ tag, ...x }) => x) });
+    if (res.status !== 200) return apiError(res);
+    const label = { ok: 'OK', minor_fault: 'minor fault', major_fault: 'major fault', not_running: 'not running' };
+    const lines = items.map((x) => `• ${esc(assetName({ kind: 'genset', tag: x.tag }))}: ${Number(x.total_hours).toLocaleString('en-GB')} h${x.meter_replaced ? ' (new meter)' : ''}${x.condition ? ` · ${label[x.condition]}${x.fault ? `: ${esc(x.fault)}` : ''}` : ''}`);
+    const monthName = new Date(`${res.body.month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const status = res.body.complete ? `✅ ${esc(r.island.name)} is up to date for ${monthName}.`
+      : `Still to do for ${monthName}: ${res.body.still_due.map((t) => esc(assetName({ kind: 'genset', tag: t }))).join(', ')}`;
+    return `⏱ Hours recorded for <b>${esc(r.island.atoll_code)}. ${esc(r.island.name)}</b>\n${lines.join('\n')}\n${status}`;
+  }
 
   async function cmdStatus(user, words, asUser) {
     if (!words.length) return 'Which island? e.g. <code>/status Maafushi</code>';
@@ -531,12 +589,13 @@ export function createTelegram({ db, config, log }) {
     const user = await linkedUser(msg.from.id);
     if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
 
-    const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance', 'disconnected', 'disconnect']);
+    const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance', 'disconnected', 'disconnect', 'hours']);
     if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /interruption, /summary, and comment on work you have been added to with /update.');
     try {
       let text;
       if (cmd === 'status') text = await cmdStatus(user, words, asUser);
       else if (STATUS_WORDS[cmd]) text = await cmdSetStatus(user, STATUS_WORDS[cmd], words, asUser);
+      else if (cmd === 'hours') text = await cmdHours(user, words, asUser);
       else if (cmd === 'interruption' || cmd === 'incident') text = await cmdIncident(user, words, asUser);
       else if (cmd === 'update') text = await cmdWorkUpdate(user, words, asUser);
       else if (cmd === 'done') text = await cmdWorkUpdate(user, words, asUser, 'completed');

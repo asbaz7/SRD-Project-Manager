@@ -142,6 +142,9 @@ function since(prev, total, metered, done) {
  * from the last record (and from maintenance records added since), so the
  * due dates keep working. Kept in the history and made the latest.
  * items: [{ asset, total_hours, meter_replaced, condition, fault, needs_overhaul, alt_needs_service }]
+ * Condition, fault and the flags may be left out (e.g. hours sent from
+ * Telegram): they stay as last recorded. The powerhouse counts as updated
+ * for the month once every genset in use (not disconnected) has its figures.
  */
 export async function applyGensetUpdate(t, { facilityId, items, userId, today }) {
   const month = `${today.slice(0, 7)}-01`;
@@ -156,10 +159,11 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
     const overhaul = done.find((e) => e.kind !== 'valve_clearance');
     const valve = done.find((e) => e.kind === 'valve_clearance');
     const metered = !it.meter_replaced;
+    const condition = it.condition ?? prev?.condition ?? 'ok';
     const r = {
-      status_text: CONDITION_TEXT[it.condition],
-      condition: it.condition,
-      fault: it.condition === 'ok' ? null : it.fault,
+      status_text: CONDITION_TEXT[condition],
+      condition,
+      fault: condition === 'ok' ? null : it.fault ?? (it.condition ? null : prev?.fault ?? null),
       total_hours: it.total_hours,
       hours_since_overhaul: since({ since: prev?.hours_since_overhaul, total: prev?.total_hours }, it.total_hours, metered, overhaul),
       last_overhaul_on: prev?.last_overhaul_on ?? null,
@@ -169,8 +173,8 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
       last_battery_on: prev?.last_battery_on ?? null,
       max_load_kw: prev?.max_load_kw ?? null,
       capable_kw: prev?.capable_kw ?? null,
-      needs_overhaul: !!it.needs_overhaul,
-      alt_needs_service: !!it.alt_needs_service,
+      needs_overhaul: it.needs_overhaul ?? prev?.needs_overhaul ?? false,
+      alt_needs_service: it.alt_needs_service ?? prev?.alt_needs_service ?? false,
       overhaul_spares_received: prev?.overhaul_spares_received ?? null,
     };
     const opts = { source: 'update', userId, sourceRef: it.meter_replaced ? 'meter replaced' : null, at };
@@ -179,8 +183,18 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
     await t.query(`insert into hours_log (asset_id, month, total_hours) values ($1, $2, $3)
                    on conflict (asset_id, month) do update set total_hours = excluded.total_hours`, [it.asset.id, month, it.total_hours]);
   }
-  const p = { source: 'update', reported_on: today, genset_count: items.length, userId };
-  await keepPowerhouseReport(t, facilityId, month, p);
-  await setLatestPowerhouse(t, facilityId, month, p);
-  return { month, gensets: items.length };
+  // The powerhouse is up to date for the month once all its gensets are.
+  const { rows: [count] } = await t.query(`
+    select count(*) filter (where c.report_month >= $2)::int as done,
+           count(*) filter (where c.report_month is null or c.report_month < $2)::int as left,
+           coalesce(array_agg(s.tag order by length(s.tag), s.tag) filter (where c.report_month is null or c.report_month < $2), '{}') as due
+      from assets s left join engine_conditions c on c.asset_id = s.id
+     where s.facility_id = $1 and s.kind = 'genset' and s.active and s.status not in ('decommissioned', 'disconnected')`, [facilityId, month]);
+  const due = typeof count.due === 'string' ? count.due.replace(/[{}"]/g, '').split(',').filter(Boolean) : count.due;
+  if (!count.left) {
+    const p = { source: 'update', reported_on: today, genset_count: count.done, userId };
+    await keepPowerhouseReport(t, facilityId, month, p);
+    await setLatestPowerhouse(t, facilityId, month, p);
+  }
+  return { month, gensets: items.length, complete: !count.left, still_due: due };
 }

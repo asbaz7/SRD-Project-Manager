@@ -16,7 +16,8 @@ const updateBody = z.object({
     total_hours: z.number().nonnegative().max(1_000_000),
     // The hours meter was replaced: a lower reading is allowed.
     meter_replaced: z.boolean().optional(),
-    condition: z.enum(CONDITIONS),
+    // Left out: stays as last recorded (with its fault).
+    condition: z.enum(CONDITIONS).optional(),
     fault: optText(2000),
     needs_overhaul: z.boolean().optional(),
     alt_needs_service: z.boolean().optional(),
@@ -66,7 +67,7 @@ export default async function gensetUpdateRoutes(app) {
       if (!g) throw badRequest('Each genset must be one of this powerhouse\'s, in use');
       if (seen.has(g.id)) throw badRequest(`Genset ${g.tag} is listed twice`);
       seen.add(g.id);
-      if (it.condition !== 'ok' && !it.fault) throw badRequest(`Genset ${g.tag}: say what the fault is`);
+      if (it.condition && it.condition !== 'ok' && !it.fault) throw badRequest(`Genset ${g.tag}: say what the fault is`);
       if (g.total_hours != null && it.total_hours < Number(g.total_hours) && !it.meter_replaced) {
         throw badRequest(`Genset ${g.tag}: ${it.total_hours} hours is less than the last reading (${Number(g.total_hours)}). Tick "meter replaced" if it was.`);
       }
