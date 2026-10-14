@@ -168,27 +168,21 @@ icon and a label. Each service has its own identity colour.
 Work orders carry a `service` (migration 005): taken from the asset or
 facility, or chosen for island-wide work.
 
-## Other systems: access tokens (Oct 2026)
+## Works on its own: no outside systems (Oct 2026)
 
-Another system (the Fleet Manager connector) uses SRD as a **service
-account** (`users.service_account`, migration 021):
-- it cannot sign in with a password and is not listed among people;
-- it is a technical manager for the whole region by default.
+SRD Utility Manager depends on no other app for its data. From 9 to 14 Oct
+2026 the Fleet Manager connector used a service account and an access token
+to send genset condition reports; on 14 Oct it was disconnected
+(migration 045):
+- access tokens are no longer accepted, and the screens and endpoints that
+  issued them (`/admin/api-tokens`, `/admin/service-accounts`) and received
+  reports (`POST /condition-reports`) are gone;
+- its token is revoked and its service account switched off;
+- the 146 genset reports it sent (Jul-Oct 2026) stay in the history, marked
+  `fleet_manager`. New reports come only from workbooks uploaded here.
 
-It authenticates with an **access token**: `Authorization: Bearer srd_…`.
-- Only the token's SHA-256 is stored, with its last 4 characters as a hint.
-- Administrators create and revoke tokens under Users → Access tokens
-  (`/admin/api-tokens`, `/admin/service-accounts`).
-- Its changes are audited under the account's name.
-
-**Data agreement with the Fleet Manager** (Oct 2026):
-- **SRD keeps:** faults, work orders, running status, moves, islands, and its
-  own condition report upload (kept as a fallback until the connector has
-  proved reliable).
-- **The Fleet Manager sends:** alternator service dates and nameplate
-  corrections, through the normal API.
-- **Linking:** assets are linked by engine serial. Edit assets; don't delete
-  and recreate them.
+The system's own Telegram bot (@SRDmanagerbot) is part of it, not an outside
+system.
 
 ## Users: head office only (decided Oct 2026)
 
@@ -338,11 +332,11 @@ saying "not running":
 The status API returns the work, and the Telegram reply and down alert link
 to it.
 
-## Surveys: in the Fleet Manager (Oct 2026)
+## Surveys (Oct 2026)
 
 A Surveys section was built (migration 019) and then removed (migration
-022): surveys, and confirming "unverified" gensets, are done in the Fleet
-Manager, so there is one place for them.
+022), when surveys were to be done in the Fleet Manager. Since that was
+disconnected (14 Oct 2026) there is no surveys section.
 
 ## Engine state: one answer (Oct 2026)
 
@@ -508,49 +502,23 @@ history.
 |---|---|---|---|
 | GET | `/engines?condition&flag&atoll_id&q&sort` (CSV) | any | Fleet view with summary counts |
 | GET | `/condition-reports` | any | Every powerhouse's latest report, and whether it is missing |
-| POST | `/condition-reports` | manager (Fleet Manager service account) | A powerhouse's checked monthly report as JSON (below). Sending a month again replaces it |
 | GET | `/condition-reports/history?facility_id\|asset_id&from&to` | any | Report history month by month, per source |
 | POST | `/condition-reports/preview` | manager | Read an uploaded `.xlsx` (base64), match its island and show the changes. Saves nothing |
 | POST | `/condition-reports/import` | manager | Apply it for the confirmed island |
 | GET / PUT | `/service-intervals` | read: any · write: technical manager | Overhaul (hours) and alternator service (months) intervals: the region's, and per model (matched on part of the make / model, e.g. `KTA38`) |
-| PATCH | `/assets/:id` with `next_overhaul_on`, `next_overhaul_hours`, `next_alt_service_on` | manager (e.g. the Fleet Manager service account) | Set the next service on one genset; wins over the interval until a later service is recorded |
+| PATCH | `/assets/:id` with `next_overhaul_on`, `next_overhaul_hours`, `next_alt_service_on` | manager | Set the next service on one genset; wins over the interval until a later service is recorded |
 | POST | `/assets/:id/maintenance` | manager | Add a maintenance record by hand |
 | PATCH | `/maintenance/:id` | manager | Correct a record (manual: all fields; from work: hours and notes) with a required `reason` |
 | DELETE | `/maintenance/:id` | manager (own manual records) / admin | Remove a record |
 | GET / POST / PATCH | `/work`, `/work/:id` | read: any · write: manager | Work orders |
 | POST | `/work/:id/updates` | manager | Progress update, optionally changing the status |
 
-### Reports sent by Fleet Manager
+### Reports from Fleet Manager (history only)
 
-Fleet Manager collects the islands' sheets from OneDrive, checks them row by
-row and sends each powerhouse's report right after its import:
-
-```json
-POST /api/v1/condition-reports
-{
-  "report_month": "2026-08-01",            // first day of the month reported on
-  "reported_on": "2026-09-01",
-  "file_name": "ADh. Dhigurah ECR Aug 2026.xlsx",
-  "source_ref": "ECR import #412",
-  "peak_load": { "kw": 1258, "at": "2026-07-12T18:00:00+05:00" },
-  "held_rows": [{ "genset": "7", "reason": "Hours went backwards" }],
-  "engines": [{
-    "srd_asset_id": "4ec2ed22-…",
-    "status_text": "RUNNING; OK", "condition": "ok",   // ok | minor_fault | major_fault | not_running
-    "fault": null, "total_hours": 10999, "hours_since_overhaul": null, "hours_since_valve": null,
-    "last_overhaul_on": null, "last_valve_on": "2024-07-23", "last_battery_on": null, "last_alt_service_on": "2026-09-16",
-    "needs_overhaul": false, "alt_needs_service": true, "overhaul_spares_received": null,
-    "max_load_kw": 486, "capable_kw": 600
-  }]
-}
-```
-
-All gensets must be at one powerhouse (or give `facility_id` with an empty
-list). It is kept in the history next to any uploaded sheet of the same
-month, becomes the latest unless a newer month is in, sets the running state
-like an upload, and adds its dates to the maintenance history (`origin:
-fleet_manager`). The reply gives `latest`, counts, and `differences` from an
-uploaded sheet of the same month, field by field.
+Until 14 Oct 2026 Fleet Manager sent each powerhouse's checked report as
+JSON. Those reports are kept in the history next to uploaded sheets of the
+same month (source `fleet_manager`, maintenance dates with `origin:
+fleet_manager`); nothing new arrives that way.
 
 ## 5. Access control
 

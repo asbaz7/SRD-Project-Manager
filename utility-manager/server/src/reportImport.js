@@ -492,6 +492,8 @@ const DIFF_FIELDS = ['condition', 'total_hours', 'last_overhaul_on', 'last_valve
 const same = (a, b) => (a ?? null) === (b ?? null) || (a != null && b != null && Number(a) === Number(b) && !Number.isNaN(Number(a)));
 
 /**
+ * (No longer received: Fleet Manager was disconnected on 14 Oct 2026 and its
+ * reports are kept as history. Kept for the tests of that history.)
  * A powerhouse's monthly report as checked and sent by Fleet Manager
  * (genset ids already linked). Kept in the history next to any upload of
  * the same month; becomes the latest unless a newer month is in. Dates it

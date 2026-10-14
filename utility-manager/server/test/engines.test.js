@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { buildApp } from '../src/app.js';
+import { applyFleetReport } from '../src/reportImport.js';
 import { hashPassword } from '../src/auth.js';
 import { classifyCondition, fixSinceHours, parseConditionReport, toDate, toHours } from '../src/conditionReport.js';
 import { loadConfig } from '../src/config.js';
@@ -710,7 +711,18 @@ describe('reports sent by Fleet Manager, and report history', () => {
                                 where f.island_id = $1 and s.kind = 'genset' and s.active and s.serial_no like '%DG'
                                 order by length(s.tag), s.tag`, [dhigurah.id])).rows;
   });
-  const send = (body) => call('POST', '/condition-reports', { token: admin, body });
+  // Fleet Manager no longer sends reports (disconnected 14 Oct 2026); the
+  // ones it sent are kept as history. These tests write such history
+  // directly, the way it was stored.
+  const send = async (body) => {
+    const ids = body.engines.map((e) => e.srd_asset_id);
+    const { rows } = await db.query(`select a.id, a.tag, a.kind, a.active, a.status, a.status_at, a.facility_id from assets a where a.id = any($1::uuid[])`, [ids]);
+    const assets = new Map(rows.map((a) => [a.id, a]));
+    const facilityId = body.facility_id || rows[0].facility_id;
+    const report = { held_rows: [], ...body, engines: body.engines.map((e) => ({ ...e })) };
+    const result = await db.tx(null, (t) => applyFleetReport(t, report, { facilityId, assets, userId: null }));
+    return { status: 200, body: { ok: true, facility_id: facilityId, report_month: body.report_month, ...result } };
+  };
 
   test('uploads are kept month by month', async () => {
     const h = (await call('GET', `/condition-reports/history?asset_id=${gensets[0].id}`, { token: admin })).body;
@@ -912,16 +924,5 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.equal(kudagiri?.atoll_code, 'K');
     const island = (await call('GET', `/islands/${kudagiri.id}`, { token: admin })).body;
     assert.deepEqual(island.facilities.map((f) => f.name), ['Kudagiri Powerhouse']);
-  });
-
-  test('bad reports are refused', async () => {
-    const other = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id
-                                    where f.island_id = $1 and s.kind = 'genset' and s.active limit 1`, [maafushi.id])).rows[0];
-    assert.equal((await send({ report_month: '2026-08-15', engines: [{ srd_asset_id: gensets[0].id }] })).status, 400);
-    assert.equal((await send({ report_month: EXPECTED, engines: [{ srd_asset_id: '00000000-0000-4000-8000-000000000000' }] })).status, 400);
-    if (other) assert.equal((await send({ report_month: EXPECTED, engines: [{ srd_asset_id: gensets[0].id }, { srd_asset_id: other.id }] })).status, 400);
-    assert.equal((await send({ report_month: EXPECTED, engines: [] })).status, 400);
-    const notTheirs = await call('POST', '/condition-reports', { token: manager, body: { report_month: EXPECTED, engines: [{ srd_asset_id: gensets[0].id }] } });
-    assert.equal(notTheirs.status, 403, 'a manager for Maafushi cannot send Dhigurah\'s report');
   });
 });

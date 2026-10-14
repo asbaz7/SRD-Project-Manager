@@ -49,7 +49,6 @@ const sha256 = (token) => createHash('sha256').update(token).digest();
 
 export async function createSession(db, userId, { ttlHours, ip, userAgent }) {
   let token = randomBytes(32).toString('base64url');
-  while (token.startsWith(API_TOKEN_PREFIX)) token = randomBytes(32).toString('base64url');   // keep apart from access tokens
   const expiresAt = new Date(Date.now() + ttlHours * 3600_000);
   await db.query(
     `insert into sessions (token_hash, user_id, expires_at, ip, user_agent) values ($1, $2, $3, $4, $5)`,
@@ -62,35 +61,8 @@ export async function destroySession(db, token) {
   if (token) await db.query('delete from sessions where token_hash = $1', [sha256(token)]);
 }
 
-// Access tokens for other systems start with this; sessions don't.
-export const API_TOKEN_PREFIX = 'srd_';
-
-export async function createApiToken() {
-  const token = API_TOKEN_PREFIX + randomBytes(32).toString('base64url');
-  return { token, hash: sha256(token), hint: token.slice(-4) };
-}
-
-async function loadApiToken(db, token) {
-  const { rows } = await db.query(`
-    select t.id as token_id, t.last_used_at, u.id, u.email, u.full_name, u.role, u.technical, u.permissions,
-           u.designation, u.unit_id, (select coalesce(array_agg(un.id order by un.id), '{}') from units un where un.head_user_id = u.id) as head_of,
-           coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
-                    filter (where sc.id is not null), '[]') as scopes
-      from api_tokens t join users u on u.id = t.user_id and u.active
-      left join user_scopes sc on sc.user_id = u.id
-     where t.token_hash = $1 and t.revoked_at is null
-     group by t.id, u.id`, [sha256(token)]);
-  const row = rows[0];
-  if (!row) return null;
-  if (!row.last_used_at || Date.now() - new Date(row.last_used_at).getTime() > 5 * 60_000) {
-    db.query('update api_tokens set last_used_at = now() where id = $1', [row.token_id]).catch(() => {});
-  }
-  return { ...row, must_change_password: false, viaToken: true };
-}
-
 export async function loadSession(db, token) {
   if (!token || token.length > 100) return null;
-  if (token.startsWith(API_TOKEN_PREFIX)) return toUser(await loadApiToken(db, token));
   const { rows } = await db.query(
     `select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical, u.permissions,
             u.designation, u.unit_id, (select coalesce(array_agg(un.id order by un.id), '{}') from units un where un.head_user_id = u.id) as head_of,
@@ -131,7 +103,6 @@ function toUser(row) {
     headOf: (typeof row.head_of === 'string' ? row.head_of.replace(/[{}]/g, '').split(',').filter(Boolean) : (row.head_of || [])).map(Number),
     generalManager: /^\s*general manager\s*$/i.test(row.designation || ''),
     mustChangePassword: row.must_change_password,
-    viaToken: !!row.viaToken,
     scope: {
       region: scopes.some((s) => !s.atoll_id && !s.island_id),
       atollIds: scopes.filter((s) => s.atoll_id).map((s) => s.atoll_id),

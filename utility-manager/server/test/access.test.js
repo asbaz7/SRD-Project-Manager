@@ -1,5 +1,6 @@
 // Technical vs non-technical staff, work commenters, and per-project sharing.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { buildApp } from '../src/app.js';
 import { hashPassword } from '../src/auth.js';
@@ -326,40 +327,17 @@ test('projects: type, task breakdown and progress calculated from the tasks', as
   assert.equal((await call('POST', '/projects', T.tech, { title: 'x', island_id: maafushi.id, project_type: 'powerhouse' })).status, 400);
 });
 
-test('access tokens: a service account for another system, revocable, changes signed with its name', async () => {
-  const svc = await call('POST', '/admin/service-accounts', T.admin, { full_name: 'Fleet Manager', email: 'fleet-manager@srd.mv' });
-  assert.equal(svc.status, 201, JSON.stringify(svc.body));
-  assert.equal(svc.body.service_account, true);
-  assert.equal((await call('POST', '/admin/service-accounts', T.tech, { full_name: 'x', email: 'x@srd.mv' })).status, 403);
-  // Not listed among people; can't sign in with a password.
-  assert.ok(!(await call('GET', '/users/directory', T.tech)).body.some((u) => u.id === svc.body.id));
-
-  const made = await call('POST', '/admin/api-tokens', T.admin, { user_id: svc.body.id, name: 'Fleet Manager connector' });
-  assert.equal(made.status, 201);
-  const token = made.body.token;
-  assert.match(token, /^srd_[A-Za-z0-9_-]{40,}$/);
-  const list = (await call('GET', '/admin/api-tokens', T.admin)).body;
-  assert.equal(list[0].token_hint, token.slice(-4));
-  assert.ok(!JSON.stringify(list).includes(token), 'the token itself is never shown again');
-
-  // It works like a technical manager, and its changes are signed with its name.
-  assert.equal((await call('GET', '/auth/me', token)).body.fullName, 'Fleet Manager');
-  assert.equal((await call('GET', '/engines', token)).status, 200);
-  const g = (await call('GET', '/engines', token)).body.engines[0];
-  assert.equal((await call('POST', `/assets/${g.id}/maintenance`, token, { kind: 'alternator_service', done_on: '2026-09-01', notes: 'From the Fleet Manager' })).status, 201);
-  const who = (await db.query(`select u.full_name from audit_log l join users u on u.id = l.user_id where l.entity = 'maintenance_events' order by l.at desc limit 1`)).rows[0];
-  assert.equal(who.full_name, 'Fleet Manager');
-
-  // Its "last used" stamps are hidden from the audit trail unless asked for.
-  const stamps = (rows) => rows.filter((l) => l.entity === 'api_tokens' && l.action === 'update'
-    && Object.keys(l.changes).length === 1 && l.changes.last_used_at);
-  assert.equal(stamps((await call('GET', '/audit?limit=200', T.admin)).body.items).length, 0);
-  assert.ok(stamps((await call('GET', '/audit?limit=200&system=1', T.admin)).body.items).length >= 1);
-
-  // Revoked: refused at once.
-  await call('DELETE', `/admin/api-tokens/${made.body.id}`, T.admin);
+test('outside systems cannot connect: no access tokens, no report intake', async () => {
+  // A token made the old way is refused, as are the endpoints that issued
+  // tokens and received reports.
+  const token = 'srd_' + 'x'.repeat(43);
+  const { rows: [u] } = await db.query("select id from users where email = 'tech@srd.mv'");
+  await db.query("insert into api_tokens (user_id, name, token_hash, token_hint) values ($1, 'old', $2, 'xxxx')", [u.id, createHash('sha256').update(token).digest()]);
   assert.equal((await call('GET', '/auth/me', token)).status, 401);
-  assert.equal((await call('GET', '/engines', 'srd_not-a-real-token-at-all-0000000000000000000')).status, 401);
+  assert.equal((await call('GET', '/engines', token)).status, 401);
+  for (const [method, url] of [['GET', '/admin/api-tokens'], ['POST', '/admin/api-tokens'], ['POST', '/admin/service-accounts'], ['POST', '/condition-reports']]) {
+    assert.equal((await call(method, url, T.admin, method === 'GET' ? undefined : {})).status, 404, `${method} ${url}`);
+  }
 });
 
 test('units: people belong to one; work and projects are assigned to one, and its members can view the project', async () => {
