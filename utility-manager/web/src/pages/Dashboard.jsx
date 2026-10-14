@@ -163,10 +163,12 @@ function TakeoverTile({ t }) {
         <p className="small">
           <span className="tko-state taken_over">{done} under STELCO</span> · <span className="tko-state pending">{t.totals.pending} under FENAKA</span>
           {t.totals.not_set > 0 && <> · <span className="tko-state not_set">{t.totals.not_set} not set</span></>}</p>
+        {t.survey.scope > 0 && <p className="small"><Link to="/takeover?view=survey">Survey</Link>: {t.survey.completed} of {t.survey.scope} islands under FENAKA surveyed
+          · {t.survey.ongoing} ongoing · {t.survey.planned} planned</p>}
         <div className="tko-services">{[['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']].map(([k, label]) => {
           const s = t.services[k];
-          return <div key={k}><small>{label}: {s.taken_over} of {s.taken_over + s.pending + s.fenaka}</small>
-            <div className="tko-bar thin"><span style={{ width: `${p(s.taken_over, s.taken_over + s.pending + s.fenaka)}%` }} /></div></div>;
+          return <div key={k}><small>{label}: {s.taken_over} of {s.taken_over + s.fenaka}</small>
+            <div className="tko-bar thin"><span style={{ width: `${p(s.taken_over, s.taken_over + s.fenaka)}%` }} /></div></div>;
         })}</div>
       </div>
     </div>

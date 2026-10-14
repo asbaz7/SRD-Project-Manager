@@ -699,3 +699,35 @@ tr.picked > td { background: color-mix(in srgb, var(--accent) 14%, transparent);
 .tko-pill.fenaka { color: var(--warn); background: color-mix(in srgb, var(--warn-fill) 10%, transparent); }
 .tko-pill.other_operator { color: #9aa6ff; background: rgba(124, 140, 248, .15); }
 .tko-state.other { color: #9aa6ff; }
+
+/* Takeover / Survey switch and survey colours */
+.tko-switch { display: inline-flex; gap: 2px; padding: 3px; margin: 10px 0 2px; border-radius: 12px; background: var(--track); }
+.tko-switch button { border: 0; background: none; color: var(--text-2); font: inherit; font-size: .85rem; font-weight: 600; padding: 5px 14px; border-radius: 9px; cursor: pointer; }
+.tko-switch button.on { background: var(--glass-strong, var(--glass)); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.form .tko-switch { justify-self: start; }
+.tko-form-head { margin: 8px 0 0; font-size: .9rem; color: var(--text-2); }
+:root { --sv-completed: #2dd4bf; --sv-ongoing: #60a5fa; --sv-planned: #a78bfa; --sv-not_started: var(--warn-fill); }
+.tko-bar.sv { display: flex; }
+.tko-bar.sv > span { border-radius: 0; }
+.tko-bar.sv > span:first-child { border-radius: 999px 0 0 999px; }
+.tko-bar.sv > span.completed { background: var(--sv-completed); }
+.tko-bar.sv > span.ongoing { background: var(--sv-ongoing); }
+.tko-bar.sv > span.planned { background: var(--sv-planned); }
+.sv-text.completed { color: var(--sv-completed); } .sv-text.ongoing { color: var(--sv-ongoing); }
+.sv-text.planned { color: var(--sv-planned); } .sv-text.not_started { color: var(--warn); }
+.tko-island.sv-completed circle:not(.hit) { fill: var(--sv-completed); }
+.tko-island.sv-ongoing circle:not(.hit) { fill: var(--sv-ongoing); }
+.tko-island.sv-planned circle:not(.hit) { fill: var(--sv-planned); }
+.tko-island.sv-not_started circle:not(.hit) { fill: var(--sv-not_started); }
+.tko-island.sv-none circle:not(.hit) { fill: var(--none-fill); opacity: .45; }
+.tko-legend-float .dot.sv-completed { background: var(--sv-completed); } .tko-legend-float .dot.sv-ongoing { background: var(--sv-ongoing); }
+.tko-legend-float .dot.sv-planned { background: var(--sv-planned); } .tko-legend-float .dot.sv-not_started { background: var(--sv-not_started); }
+.tko-legend-float .dot.sv-none { background: var(--none-fill); opacity: .5; }
+.tko-atoll.sv-completed polygon { fill: color-mix(in srgb, var(--sv-completed) 22%, transparent); stroke: var(--sv-completed); }
+.tko-atoll.sv-ongoing polygon { fill: color-mix(in srgb, var(--sv-ongoing) 20%, transparent); stroke: var(--sv-ongoing); }
+.tko-atoll.sv-planned polygon { fill: color-mix(in srgb, var(--sv-planned) 20%, transparent); stroke: var(--sv-planned); }
+.tko-atoll.sv-not_started polygon { fill: color-mix(in srgb, var(--warn-fill) 16%, transparent); stroke: var(--warn-fill); }
+.tko-atoll.sv-clear polygon { fill: var(--track); stroke: var(--none-fill); stroke-opacity: .5; }
+.tko-popup-survey { margin: 4px 0 8px; padding: 8px 10px; border-radius: 12px; background: var(--track); }
+.tko-popup-survey p { margin: 2px 0; }
+.tko-none { display: block; margin-top: 3px; }

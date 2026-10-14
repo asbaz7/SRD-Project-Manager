@@ -8,12 +8,14 @@ import { date, id, one, optText, parse, parsePatch, serialParam, text, updateSet
 import { INHABITED_ISLANDS, NATIONAL_ATOLLS } from '../nationalAtolls.js';
 
 export const TAKEOVER_SERVICES = ['electricity', 'water', 'sewerage'];
-// pending: survey ongoing; fenaka: still FENAKA's, survey not started;
-// other_operator: run by someone else (MWSC, a private party).
-export const TAKEOVER_STATUSES = ['taken_over', 'pending', 'fenaka', 'other_operator', 'not_applicable'];
+// Who runs each service: STELCO (taken over), still FENAKA, another
+// operator (MWSC, a private party), or none there. The survey before the
+// takeover is the island's (migration 059).
+export const TAKEOVER_STATUSES = ['taken_over', 'fenaka', 'other_operator', 'not_applicable'];
+export const SURVEY_STAGES = ['planned', 'ongoing', 'completed'];
 const OUTSIDE = ['not_applicable', 'other_operator'];
-const NO_DATE = ['fenaka', ...OUTSIDE];
 const status = z.enum(TAKEOVER_STATUSES).nullish();
+const m365 = z.string().trim().max(2000).url().refine((u) => u.startsWith('https://'), 'must start with https://');
 const islandBody = z.object({
   atoll_code: z.enum(NATIONAL_ATOLLS.map((a) => a.code)),
   name: text(100),
@@ -23,9 +25,20 @@ const islandBody = z.object({
   water_status: status, water_on: date.nullish(),
   sewerage_status: status, sewerage_on: date.nullish(),
   notes: optText(2000),
+  survey_stage: z.enum(SURVEY_STAGES).nullish(),
+  survey_start: date.nullish(), survey_end: date.nullish(),
+  survey_team: optText(300),
+  survey_link: m365.nullish().or(z.literal('').transform(() => null)),
 });
 const COLS = ['atoll_code', 'name', 'island_id', 'phase', 'electricity_status', 'electricity_on', 'water_status', 'water_on',
-  'sewerage_status', 'sewerage_on', 'notes'];
+  'sewerage_status', 'sewerage_on', 'notes', 'survey_stage', 'survey_start', 'survey_end', 'survey_team', 'survey_link'];
+
+// Islands still (partly) FENAKA's are the ones to survey; by stage.
+const surveyed = (list) => {
+  const scope = list.filter((i) => i.state === 'pending');
+  const n = (stage) => scope.filter((i) => (i.survey_stage || null) === stage).length;
+  return { scope: scope.length, completed: n('completed'), ongoing: n('ongoing'), planned: n('planned'), not_started: n(null) };
+};
 
 // An island's overall state: taken over once every service that is part of
 // the takeover is; pending (under FENAKA) while any is still FENAKA's; other
@@ -54,11 +67,11 @@ export default async function takeoverRoutes(app) {
     const count = (list, state) => list.filter((i) => i.state === state).length;
     const atolls = NATIONAL_ATOLLS.map((a) => {
       const list = counted.filter((i) => i.atoll_code === a.code);
-      return { ...a, islands: list.length, taken_over: count(list, 'taken_over'), pending: count(list, 'pending'), other: count(list, 'other'), not_set: count(list, 'not_set') };
+      return { ...a, islands: list.length, taken_over: count(list, 'taken_over'), pending: count(list, 'pending'), other: count(list, 'other'),
+        not_set: count(list, 'not_set'), survey: surveyed(list) };
     });
     const services = Object.fromEntries(TAKEOVER_SERVICES.map((k) => [k, {
       taken_over: counted.filter((i) => i[`${k}_status`] === 'taken_over').length,
-      pending: counted.filter((i) => i[`${k}_status`] === 'pending').length,
       fenaka: counted.filter((i) => i[`${k}_status`] === 'fenaka').length,
     }]));
     return {
@@ -66,8 +79,8 @@ export default async function takeoverRoutes(app) {
       totals: {
         islands: counted.length, taken_over: count(counted, 'taken_over'), pending: count(counted, 'pending'),
         other: count(counted, 'other'), not_set: count(counted, 'not_set'),
-        survey: counted.filter((i) => TAKEOVER_SERVICES.some((k) => i[`${k}_status`] === 'pending')).length,
       },
+      survey: surveyed(counted),
       services, atolls, islands,
     };
   });
@@ -105,7 +118,24 @@ export default async function takeoverRoutes(app) {
     const { rowCount } = await db.tx(req.user.id, (t) => t.query(
       `update takeover_islands set ${b.service}_status = $2, ${b.service}_on = $3, updated_by = $4
         where atoll_code = $1 ${b.all ? '' : `and ${b.service}_status is null`}`,
-      [code, b.status, NO_DATE.includes(b.status) ? null : b.on ?? null, req.user.id]));
+      [code, b.status, b.status === 'taken_over' ? b.on ?? null : null, req.user.id]));
+    return { ok: true, updated: rowCount };
+  });
+
+  // The survey stage for an atoll's islands still with FENAKA (those with no
+  // stage yet, unless all), e.g. "Thaa: survey planned from 1 Nov".
+  app.post('/takeover/atolls/:code/survey', manager, async (req) => {
+    const { code } = parse(z.object({ code: z.enum(NATIONAL_ATOLLS.map((a) => a.code)) }), req.params);
+    const b = parse(z.object({
+      stage: z.enum(SURVEY_STAGES).nullable(), start: date.nullish(), end: date.nullish(),
+      team: optText(300), all: z.boolean().default(false),
+    }), req.body);
+    const { rowCount } = await db.tx(req.user.id, (t) => t.query(
+      `update takeover_islands set survey_stage = $2, survey_start = coalesce($3, survey_start), survey_end = $4,
+              survey_team = coalesce($5, survey_team), updated_by = $6
+        where atoll_code = $1 and 'fenaka' in (electricity_status, water_status, sewerage_status)
+          ${b.all ? '' : 'and survey_stage is null'}`,
+      [code, b.stage, b.start ?? null, b.stage === 'completed' ? b.end ?? null : null, b.team ?? null, req.user.id]));
     return { ok: true, updated: rowCount };
   });
 

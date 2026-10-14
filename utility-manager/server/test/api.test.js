@@ -407,7 +407,8 @@ describe('national takeover tracker', () => {
   test('SRD islands start it; islands elsewhere are added; per service, an island is taken over once all are', async () => {
     // The test register is filled after the migrations: run the seeding again.
     const sql = readFileSync(new URL('../migrations/053_national_takeover.sql', import.meta.url), 'utf8');
-    await db.exec(sql.slice(sql.indexOf('insert into takeover_islands')));
+    // ('pending' was "survey ongoing" then; the services are FENAKA's now.)
+    await db.exec(sql.slice(sql.indexOf('insert into takeover_islands')).replaceAll("'pending'", "'fenaka'"));
     let t = (await call('GET', '/takeover', { token: admin })).body;
     assert.equal(t.expected_islands, 187);
     assert.equal(t.atolls.length, 20);
@@ -422,7 +423,7 @@ describe('national takeover tracker', () => {
 
     // An island outside SRD, still with FENAKA.
     const add = await call('POST', '/takeover/islands', { token: admin, body: {
-      atoll_code: 'HA', name: 'Testfushi', phase: 'Phase 3', electricity_status: 'pending', electricity_on: '2026-12-01', water_status: 'pending' } });
+      atoll_code: 'HA', name: 'Testfushi', phase: 'Phase 3', electricity_status: 'fenaka', water_status: 'fenaka', survey_stage: 'planned', survey_start: '2026-12-01' } });
     assert.equal(add.status, 201, JSON.stringify(add.body));
     assert.equal(add.body.state, 'pending');
     assert.equal((await call('POST', '/takeover/islands', { token: admin, body: { atoll_code: 'HA', name: 'testfushi' } })).status, 400, 'no duplicates');
@@ -444,6 +445,21 @@ describe('national takeover tracker', () => {
     assert.equal(islandState({ electricity_status: 'other_operator', water_status: 'other_operator' }), 'other');
     assert.equal(t.islands.find((i) => i.atoll_code === 'R' && i.name === 'Dhuvaafaru').state, 'other');
     assert.equal(t.atolls.find((a) => a.code === 'R').pending, 14);
+    // Survey progress: of the islands still FENAKA's.
+    assert.equal(t.survey.scope, t.totals.pending);
+    assert.equal(t.survey.completed + t.survey.ongoing + t.survey.planned + t.survey.not_started, t.survey.scope);
+    let sv = await call('POST', '/takeover/atolls/R/survey', { token: admin, body: { stage: 'ongoing', start: '2026-10-01', team: 'Survey team A' } });
+    assert.equal(sv.body.updated, 14, 'not Dhuvaafaru (MWSC)');
+    const alifushi = (await call('GET', '/takeover', { token: admin })).body.islands.find((i) => i.atoll_code === 'R' && i.name === 'Alifushi');
+    assert.deepEqual([alifushi.survey_stage, alifushi.survey_start, alifushi.survey_team], ['ongoing', '2026-10-01', 'Survey team A']);
+    r = await call('PATCH', `/takeover/islands/${alifushi.id}`, { token: admin, body: { survey_stage: 'completed', survey_end: '2026-10-10', survey_link: 'https://stelco.sharepoint.com/r/alifushi.docx' } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal((await call('PATCH', `/takeover/islands/${alifushi.id}`, { token: admin, body: { survey_link: 'http://x.example' } })).status, 400);
+    sv = await call('POST', '/takeover/atolls/R/survey', { token: admin, body: { stage: 'planned' } });
+    assert.equal(sv.body.updated, 0, 'only islands with no stage');
+    t = (await call('GET', '/takeover', { token: admin })).body;
+    const rs = t.atolls.find((a) => a.code === 'R').survey;
+    assert.deepEqual([rs.scope, rs.completed, rs.ongoing], [14, 1, 13]);
     // Vilimalé and Gulhifalhu: on the list and the map, not in the 187.
     assert.deepEqual(t.islands.filter((i) => !i.counted).map((i) => i.name).sort(), ['Gulhifalhu', 'Kudagiri', 'Thilafushi', 'Vilimalé']);
     assert.equal(t.services.water.taken_over >= 1, true);
@@ -459,13 +475,14 @@ describe('national takeover tracker', () => {
 
     // A whole atoll at once: only the islands not set, unless all.
     const feydhoo = t.islands.find((i) => i.atoll_code === 'S' && i.name === 'Feydhoo');
-    await call('PATCH', `/takeover/islands/${feydhoo.id}`, { token: admin, body: { electricity_status: 'pending' } });
+    await call('PATCH', `/takeover/islands/${feydhoo.id}`, { token: admin, body: { electricity_status: 'fenaka' } });
     let bulk = await call('POST', '/takeover/atolls/S', { token: admin, body: { service: 'electricity', status: 'taken_over', on: '2025-01-01' } });
     assert.equal(bulk.body.updated, 5, 'the 5 not set; Feydhoo kept');
     t = (await call('GET', '/takeover', { token: admin })).body;
-    assert.equal(t.islands.find((i) => i.id === feydhoo.id).electricity_status, 'pending');
+    assert.equal(t.islands.find((i) => i.id === feydhoo.id).electricity_status, 'fenaka');
     bulk = await call('POST', '/takeover/atolls/S', { token: admin, body: { service: 'electricity', status: 'taken_over', all: true } });
     assert.equal(bulk.body.updated, 6);
-    assert.equal((await call('POST', '/takeover/atolls/S', { token: viewer, body: { service: 'water', status: 'pending' } })).status, 403);
+    assert.equal((await call('POST', '/takeover/atolls/S', { token: viewer, body: { service: 'water', status: 'fenaka' } })).status, 403);
+    assert.equal((await call('POST', '/takeover/atolls/S/survey', { token: viewer, body: { stage: 'planned' } })).status, 403);
   });
 });
