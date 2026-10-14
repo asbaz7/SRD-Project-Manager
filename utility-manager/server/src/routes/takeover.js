@@ -79,6 +79,21 @@ export default async function takeoverRoutes(app) {
     return { ...row, state: islandState(row) };
   });
 
+  // One service for a whole atoll at once (e.g. "Seenu: electricity taken
+  // over"), for the islands not set yet unless all are asked for.
+  app.post('/takeover/atolls/:code', manager, async (req) => {
+    const { code } = parse(z.object({ code: z.enum(NATIONAL_ATOLLS.map((a) => a.code)) }), req.params);
+    const b = parse(z.object({
+      service: z.enum(TAKEOVER_SERVICES), status: z.enum(['taken_over', 'pending', 'not_applicable']),
+      on: date.nullish(), all: z.boolean().default(false),
+    }), req.body);
+    const { rowCount } = await db.tx(req.user.id, (t) => t.query(
+      `update takeover_islands set ${b.service}_status = $2, ${b.service}_on = $3, updated_by = $4
+        where atoll_code = $1 ${b.all ? '' : `and ${b.service}_status is null`}`,
+      [code, b.status, b.status === 'not_applicable' ? null : b.on ?? null, req.user.id]));
+    return { ok: true, updated: rowCount };
+  });
+
   app.delete('/takeover/islands/:id', { preHandler: requireRole('admin') }, async (req) => {
     const { id: rowId } = parse(serialParam, req.params);
     const { rowCount } = await db.tx(req.user.id, (t) => t.query('delete from takeover_islands where id = $1', [rowId]));

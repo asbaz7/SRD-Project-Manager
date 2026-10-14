@@ -411,6 +411,8 @@ describe('national takeover tracker', () => {
     let t = (await call('GET', '/takeover', { token: admin })).body;
     assert.equal(t.expected_islands, 187);
     assert.equal(t.atolls.length, 20);
+    // The census's inhabited islands for the atolls outside SRD, in full.
+    assert.deepEqual(['HA', 'Lh', 'L', 'Gn', 'S'].map((c) => t.atolls.find((a) => a.code === c).islands), [14, 4, 11, 1, 6]);
     const k = t.atolls.find((a) => a.code === 'K');
     assert.ok(k.islands > 0 && k.taken_over === k.islands, 'Kaafu: electricity already with STELCO');
     const maafushiRow = t.islands.find((i) => i.name === 'Maafushi');
@@ -419,10 +421,10 @@ describe('national takeover tracker', () => {
 
     // An island outside SRD, still with FENAKA.
     const add = await call('POST', '/takeover/islands', { token: admin, body: {
-      atoll_code: 'HA', name: 'Dhidhdhoo', phase: 'Phase 3', electricity_status: 'pending', electricity_on: '2026-12-01', water_status: 'pending' } });
+      atoll_code: 'HA', name: 'Testfushi', phase: 'Phase 3', electricity_status: 'pending', electricity_on: '2026-12-01', water_status: 'pending' } });
     assert.equal(add.status, 201, JSON.stringify(add.body));
     assert.equal(add.body.state, 'pending');
-    assert.equal((await call('POST', '/takeover/islands', { token: admin, body: { atoll_code: 'HA', name: 'dhidhdhoo' } })).status, 400, 'no duplicates');
+    assert.equal((await call('POST', '/takeover/islands', { token: admin, body: { atoll_code: 'HA', name: 'testfushi' } })).status, 400, 'no duplicates');
     assert.equal((await call('POST', '/takeover/islands', { token: admin, body: { atoll_code: 'XX', name: 'Nowhere' } })).status, 400);
 
     // Electricity handed over, water not yet: still pending; then both.
@@ -433,6 +435,7 @@ describe('national takeover tracker', () => {
     assert.equal(r.body.phase, 'Phase 3', 'other fields kept');
     t = (await call('GET', '/takeover', { token: admin })).body;
     assert.equal(t.atolls.find((a) => a.code === 'HA').taken_over, 1);
+    assert.equal(t.totals.islands, t.islands.length);
     assert.equal(t.services.water.taken_over >= 1, true);
 
     // Everyone sees it; only managers change it; only admins remove.
@@ -443,5 +446,16 @@ describe('national takeover tracker', () => {
     assert.equal((await call('GET', '/takeover', { token: viewer })).status, 200);
     assert.equal((await call('PATCH', `/takeover/islands/${add.body.id}`, { token: viewer, body: { phase: 'x' } })).status, 403);
     assert.equal((await call('DELETE', `/takeover/islands/${add.body.id}`, { token: admin })).status, 200);
+
+    // A whole atoll at once: only the islands not set, unless all.
+    const feydhoo = t.islands.find((i) => i.atoll_code === 'S' && i.name === 'Feydhoo');
+    await call('PATCH', `/takeover/islands/${feydhoo.id}`, { token: admin, body: { electricity_status: 'pending' } });
+    let bulk = await call('POST', '/takeover/atolls/S', { token: admin, body: { service: 'electricity', status: 'taken_over', on: '2025-01-01' } });
+    assert.equal(bulk.body.updated, 5, 'the 5 not set; Feydhoo kept');
+    t = (await call('GET', '/takeover', { token: admin })).body;
+    assert.equal(t.islands.find((i) => i.id === feydhoo.id).electricity_status, 'pending');
+    bulk = await call('POST', '/takeover/atolls/S', { token: admin, body: { service: 'electricity', status: 'taken_over', all: true } });
+    assert.equal(bulk.body.updated, 6);
+    assert.equal((await call('POST', '/takeover/atolls/S', { token: viewer, body: { service: 'water', status: 'pending' } })).status, 403);
   });
 });

@@ -38,6 +38,7 @@ function TakeoverView({ t, reload }) {
   const { can } = useAuth();
   const [filters, setFilter] = useFilters();
   const [editing, setEditing] = useState(null);
+  const [bulk, setBulk] = useState(false);
   const done = t.totals.taken_over;
   const total = t.expected_islands;
   const match = (i) => !filters.show || i.state === filters.show;
@@ -75,6 +76,7 @@ function TakeoverView({ t, reload }) {
         </div>
         <Card title={atoll ? `${atoll.code} · ${atoll.name}` : 'All atolls'}
           actions={<>{atoll && <button className="btn small ghost" onClick={() => setFilter('atoll', '')}>All atolls</button>}
+            {can('manager') && atoll && atoll.islands > 0 && <button className="btn small" onClick={() => setBulk(true)}>Set for whole atoll</button>}
             {can('manager') && <button className="btn small primary" onClick={() => setEditing({ atoll_code: atoll?.code || '' })}>Add island</button>}</>}>
           {!atoll && !filters.show ? <AtollTable atolls={t.atolls} onPick={(code) => setFilter('atoll', code)} />
             : list.length === 0 ? <Empty>No islands here{filters.show ? ' with this status' : ' on the list yet'}.{can('manager') && ' Add them with Add island.'}</Empty>
@@ -82,6 +84,7 @@ function TakeoverView({ t, reload }) {
         </Card>
       </div>
     </div>
+    {bulk && atoll && <AtollForm atoll={atoll} onClose={() => setBulk(false)} onSaved={() => { setBulk(false); reload(); }} />}
     {editing && <IslandForm row={editing} atolls={t.atolls} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
   </>;
 }
@@ -183,6 +186,28 @@ function IslandForm({ row, atolls, onClose, onSaved }) {
         {row.id && can('admin') && <button type="button" className="btn danger" disabled={remove.busy} onClick={remove.submit} style={{ marginRight: 'auto' }}>Remove</button>}
         <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
         <button className="btn primary" disabled={save.busy}>Save</button></div>
+    </form>
+  </Modal>;
+}
+
+// One service for every island of an atoll at once, e.g. "Seenu: electricity
+// taken over". Islands already set keep theirs unless "all" is ticked.
+function AtollForm({ atoll, onClose, onSaved }) {
+  const [f, setF] = useState({ service: 'electricity', status: 'taken_over', on: '', all: false });
+  const { submit, busy, error } = useSubmit(async () => {
+    await api(`/takeover/atolls/${atoll.code}`, { method: 'POST', body: { service: f.service, status: f.status, on: f.on || null, all: f.all } });
+    onSaved();
+  });
+  return <Modal title={`${atoll.code} · ${atoll.name}: set for the whole atoll`} onClose={onClose}>
+    <form className="form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <ErrorBox error={error} />
+      <Field label="Service"><Select value={f.service} onChange={(v) => setF({ ...f, service: v })} options={SERVICES} /></Field>
+      <Field label="Status"><Select value={f.status} onChange={(v) => setF({ ...f, status: v })} options={Object.entries(STATUS)} /></Field>
+      {f.status !== 'not_applicable' && <Field label={f.status === 'taken_over' ? 'Taken over on (optional)' : 'Planned for (optional)'}>
+        <input type="date" value={f.on} onChange={(e) => setF({ ...f, on: e.target.value })} /></Field>}
+      <label className="check wide"><input type="checkbox" checked={f.all} onChange={(e) => setF({ ...f, all: e.target.checked })} /> Also change islands already set (otherwise only those not set yet)</label>
+      <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={busy}>Apply to {atoll.name}</button></div>
     </form>
   </Modal>;
 }
