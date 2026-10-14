@@ -641,15 +641,17 @@ input.qty { width: 80px; text-align: right; }
 .tko-atoll:hover polygon { fill-opacity: .9; filter: brightness(1.25); }
 .tko-atoll.selected polygon { stroke: var(--text); fill-opacity: .5; }
 .tko-atoll text { fill: var(--text-2); font-weight: 700; }
-.tko-atoll text .count { fill: var(--muted); font-weight: 500; }
+.tko-atoll text .name { fill: var(--muted); font-weight: 500; }
+.tko-atoll text .count { fill: var(--text-2); font-weight: 600; }
 .tko-island { cursor: pointer; }
-.tko-island circle { stroke: color-mix(in srgb, #000 35%, transparent); }
-.tko-island.taken_over circle { fill: var(--good-fill); }
-.tko-island.pending circle { fill: var(--warn-fill); }
-.tko-island.not_set circle { fill: var(--none-fill); }
-.tko-island.picked circle { stroke: var(--text); }
+.tko-island circle.hit { fill: transparent; stroke: none; }
+.tko-island circle:not(.hit) { stroke: color-mix(in srgb, #000 35%, transparent); }
+.tko-island.taken_over circle:not(.hit) { fill: var(--good-fill); }
+.tko-island.pending circle:not(.hit) { fill: var(--warn-fill); }
+.tko-island.not_set circle:not(.hit) { fill: var(--none-fill); }
+.tko-island.picked circle:not(.hit) { stroke: var(--text); }
 .tko-island.dim { opacity: .25; }
-.tko-island text { fill: var(--text); paint-order: stroke; stroke: color-mix(in srgb, #000 55%, transparent); stroke-width: .35px; }
+.tko-island text { fill: var(--text); font-weight: 600; paint-order: stroke; stroke: color-mix(in srgb, #000 60%, transparent); stroke-width: 3px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 tr.picked > td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .tko-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .tko-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
@@ -675,3 +677,10 @@ tr.picked > td { background: color-mix(in srgb, var(--accent) 14%, transparent);
 .atoll-chip.taken { border-color: var(--good-fill); background: color-mix(in srgb, var(--good-fill) 16%, transparent); }
 .atoll-chip.pending { border-color: var(--warn-fill); background: color-mix(in srgb, var(--warn-fill) 14%, transparent); }
 .atoll-chip.part { border-color: var(--warn-fill); background: linear-gradient(90deg, color-mix(in srgb, var(--good-fill) 22%, transparent), color-mix(in srgb, var(--warn-fill) 14%, transparent)); }
+
+.tko-legend-float .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.tko-legend-float .dot.taken { background: var(--good-fill); }
+.tko-legend-float .dot.pending { background: var(--warn-fill); }
+.tko-legend-float .dot.none { background: var(--none-fill); }
+.tko-list .grow { flex: 1; min-width: 0; display: block; }
+.tko-list .num { flex: none; }

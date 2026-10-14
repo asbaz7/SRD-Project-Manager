@@ -2,7 +2,7 @@
 // from FENAKA to STELCO. The figures and progress, a map of the 20 atolls
 // coloured by how far each is, and an atoll's islands with each service's
 // status and date. Managers keep it up to date.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -186,9 +186,20 @@ function AtollMap({ atolls, islands, match, selected, onPick, picked, onIsland }
   })();
   const view = useEased(target);
   const zoomed = view[2] < FULL[2] * 0.6;
-  const unit = view[2] / 100; // sizes follow the zoom
+  // Map units to a screen pixel, so text and dots keep their size on screen
+  // whatever the zoom and window.
+  const ref = useRef(null);
+  const [box, setBox] = useState({ w: 800, h: 800 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width || 800, h: e.contentRect.height || 800 }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const px = Math.max(view[2] / box.w, view[3] / box.h);
   const tone = (a) => (!a.islands ? 'none' : a.taken_over === a.islands ? 'taken' : 'pending');
-  return <svg className="tko-map" viewBox={view.join(' ')} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Islands by takeover status">
+  return <svg ref={ref} className="tko-map" viewBox={view.join(' ')} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Islands by takeover status">
     {atolls.map((a) => {
       const xy = byAtoll[a.code].map(toXY);
       if (!xy.length) return null;
@@ -197,8 +208,10 @@ function AtollMap({ atolls, islands, match, selected, onPick, picked, onIsland }
       return <g key={a.code} className={`tko-atoll ${tone(a)}${selected === a.code ? ' selected' : ''}`}
         onClick={() => onPick(a.code)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onPick(a.code)}>
         <title>{`${a.name}: ${a.taken_over} of ${a.islands} taken over`}</title>
-        <polygon points={ring.map((p) => p.join(',')).join(' ')} strokeWidth={unit * 0.35} strokeLinejoin="round" />
-        {!zoomed && <text x={lx} y={ly} fontSize={unit * 2.6} className="atoll-name">{a.code}<tspan className="count" dx={unit}>{a.taken_over}/{a.islands}</tspan></text>}
+        <polygon points={ring.map((p) => p.join(',')).join(' ')} strokeWidth={px * 1.5} strokeLinejoin="round" />
+        {!zoomed && <text x={lx + px * 4} y={ly + px * 5} fontSize={px * 14} className="atoll-name">{a.code}
+          <tspan className="name" dx={px * 6} fontSize={px * 12}>{a.name}</tspan>
+          <tspan className="count" dx={px * 6} fontSize={px * 12}>{a.taken_over}/{a.islands}</tspan></text>}
       </g>;
     })}
     {placed.map((i) => {
@@ -207,8 +220,9 @@ function AtollMap({ atolls, islands, match, selected, onPick, picked, onIsland }
       return <g key={i.id} className={`tko-island ${i.state}${picked === i.id ? ' picked' : ''}${on ? '' : ' dim'}`}
         onClick={(e) => { e.stopPropagation(); if (!zoomed) onPick(i.atoll_code); else onIsland(i); }}>
         <title>{`${i.atoll_code}. ${i.name}: ${STATE[i.state]}`}</title>
-        <circle cx={x} cy={y} r={unit * (zoomed ? 1.1 : 0.75)} strokeWidth={unit * 0.25} />
-        {zoomed && selected === i.atoll_code && <text x={x + unit * 1.8} y={y + unit * 0.9} fontSize={unit * 2.4}>{i.name}</text>}
+        <circle cx={x} cy={y} r={px * 10} className="hit" />
+        <circle cx={x} cy={y} r={px * (zoomed ? 6 : 3.5)} strokeWidth={px * 1.2} />
+        {zoomed && selected === i.atoll_code && <text x={x + px * 10} y={y + px * 4.5} fontSize={px * 13}>{i.name}</text>}
       </g>;
     })}
   </svg>;
