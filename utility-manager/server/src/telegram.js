@@ -190,7 +190,7 @@ export function createTelegram({ db, config, log }) {
 
   // ---- Daily summary ------------------------------------------------------
   // Ongoing work, each with its status and latest update: what matters most
-  // in the morning summary.
+  // in the morning summary. Work on hold is only counted, not listed.
   const shortWhen = (t) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: config.timezone });
   function workLines(work = []) {
     if (!work.length) return [];
@@ -208,16 +208,23 @@ export function createTelegram({ db, config, log }) {
     const res = await asUser(rows[0].id, 'GET', '/dashboard');
     if (res.status !== 200) throw new Error(`dashboard: ${res.status}`);
     const d = res.body;
+    // All open work (the dashboard's list stops at 30): active work is
+    // listed, work on hold only counted.
+    const open = await asUser(rows[0].id, 'GET', '/work?status=open&limit=500');
+    if (open.status !== 200) throw new Error(`work: ${open.status}`);
+    const active = open.body.items.filter((w) => w.status !== 'on_hold');
+    const onHold = open.body.items.length - active.length;
+    const workLine = `🔧 ${active.length} work in progress${onHold ? ` (${onHold} more on hold)` : ''} · 🚨 ${d.incidents.open} open interruptions`;
     const el = d.services.electricity;
     const e = d.engines || {};
     const day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: config.timezone });
     const mw = (kw) => (kw >= 10000 ? `${(kw / 1000).toFixed(1)} MW` : `${Math.round(kw)} kW`);
     const lines = [`📋 <b>SRD summary: ${esc(day)}</b>`];
     if (!technical) {
-      lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open interruptions`);
+      lines.push(workLine);
       const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
       if (inc.length) lines.push('', '<b>Serious interruptions</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
-      lines.push(...workLines(d.work));
+      lines.push(...workLines(active));
       lines.push('', link('/', 'Open the dashboard'));
       return lines.join('\n');
     }
@@ -229,8 +236,8 @@ export function createTelegram({ db, config, log }) {
       const v = d.services[s];
       if (v.assets) lines.push(`${SERVICE_ICON[s]} ${v.running}/${v.assets} ${SERVICE_LABEL[s].toLowerCase()} assets running${v.down ? ` · ${v.down} out of service` : ''}`);
     }
-    lines.push(`🔧 ${d.work.length} work in progress · 🚨 ${d.incidents.open} open interruptions`);
-    lines.push(...workLines(d.work));
+    lines.push(workLine);
+    lines.push(...workLines(active));
     const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);
     if (inc.length) lines.push('', '<b>Serious interruptions</b>', ...inc.map((i) => `• ${esc(i.title)} (${esc(i.atoll_code)}. ${esc(i.island_name)})`));
     lines.push('', link('/', 'Open the dashboard'));

@@ -193,6 +193,7 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
           : `Monthly update ${month.slice(0, 7)}: ${[CONDITION_TEXT[condition] || x.status, x.note].filter(Boolean).join(' — ')}`, at, userId]);
     }
     if (x.faultChanged) {
+      await t.query("select set_config('app.fault_cleared_by', $1, true)", [x.statusChanged && x.level === 'none' ? 'Back in service (monthly update)' : 'Monthly update']);
       await t.query('update assets set fault_level = $2, fault_note = $3, fault_at = now(), fault_by = $4 where id = $1',
         [it.asset.id, x.level, x.note, userId]);
     }

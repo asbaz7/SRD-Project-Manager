@@ -190,6 +190,12 @@ export default async function assetRoutes(app) {
     const asset = one((await db.query(`${ASSET_LIST} where s.id = $1`, [assetId])).rows, 'Asset');
     delete asset.total_count;
     asset.can_edit = canWriteIsland(req.user, { id: asset.island_id, atoll_id: asset.atoll_id });
+    // Every fault logged on it, newest first.
+    asset.fault_log = (await db.query(`
+      select l.id, l.level, l.note, l.logged_at, l.cleared_at, l.cleared_reason,
+             lu.full_name as logged_by_name, cu.full_name as cleared_by_name
+        from fault_log l left join users lu on lu.id = l.logged_by left join users cu on cu.id = l.cleared_by
+       where l.asset_id = $1 order by l.logged_at desc limit 50`, [assetId])).rows;
     asset.history = (await db.query(`
       select l.id, l.status, l.note, l.running_hours, l.reported_at, u.full_name as reported_by_name
         from asset_status_log l left join users u on u.id = l.reported_by
@@ -279,10 +285,13 @@ export default async function assetRoutes(app) {
     const b = parse(z.object({ level: z.enum(['none', 'minor', 'major']), note: optText(2000) }), req.body);
     if (b.level !== 'none' && !b.note) throw badRequest('Say what the fault is');
     await assertIslandWrite(db, req.user, { assetId });
-    const row = await db.tx(req.user.id, async (t) => one((await t.query(
+    const row = await db.tx(req.user.id, async (t) => one((await (async () => {
+      if (b.level === 'none') await t.query("select set_config('app.fault_cleared_by', 'Marked fixed', true)");
+      return t.query(
       `update assets set fault_level = $2, fault_note = $3, fault_at = now(), fault_by = $4
         where id = $1 and kind = 'genset' returning id, fault_level, fault_note, fault_at`,
-      [assetId, b.level, b.level === 'none' ? null : b.note, req.user.id])).rows, 'Genset'));
+      [assetId, b.level, b.level === 'none' ? null : b.note, req.user.id]);
+    })()).rows, 'Genset'));
     return row;
   });
 
@@ -322,6 +331,7 @@ export default async function assetRoutes(app) {
       const back = body.items.filter((i) => ['running', 'standby'].includes(i.status)
         && ['down', 'maintenance'].includes(before.find((b) => b.id === i.asset_id)?.status)).map((i) => i.asset_id);
       if (back.length) {
+        await t.query("select set_config('app.fault_cleared_by', 'Back in service', true)");
         await t.query(`update assets set fault_level = 'none', fault_note = null, fault_at = now(), fault_by = $2
                         where id = any($1::uuid[]) and kind = 'genset'`, [back, req.user.id]);
       }
