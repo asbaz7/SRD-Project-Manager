@@ -89,7 +89,8 @@ export default async function locationRoutes(app) {
     const { id: islandId } = parse(idParam, req.params);
     const vis = projectVisible(req.user, 2);
     const island = one((await db.query(`${islandSummary(vis, workVisible(req.user, 2))} where i.id = $1 group by i.id, a.id`, [islandId, ...vis.values])).rows, 'Island');
-    const [{ rows: facilities }, { rows: assets }] = await Promise.all([
+    // All of it in one round.
+    const [{ rows: facilities }, { rows: assets }, { rows: reports }, { rows: work }, { rows: movedAway }] = await Promise.all([
       db.query(`select f.* from facilities f where f.island_id = $1 order by f.active desc, f.service, f.name`, [islandId]),
       db.query(`select s.*, u.full_name as status_by_name,
                        c.report_month, c.condition, c.report_condition, c.condition_source, c.condition_note, c.condition_at, c.status_text as report_status, c.fault, c.total_hours,
@@ -105,8 +106,6 @@ export default async function locationRoutes(app) {
                   left join engine_current c on c.asset_id = s.id
                  where f.island_id = $1
                  order by s.kind, length(s.tag), s.tag`, [islandId]),
-    ]);
-    const [{ rows: reports }, { rows: work }, { rows: movedAway }] = await Promise.all([
       db.query(`select r.*, u.full_name as uploaded_by_name from powerhouse_reports r
                   join facilities f on f.id = r.facility_id left join users u on u.id = r.uploaded_by
                  where f.island_id = $1`, [islandId]),

@@ -142,14 +142,16 @@ export function connectionLimit(max = MAX_OPEN) {
 function perRequestDb(connection) {
   const connect = async () => {
     const client = new pg.Client(connection);
+    // Errors also arrive as events (a refused connection, one lost while
+    // idle): without a listener they would crash the process. The failing
+    // call still rejects, and a broken connection is dropped when handed back.
+    client.on('error', () => {});
     try {
       await client.connect();
     } catch (err) {
       client.end().catch(() => {});
       throw err;
     }
-    // An idle connection that fails is dropped when next handed back.
-    client.on('error', () => {});
     return client;
   };
   const single = { take: connect, give: (client) => { client.end().catch(() => {}); } };

@@ -261,19 +261,23 @@ export default async function workRoutes(app) {
     const vis = workVisible(req.user, 2);
     const work = one((await db.query(`${SELECT} where w.id = $1 and ${vis.sql}`, [workId, ...vis.values])).rows, 'Work');
     delete work.total_count;
-    const access = await workAccess(req.user, workId);
+    const [access, commenters, updates] = await Promise.all([
+      workAccess(req.user, workId),
+      db.query(`
+        select c.user_id, u.full_name, u.designation, (u.technical or u.role = 'admin') as technical, c.added_at, a.full_name as added_by_name
+          from work_commenters c join users u on u.id = c.user_id left join users a on a.id = c.added_by
+         where c.work_id = $1 order by u.full_name`, [workId]),
+      db.query(`
+        select u.*, us.full_name as created_by_name, (u.created_by = $2 and u.created_at > now() - interval '8 hours') as can_edit
+          from work_updates u left join users us on us.id = u.created_by
+         where u.work_id = $1 order by u.created_at desc`, [workId, req.user.id]),
+    ]);
     work.can_run = access.run;
     work.can_update = access.update;
     work.can_comment = access.comment;
     work.can_share = access.share;
-    work.commenters = (await db.query(`
-      select c.user_id, u.full_name, u.designation, (u.technical or u.role = 'admin') as technical, c.added_at, a.full_name as added_by_name
-        from work_commenters c join users u on u.id = c.user_id left join users a on a.id = c.added_by
-       where c.work_id = $1 order by u.full_name`, [workId])).rows;
-    work.updates = (await db.query(`
-      select u.*, us.full_name as created_by_name, (u.created_by = $2 and u.created_at > now() - interval '8 hours') as can_edit
-        from work_updates u left join users us on us.id = u.created_by
-       where u.work_id = $1 order by u.created_at desc`, [workId, req.user.id])).rows;
+    work.commenters = commenters.rows;
+    work.updates = updates.rows;
     return work;
   });
 
