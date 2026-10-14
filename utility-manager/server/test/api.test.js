@@ -438,7 +438,7 @@ describe('national takeover tracker', () => {
     assert.equal(t.atolls.find((a) => a.code === 'HA').taken_over, 1);
     assert.equal(t.totals.islands, t.islands.filter((i) => i.counted).length);
     // Vilimalé and Gulhifalhu: on the list and the map, not in the 187.
-    assert.deepEqual(t.islands.filter((i) => !i.counted).map((i) => i.name).sort(), ['Gulhifalhu', 'Vilimalé']);
+    assert.deepEqual(t.islands.filter((i) => !i.counted).map((i) => i.name).sort(), ['Gulhifalhu', 'Kudagiri', 'Thilafushi', 'Vilimalé']);
     assert.equal(t.services.water.taken_over >= 1, true);
 
     // Everyone sees it; only managers change it; only admins remove.
