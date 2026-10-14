@@ -84,7 +84,7 @@ export default function Layout() {
         <Brand />
         <NavLink to="/account" className="who-mini avatar" aria-label="My account">{initials(user.fullName)}</NavLink>
       </header>
-      <main className="page"><CrashGuard resetKey={location.pathname}><Suspense fallback={<Loading />}><Outlet /></Suspense></CrashGuard></main>
+      <main className={`page${location.pathname === '/takeover' ? ' page-full' : ''}`}><CrashGuard resetKey={location.pathname}><Suspense fallback={<Loading />}><Outlet /></Suspense></CrashGuard></main>
       <nav className="bottom-bar" aria-label="Main">
         {tabs.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>

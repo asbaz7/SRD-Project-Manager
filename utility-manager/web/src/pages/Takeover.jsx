@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Async, Card, Empty, ErrorBox, Field, Modal, PageHead, Select, Stat } from '../components/ui.jsx';
+import { Async, Empty, ErrorBox, Field, Modal, Select } from '../components/ui.jsx';
 import { date, num } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
@@ -18,11 +18,13 @@ const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 
 export default function Takeover() {
   const state = useApi('/takeover');
-  return <>
-    <PageHead title="National takeover" icon="takeover" subtitle="Utility services on every inhabited island, from FENAKA to STELCO" />
+  // The map fills the page; the figures, lists and details float over it.
+  return <div className="tko-full">
     <Async state={state}>{(t) => <TakeoverView t={t} reload={state.reload} />}</Async>
-  </>;
+  </div>;
 }
+
+const wide = () => typeof window === 'undefined' || window.innerWidth > 860;
 
 function TakeoverView({ t, reload }) {
   const { can } = useAuth();
@@ -30,58 +32,90 @@ function TakeoverView({ t, reload }) {
   const [editing, setEditing] = useState(null);
   const [bulk, setBulk] = useState(false);
   const [picked, setPicked] = useState(null);
+  const [drawer, setDrawer] = useState(wide);
+  const [summary, setSummary] = useState(wide);
   const done = t.totals.taken_over;
   const total = t.expected_islands;
   const match = (i) => !filters.show || i.state === filters.show;
   const atoll = t.atolls.find((a) => a.code === filters.atoll);
   const list = t.islands.filter((i) => (!atoll || i.atoll_code === atoll.code) && match(i));
+  const island = t.islands.find((i) => i.id === picked);
+  const pickAtoll = (code) => { setPicked(null); setFilter('atoll', code); if (code && wide()) setDrawer(true); };
 
-  return <>
-    <div className="stats">
-      <Stat label="Inhabited islands" value={num(total)} sub={`Across 20 atolls · ${num(t.totals.islands)} on the list`} />
-      <Stat label="Taken over" value={num(done)} sub="Now under STELCO" />
-      <Stat label="Remaining" value={num(Math.max(0, total - done))} sub={`${num(t.totals.pending)} pending · ${num(Math.max(0, total - t.totals.islands))} not on the list yet`} tone="warn" />
-      <Stat label="Progress" value={`${pct(done, total)}%`} sub="Of inhabited islands" />
+  return <div className={`tko-stage${drawer ? ' drawer-open' : ''}`}>
+    <div className="tko-map-wrap">
+      <AtollMap atolls={t.atolls} islands={t.islands} match={match} selected={filters.atoll} picked={picked}
+        onPick={(code) => pickAtoll(filters.atoll === code ? '' : code)} onIsland={(i) => setPicked(i.id)} />
     </div>
-    <Card title="Takeover progress">
-      <div className="tko-bar"><span style={{ width: `${pct(done, total)}%` }} /></div>
-      <p className="small"><strong>{num(done)} of {num(total)}</strong> inhabited islands</p>
-      <div className="tko-services">{SERVICES.map(([k, label]) => {
-        const s = t.services[k];
-        const of = s.taken_over + s.pending;
-        return <div key={k}><span className="small">{label}</span>
-          <div className="tko-bar thin"><span style={{ width: `${pct(s.taken_over, of)}%` }} /></div>
-          <small className="muted">{num(s.taken_over)} taken over · {num(s.pending)} pending</small></div>;
-      })}</div>
-    </Card>
 
-    <div className="tko-layout">
-      <Card title={atoll ? `Map · ${atoll.name}` : 'Map'} className="tko-map-card">
-        <AtollMap atolls={t.atolls} islands={t.islands} match={match} selected={filters.atoll} picked={picked}
-          onPick={(code) => { setPicked(null); setFilter('atoll', filters.atoll === code ? '' : code); }}
-          onIsland={(i) => { setPicked(i.id); if (can('manager')) setEditing(i); }} />
-        <div className="tko-legend small"><span><i className="dot taken" /> Taken over by STELCO</span><span><i className="dot pending" /> Pending / under FENAKA</span><span><i className="dot none" /> Not set</span>
-          {filters.atoll && <button className="link" onClick={() => { setPicked(null); setFilter('atoll', ''); }}>← Whole country</button>}</div>
-        {t.islands.some((i) => i.lat == null) && <p className="muted small">Not on the map (no position yet): {t.islands.filter((i) => i.lat == null).map((i) => `${i.atoll_code}. ${i.name}`).join(', ')}</p>}
-      </Card>
-      <div>
+    {/* Figures, top left; folds down to one line. */}
+    <section className="glass tko-float tko-summary">
+      <header>
+        <h1>National takeover</h1>
+        <button className="btn small ghost" onClick={() => setSummary(!summary)} aria-expanded={summary}>{summary ? 'Hide' : 'Show'}</button>
+      </header>
+      <div className="tko-headline"><strong>{pct(done, total)}%</strong><span className="small">{num(done)} of {num(total)} inhabited islands under STELCO</span></div>
+      <div className="tko-bar"><span style={{ width: `${pct(done, total)}%` }} /></div>
+      {summary && <>
+        <p className="small muted">{num(t.totals.pending)} pending · {num(t.totals.not_set)} not set · {num(t.totals.islands)} on the list</p>
+        {SERVICES.map(([k, label]) => {
+          const s = t.services[k];
+          const of = s.taken_over + s.pending;
+          return <div key={k} className="tko-svc"><span className="small">{label}</span>
+            <div className="tko-bar thin"><span style={{ width: `${pct(s.taken_over, of)}%` }} /></div>
+            <small className="muted">{num(s.taken_over)} / {num(of)}</small></div>;
+        })}
         <div className="chips">
-          {[['', 'All islands'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['not_set', 'Not set']].map(([k, l]) =>
+          {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['not_set', 'Not set']].map(([k, l]) =>
             <button key={k} className={`chip ${(filters.show || '') === k ? 'on' : ''}`} onClick={() => setFilter('show', k)}>{l}</button>)}
         </div>
-        <Card title={atoll ? `${atoll.code} · ${atoll.name}` : 'All atolls'}
-          actions={<>{atoll && <button className="btn small ghost" onClick={() => setFilter('atoll', '')}>All atolls</button>}
-            {can('manager') && atoll && atoll.islands > 0 && <button className="btn small" onClick={() => setBulk(true)}>Set for whole atoll</button>}
-            {can('manager') && <button className="btn small primary" onClick={() => setEditing({ atoll_code: atoll?.code || '' })}>Add island</button>}</>}>
-          {!atoll && !filters.show ? <AtollTable atolls={t.atolls} onPick={(code) => setFilter('atoll', code)} />
-            : list.length === 0 ? <Empty>No islands here{filters.show ? ' with this status' : ' on the list yet'}.{can('manager') && ' Add them with Add island.'}</Empty>
-              : <IslandTable islands={list} showAtoll={!atoll} picked={picked} onEdit={can('manager') ? setEditing : null} />}
-        </Card>
-      </div>
+      </>}
+    </section>
+
+    {/* Legend and the way back, bottom left. */}
+    <div className="glass tko-float tko-legend-float small">
+      <span><i className="dot taken" /> Under STELCO</span><span><i className="dot pending" /> Under FENAKA</span><span><i className="dot none" /> Not set</span>
+      {filters.atoll && <button className="btn small" onClick={() => pickAtoll('')}>← Whole country</button>}
     </div>
+
+    {/* The atolls, or an atoll's islands, on the right (a sheet on phones). */}
+    {drawer ? <section className="glass tko-float tko-drawer">
+      <header>
+        <h2>{atoll ? `${atoll.code} · ${atoll.name}` : 'Atolls'}{atoll && <small className="muted"> {atoll.taken_over} of {atoll.islands} taken over</small>}</h2>
+        <button className="btn small ghost" onClick={() => setDrawer(false)} aria-label="Hide list">✕</button>
+      </header>
+      {can('manager') && <div className="tko-drawer-actions">
+        {atoll && atoll.islands > 0 && <button className="btn small" onClick={() => setBulk(true)}>Set for whole atoll</button>}
+        <button className="btn small primary" onClick={() => setEditing({ atoll_code: atoll?.code || '' })}>Add island</button>
+      </div>}
+      <div className="tko-drawer-body">
+        {!atoll && !filters.show ? <AtollList atolls={t.atolls} onPick={pickAtoll} />
+          : list.length === 0 ? <Empty>No islands here{filters.show ? ' with this status' : ' on the list yet'}.</Empty>
+            : <IslandList islands={list} showAtoll={!atoll} picked={picked} onPick={(i) => setPicked(i.id)} />}
+      </div>
+    </section>
+      : <button className="btn tko-float tko-drawer-open" onClick={() => setDrawer(true)}>☰ {atoll ? `${atoll.name} islands` : 'Atolls'}</button>}
+
+    {/* The island picked, as a card. */}
+    {island && <IslandCard i={island} onClose={() => setPicked(null)} onEdit={can('manager') ? () => setEditing(island) : null} />}
+
     {bulk && atoll && <AtollForm atoll={atoll} onClose={() => setBulk(false)} onSaved={() => { setBulk(false); reload(); }} />}
     {editing && <IslandForm row={editing} atolls={t.atolls} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
-  </>;
+  </div>;
+}
+
+function IslandCard({ i, onClose, onEdit }) {
+  return <section className="glass tko-float tko-popup" role="dialog" aria-label={`${i.atoll_code}. ${i.name}`}>
+    <header>
+      <h2>{i.atoll_code}. {i.island_id ? <Link to={`/islands/${i.island_id}`}>{i.name}</Link> : i.name}
+        <small className={`tko-state ${i.state}`}> {STATE[i.state]}</small></h2>
+      <button className="btn small ghost" onClick={onClose} aria-label="Close">✕</button>
+    </header>
+    <dl className="tko-popup-services">{SERVICES.map(([k, label]) => <div key={k}><dt>{label}</dt><dd><Service status={i[`${k}_status`]} on={i[`${k}_on`]} /></dd></div>)}</dl>
+    {i.phase && <p className="small"><span className="muted">Phase:</span> {i.phase}</p>}
+    {i.notes && <p className="small muted">{i.notes}</p>}
+    {onEdit && <div className="form-actions"><button className="btn small primary" onClick={onEdit}>Edit</button></div>}
+  </section>;
 }
 
 // The map: every island at its place (OpenStreetMap positions, migration
@@ -180,17 +214,13 @@ function AtollMap({ atolls, islands, match, selected, onPick, picked, onIsland }
   </svg>;
 }
 
-function AtollTable({ atolls, onPick }) {
-  return <div className="table-scroll"><table>
-    <thead><tr><th>Atoll</th><th className="num">On the list</th><th className="num">Taken over</th><th className="num">Pending</th><th className="hide-sm">Progress</th></tr></thead>
-    <tbody>{atolls.map((a) => <tr key={a.code} className="row-link" onClick={() => onPick(a.code)}>
-      <td><strong>{a.code}</strong> · {a.name}</td>
-      <td className="num">{a.islands || <span className="muted">—</span>}</td>
-      <td className="num">{a.taken_over || ''}</td>
-      <td className="num">{a.pending || ''}</td>
-      <td className="hide-sm">{a.islands ? <div className="tko-bar thin"><span style={{ width: `${pct(a.taken_over, a.islands)}%` }} /></div> : null}</td>
-    </tr>)}</tbody>
-  </table></div>;
+function AtollList({ atolls, onPick }) {
+  return <ul className="tko-list">{atolls.map((a) => <li key={a.code}>
+    <button onClick={() => onPick(a.code)}>
+      <span className="grow"><strong>{a.code}</strong> · {a.name}
+        {a.islands ? <div className="tko-bar thin"><span style={{ width: `${pct(a.taken_over, a.islands)}%` }} /></div> : null}</span>
+      <span className="small muted num">{a.islands ? `${a.taken_over}/${a.islands}` : '—'}</span>
+    </button></li>)}</ul>;
 }
 
 function Service({ status, on }) {
@@ -199,17 +229,14 @@ function Service({ status, on }) {
     {STATUS[status]}{on && status !== 'not_applicable' ? ` · ${date(on)}` : ''}</span>;
 }
 
-function IslandTable({ islands, showAtoll, picked, onEdit }) {
-  return <div className="table-scroll"><table>
-    <thead><tr><th>Island</th>{SERVICES.map(([k, l]) => <th key={k}>{l}</th>)}<th className="hide-sm">Phase</th>{onEdit && <th />}</tr></thead>
-    <tbody>{islands.map((i) => <tr key={i.id} className={picked === i.id ? 'picked' : ''}>
-      <td className="wrap"><strong>{showAtoll && `${i.atoll_code}. `}{i.island_id ? <Link to={`/islands/${i.island_id}`}>{i.name}</Link> : i.name}</strong>
-        <br /><small className={`tko-state ${i.state}`}>{STATE[i.state]}</small>{i.notes && <><br /><small className="muted">{i.notes}</small></>}</td>
-      {SERVICES.map(([k]) => <td key={k} className="small"><Service status={i[`${k}_status`]} on={i[`${k}_on`]} /></td>)}
-      <td className="hide-sm small">{i.phase || <span className="muted">—</span>}</td>
-      {onEdit && <td><button className="btn small" onClick={() => onEdit(i)}>Edit</button></td>}
-    </tr>)}</tbody>
-  </table></div>;
+function IslandList({ islands, showAtoll, picked, onPick }) {
+  return <ul className="tko-list">{islands.map((i) => <li key={i.id} className={picked === i.id ? 'picked' : ''}>
+    <button onClick={() => onPick(i)}>
+      <span className="grow"><strong>{showAtoll && `${i.atoll_code}. `}{i.name}</strong>
+        <span className="tko-mini">{SERVICES.map(([k, label]) => i[`${k}_status`] && i[`${k}_status`] !== 'not_applicable'
+          ? <span key={k} className={`tko-pill ${i[`${k}_status`]}`} title={`${label}: ${STATUS[i[`${k}_status`]]}`}>{label[0]}</span> : null)}</span></span>
+      <small className={`tko-state ${i.state}`}>{STATE[i.state]}</small>
+    </button></li>)}</ul>;
 }
 
 function IslandForm({ row, atolls, onClose, onSaved }) {

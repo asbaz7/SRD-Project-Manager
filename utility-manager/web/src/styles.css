@@ -586,11 +586,53 @@ input.qty { width: 80px; text-align: right; }
 .tko-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--good-fill); }
 .tko-bar.thin { height: 7px; }
 .tko-services { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 10px; }
-.tko-layout { display: grid; grid-template-columns: minmax(420px, 1.3fr) minmax(360px, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 980px) { .tko-layout { grid-template-columns: 1fr; } }
-.tko-map-card { position: sticky; top: 12px; }
-.tko-map { width: 100%; height: min(84vh, 980px); display: block; border-radius: 14px;
-  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--water) 16%, transparent), transparent 70%); }
+.page.page-full { max-width: none; padding: 0; }
+.tko-full, .tko-stage { position: relative; height: 100dvh; overflow: hidden; }
+.tko-full > .center { min-height: 100dvh; }
+.tko-map-wrap { position: absolute; inset: 0; transition: right .25s;
+  background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--water) 18%, transparent), transparent 75%); }
+.tko-stage.drawer-open .tko-map-wrap { right: 396px; }
+.tko-map { width: 100%; height: 100%; display: block; }
+.tko-float { position: absolute; z-index: 5; border-radius: 18px; }
+.tko-float header { display: flex; align-items: center; gap: 8px; }
+.tko-float header h1, .tko-float header h2 { margin: 0; font-size: 1rem; flex: 1; min-width: 0; }
+.tko-summary { top: 16px; left: 16px; width: 310px; padding: 14px 16px; }
+.tko-headline { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; }
+.tko-headline strong { font-size: 2.2rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.tko-svc { display: grid; grid-template-columns: 82px 1fr auto; align-items: center; gap: 8px; }
+.tko-summary .chips { margin: 10px 0 0; }
+.tko-legend-float { left: 16px; bottom: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 14px; }
+.tko-legend-float span { display: inline-flex; align-items: center; gap: 6px; }
+.tko-drawer { top: 16px; right: 16px; bottom: 16px; width: 364px; display: flex; flex-direction: column; padding: 14px 8px 8px 14px; }
+.tko-drawer header { padding-right: 6px; }
+.tko-drawer header h2 small { font-weight: 400; font-size: .78rem; }
+.tko-drawer-actions { display: flex; gap: 6px; margin: 10px 0 4px; }
+.tko-drawer-body { overflow-y: auto; flex: 1; margin-top: 6px; padding-right: 6px; }
+.tko-drawer-open { top: 16px; right: 16px; }
+.tko-list { list-style: none; margin: 0; padding: 0; }
+.tko-list li > button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: 12px; background: none; color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.tko-list li > button:hover { background: var(--glass-hover); }
+.tko-list li.picked > button { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.tko-list .tko-bar { margin: 5px 0 0; }
+.tko-mini { display: inline-flex; gap: 3px; margin-left: 8px; vertical-align: 1px; }
+.tko-mini .tko-pill { padding: 0 5px; font-size: .66rem; }
+.tko-popup { bottom: 16px; left: 50%; transform: translateX(-50%); width: min(380px, calc(100% - 32px)); padding: 14px 16px; z-index: 6; }
+.tko-stage.drawer-open .tko-popup { left: calc((100% - 396px) / 2); }
+.tko-popup-services { display: grid; gap: 6px; margin: 10px 0; }
+.tko-popup-services > div { display: grid; grid-template-columns: 90px 1fr; align-items: center; }
+.tko-popup-services dt { color: var(--muted); font-size: .85rem; }
+.tko-popup-services dd { margin: 0; }
+.tko-popup .form-actions { margin-top: 6px; }
+@media (max-width: 860px) {
+  .tko-full, .tko-stage { height: calc(100dvh - 58px); }
+  .tko-stage.drawer-open .tko-map-wrap { right: 0; }
+  .tko-summary { top: 10px; left: 10px; right: 10px; width: auto; padding: 10px 14px; }
+  .tko-headline strong { font-size: 1.6rem; }
+  .tko-legend-float { display: none; }
+  .tko-drawer { top: auto; left: 10px; right: 10px; bottom: 92px; width: auto; max-height: 46dvh; }
+  .tko-drawer-open { top: auto; bottom: 92px; right: 10px; }
+  .tko-popup, .tko-stage.drawer-open .tko-popup { left: 10px; right: 10px; transform: none; width: auto; bottom: 92px; }
+}
 .tko-atoll { cursor: pointer; }
 .tko-atoll polygon { transition: fill .2s; }
 .tko-atoll.taken polygon { fill: color-mix(in srgb, var(--good-fill) 22%, transparent); stroke: var(--good-fill); }
