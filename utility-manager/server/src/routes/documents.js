@@ -8,7 +8,7 @@ import { requireAllowed } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, text } from '../http.js';
-import { esc } from '../telegram.js';
+import { esc } from '../format.js';
 
 export const DEFAULT_TYPES = ['Accommodation form', 'Allowance form', 'Job description', 'Letter', 'Meal form', 'Tender'];
 const MAX_FILE = 10 * 1024 * 1024;

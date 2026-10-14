@@ -2,6 +2,7 @@
 // island's powerhouse to another's. The asset row keeps its id, so its
 // history goes with it; asset_moves records the move.
 import { conflict, badRequest } from './errors.js';
+import { workRef } from './format.js';
 
 // Serial numbers as written in reports vary ("41 316-937"): compare letters
 // and digits only, and only when long enough to be meaningful.
@@ -70,7 +71,7 @@ export async function checkMovePlan(db, { assetId, destFacilityId, destTag, work
   const { rows: open } = await db.query(`
     select id from work_orders where asset_id = $1 and kind = 'relocation' and status not in ('completed', 'cancelled')
        and id is distinct from $2`, [assetId, workId]);
-  if (open.length) throw conflict(`This is already being moved (WO-${String(open[0].id).padStart(4, '0')}).`);
+  if (open.length) throw conflict(`This is already being moved (${workRef(open[0].id)}).`);
   return { asset, dest, tag };
 }
 
@@ -91,7 +92,7 @@ export async function mergeAssets(t, { targetId, sourceId, movedOn, notes = null
   if (target.kind !== source.kind || target.service !== source.service) throw badRequest('Only records of the same kind of asset can be merged');
   const { rows: openMoves } = await t.query(`select id from work_orders where asset_id = any($1::uuid[]) and kind = 'relocation'
                                                and status not in ('completed', 'cancelled')`, [[targetId, sourceId]]);
-  if (openMoves.length) throw conflict(`Finish or cancel the move in progress first (WO-${String(openMoves[0].id).padStart(4, '0')}).`);
+  if (openMoves.length) throw conflict(`Finish or cancel the move in progress first (${workRef(openMoves[0].id)}).`);
 
   const p = [targetId, sourceId];
   await t.query(`update maintenance_events m set asset_id = $1 where asset_id = $2 and not exists (

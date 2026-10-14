@@ -1,6 +1,7 @@
 // Small helpers shared by route modules.
 import { z } from 'zod';
 import { badRequest, notFound } from './errors.js';
+import { SERVICES } from './domain.js';
 
 export function parse(schema, data) {
   const result = schema.safeParse(data ?? {});
@@ -16,7 +17,7 @@ export const unitId = z.coerce.number().int().positive().max(32767);
 export const serial = z.coerce.number().int().positive();
 export const date = z.iso.date();
 export const datetime = z.iso.datetime({ offset: true });
-export const service = z.enum(['electricity', 'water', 'sewerage']);
+export const service = z.enum(SERVICES);
 export const text = (max = 500) => z.string().trim().min(1).max(max);
 export const optText = (max = 2000) => z.string().trim().max(max).nullish().transform((v) => v || null);
 export const optNumber = z.number().finite().nonnegative().nullish();
@@ -28,6 +29,14 @@ export const paging = z.object({
 
 export const idParam = z.object({ id });
 export const serialParam = z.object({ id: serial });
+
+// A PATCH body: only the fields actually sent (a schema's defaults and
+// transforms mustn't add the others).
+export function parsePatch(schema, body) {
+  const patch = parse(schema, body);
+  for (const k of Object.keys(patch)) if (!(k in (body || {}))) delete patch[k];
+  return patch;
+}
 
 export function one(rows, what) {
   if (!rows[0]) throw notFound(what);

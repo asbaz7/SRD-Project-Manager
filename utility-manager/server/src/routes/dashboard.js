@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { id, parse } from '../http.js';
 import { expectedMonth, isMissing, reportState } from '../reportImport.js';
-import { dueCounts, mvToday } from './engines.js';
+import { dueCounts } from './engines.js';
 import { workVisible } from './work.js';
 import { projectVisible } from './projects.js';
+import { refSql } from '../format.js';
+import { localToday } from '../time.js';
 
 // Everything the overview page needs in one call. Optional atoll filter.
 export default async function dashboardRoutes(app) {
@@ -18,7 +20,7 @@ export default async function dashboardRoutes(app) {
     // Work the user may see (non-technical staff: their unit's).
     const seen = workVisible(req.user, 2);
     const skip = Promise.resolve({ rows: [] });
-    const today = await mvToday(db, config.timezone);
+    const today = localToday(config.timezone);
     const expected = expectedMonth(today);
     const [services, incidents, projects, down, openIncidents, activeProjects, engines, reports, work, open] = await Promise.all([
       // Facility and asset counts per service (technical staff only, as are
@@ -74,7 +76,7 @@ export default async function dashboardRoutes(app) {
          limit 50`, [atoll]),
       // Active projects, overdue first, then by target date.
       db.query(`
-        select p.id, 'PRJ-' || lpad(p.id::text, 4, '0') as ref, p.title, p.service, p.status, p.progress_pct,
+        select p.id, ${refSql('PRJ', 'p.id')} as ref, p.title, p.service, p.status, p.progress_pct,
                p.target_date, (p.target_date < current_date) as overdue,
                i.id as island_id, i.name as island_name, a.code as atoll_code
           from projects p
@@ -111,7 +113,7 @@ export default async function dashboardRoutes(app) {
          order by r.report_month nulls first, a.code, i.name`, [atoll]),
       // Ongoing work.
       db.query(`
-        select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.service, w.kind, w.title, w.status, w.target_on,
+        select w.id, ${refSql('WO', 'w.id')} as ref, w.service, w.kind, w.title, w.status, w.target_on,
                (w.target_on < current_date) as overdue, i.id as island_id, i.name as island_name, a.code as atoll_code,
                s.id as asset_id, s.tag as asset_tag, s.kind as asset_kind,
                (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update,

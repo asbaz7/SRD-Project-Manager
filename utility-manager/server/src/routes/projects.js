@@ -3,9 +3,10 @@ import { assertIslandWrite, requireAllowed } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { zipSync } from 'fflate';
 import { badRequest, forbidden, notFound } from '../errors.js';
-import { esc } from '../telegram.js';
+import { esc, projectRef, refSql } from '../format.js';
 import { editUpdate } from './work.js';
-import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, unitId, updateSet } from '../http.js';
+import { date, id, one, optText, pageOf, paging, parse, parsePatch, serialParam, service, text, unitId, updateSet, Where } from '../http.js';
+import { localToday } from '../time.js';
 
 const STATES = ['planned', 'ongoing', 'on_hold', 'completed', 'cancelled'];
 
@@ -100,7 +101,7 @@ const listQuery = paging.extend({
 });
 
 const SELECT = `
-  select p.*, 'PRJ-' || lpad(p.id::text, 4, '0') as ref,
+  select p.*, ${refSql('PRJ', 'p.id')} as ref,
          i.name as island_name, i.atoll_id, a.code as atoll_code, f.name as facility_name,
          o.full_name as owner_name, un.name as unit_name,
          (p.target_date < current_date and p.status in ('planned', 'ongoing', 'on_hold')) as overdue,
@@ -185,14 +186,14 @@ export async function purgeProjectFiles(db) {
 }
 
 export default async function projectRoutes(app) {
-  const { db, telegram } = app;
+  const { db, telegram, config } = app;
 
   // When a project with files closes, tell its creator and owner when the
   // files will be deleted.
   async function announceFileDeletion(projectId, before) {
     if (CLOSED.includes(before)) return;
     const { rows: [p] } = await db.query(`
-      select p.id, 'PRJ-' || lpad(p.id::text, 4, '0') as ref, p.title, p.status, p.files_delete_after, p.created_by, p.owner_id,
+      select p.id, ${refSql('PRJ', 'p.id')} as ref, p.title, p.status, p.files_delete_after, p.created_by, p.owner_id,
              (select count(*)::int from project_files f where f.project_id = p.id) as files
         from projects p where p.id = $1`, [projectId]);
     if (!p || !CLOSED.includes(p.status) || !p.files) return;
@@ -292,8 +293,7 @@ export default async function projectRoutes(app) {
   app.patch('/projects/:id', async (req) => {
     const { id: projectId } = parse(serialParam, req.params);
     // Only fields actually sent are updated; defaults from the create schema don't apply.
-    const patch = parse(body.omit({ island_id: true }).partial(), req.body);
-    for (const k of Object.keys(patch)) if (!(k in (req.body || {}))) delete patch[k];
+    const patch = parsePatch(body.omit({ island_id: true }).partial(), req.body);
     const before = one((await db.query('select status from projects where id = $1', [projectId])).rows, 'Project').status;
     const sharing = patch.visibility !== undefined || patch.members !== undefined || patch.owner_id !== undefined || patch.unit_id !== undefined;
     await assertAccess(db, req.user, projectId, sharing ? 'manage' : 'edit');
@@ -349,16 +349,10 @@ export default async function projectRoutes(app) {
 
   // --- Tracker: one task, access item or checklist item at a time ----------
   const itemParams = z.object({ id: z.coerce.number().int().positive(), itemId: z.coerce.number().int().positive() });
-  // Only the fields sent are changed.
-  const sent = (schema, b) => {
-    const patch = parse(schema, b);
-    for (const k of Object.keys(patch)) if (!(k in (b || {}))) delete patch[k];
-    return patch;
-  };
 
   app.patch('/projects/:id/tasks/:itemId', async (req) => {
     const { id: projectId, itemId } = parse(itemParams, req.params);
-    const patch = sent(trackerTask, req.body);
+    const patch = parsePatch(trackerTask, req.body);
     await assertAccess(db, req.user, projectId, 'edit');
     const current = one((await db.query('select * from project_tasks where id = $1 and project_id = $2', [itemId, projectId])).rows, 'Task');
     // Completed means done: 100%, dated today unless a date is given.
@@ -366,7 +360,7 @@ export default async function projectRoutes(app) {
     if (patch.status === 'Completed') {
       if (patch.progress === undefined) patch.progress = 100;
       if (patch.completed_date === undefined && !current.completed_date) {
-        patch.completed_date = (await db.query(`select to_char(${TODAY}, 'YYYY-MM-DD') as d`)).rows[0].d;
+        patch.completed_date = localToday(config.timezone);
       }
     } else if (patch.status && current.status === 'Completed' && patch.completed_date === undefined) {
       patch.completed_date = null;
@@ -383,7 +377,7 @@ export default async function projectRoutes(app) {
   // A new task: numbered after the project's last code (TKO-026 → TKO-027).
   app.post('/projects/:id/tasks', async (req, reply) => {
     const { id: projectId } = parse(serialParam, req.params);
-    const b = sent(trackerTask.required({ name: true }), req.body);
+    const b = parsePatch(trackerTask.required({ name: true }), req.body);
     await assertAccess(db, req.user, projectId, 'edit');
     const { rows: [last] } = await db.query(`
       select max(position) as position, (select code from project_tasks where project_id = $1 and code ~ '^[A-Za-z]+-[0-9]+$'
@@ -393,7 +387,7 @@ export default async function projectRoutes(app) {
     const m = /^([A-Za-z]+-)(\d+)$/.exec(last.code || '');
     const code = m ? `${m[1]}${String(Number(m[2]) + 1).padStart(m[2].length, '0')}` : null;
     const row = { status: 'Not Started', progress: 0, unit_id: last.unit_id, ...b };
-    if (row.status === 'Completed') { row.progress = 100; row.completed_date ??= (await db.query(`select to_char(${TODAY}, 'YYYY-MM-DD') as d`)).rows[0].d; }
+    if (row.status === 'Completed') { row.progress = 100; row.completed_date ??= localToday(config.timezone); }
     const cols = TASK_COLS.filter((k) => row[k] !== undefined);
     const { rows: [{ id: taskId }] } = await db.tx(req.user.id, (t) => t.query(
       `insert into project_tasks (project_id, position, code, ${cols.join(', ')})
@@ -427,13 +421,13 @@ export default async function projectRoutes(app) {
 
   app.patch('/projects/:id/access/:itemId', async (req) => {
     const { id: projectId, itemId } = parse(itemParams, req.params);
-    const patch = sent(accessPatch, req.body);
+    const patch = parsePatch(accessPatch, req.body);
     await assertAccess(db, req.user, projectId, 'edit');
     const current = one((await db.query('select * from project_access_items where id = $1 and project_id = $2', [itemId, projectId])).rows, 'Access item');
     // Requested / granted today, unless a date is given.
-    const today = async () => (await db.query(`select to_char(${TODAY}, 'YYYY-MM-DD') as d`)).rows[0].d;
-    if (patch.status === 'Requested' && patch.requested_on === undefined && !current.requested_on) patch.requested_on = await today();
-    if (patch.status === 'Granted' && patch.granted_on === undefined && !current.granted_on) patch.granted_on = await today();
+    const today = () => localToday(config.timezone);
+    if (patch.status === 'Requested' && patch.requested_on === undefined && !current.requested_on) patch.requested_on = today();
+    if (patch.status === 'Granted' && patch.granted_on === undefined && !current.granted_on) patch.granted_on = today();
     if (Object.keys(patch).length) {
       const set = updateSet(patch, ['status', 'requested_on', 'granted_on', 'granted_to', 'remarks']);
       await db.tx(req.user.id, (t) => t.query(`update project_access_items set ${set.sql} where id = $1`, [itemId, ...set.values]));
@@ -443,7 +437,7 @@ export default async function projectRoutes(app) {
 
   app.patch('/projects/:id/checklist/:itemId', async (req) => {
     const { id: projectId, itemId } = parse(itemParams, req.params);
-    const patch = sent(checklistPatch, req.body);
+    const patch = parsePatch(checklistPatch, req.body);
     await assertAccess(db, req.user, projectId, 'edit');
     one((await db.query('select id from project_checklist_items where id = $1 and project_id = $2', [itemId, projectId])).rows, 'Checklist item');
     if (Object.keys(patch).length) {
@@ -497,7 +491,7 @@ export default async function projectRoutes(app) {
     }
     const zip = zipSync(entries);
     reply.header('content-type', 'application/zip');
-    reply.header('content-disposition', `attachment; filename="PRJ-${String(projectId).padStart(4, '0')} files.zip"`);
+    reply.header('content-disposition', `attachment; filename="${projectRef(projectId)} files.zip"`);
     return reply.send(zip);
   });
 

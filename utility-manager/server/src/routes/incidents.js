@@ -3,7 +3,7 @@ import { allowed, assertIslandWrite, canWriteIsland, hasRole, requireAllowed } f
 import { forbidden } from '../errors.js';
 import { sendCsv } from '../csv.js';
 import { badRequest } from '../errors.js';
-import { esc } from '../telegram.js';
+import { esc } from '../format.js';
 import { Where, date, datetime, id, one, optText, pageOf, paging, parse, serialParam, service, text, updateSet } from '../http.js';
 
 const CATEGORIES = ['outage', 'breakdown', 'maintenance', 'quality', 'safety', 'other'];

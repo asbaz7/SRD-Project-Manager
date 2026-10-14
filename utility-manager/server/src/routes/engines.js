@@ -4,6 +4,9 @@ import { sendCsv } from '../csv.js';
 import { badRequest, forbidden } from '../errors.js';
 import { Where, date, id, idParam, one, optText, parse, serialParam, text } from '../http.js';
 import { REPORTS_TRACKED_FROM, expectedMonth } from '../reportImport.js';
+import { LISTED_STATUSES } from '../domain.js';
+import { workRef } from '../format.js';
+import { localToday } from '../time.js';
 
 export const EVENT_KINDS = ['overhaul', 'top_overhaul', 'alternator_service', 'valve_clearance', 'battery_change',
   'repair', 'service', 'inspection', 'other'];
@@ -119,16 +122,13 @@ export async function dueCounts(db, today, atollId) {
   };
 }
 
-export async function mvToday(db, tz) {
-  return (await db.query("select to_char((now() at time zone $1)::date, 'YYYY-MM-DD') as d", [tz])).rows[0].d;
-}
 
 const listQuery = z.object({
   atoll_id: id.optional(),
   island_id: id.optional(),
   condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults', 'retired']).optional(),
   // The genset's own status (running, down, disconnected...), as set on it.
-  status: z.enum(['running', 'standby', 'down', 'maintenance', 'disconnected', 'unknown']).optional(),
+  status: z.enum(LISTED_STATUSES).optional(),
   flag: z.enum(['overhaul', 'alternator', 'work', 'stale']).optional(),
   q: z.string().max(100).optional(),
   sort: z.enum(['island', 'condition', 'hours_since_overhaul', 'total_hours', 'last_overhaul', 'last_alt_service', 'next_service']).default('island'),
@@ -160,7 +160,7 @@ export default async function engineRoutes(app) {
     if (q.flag === 'work') w.raw("exists (select 1 from work_orders x where x.asset_id = s.id and x.status not in ('completed', 'cancelled'))");
     const { rows } = await db.query(`${ENGINE_SELECT} ${w.sql} order by a.code, i.name, length(s.tag), s.tag`, w.values);
 
-    const today = await mvToday(db, config.timezone);
+    const today = localToday(config.timezone);
     const expected = expectedMonth(today);
     const intervals = await loadIntervals(db);
     let engines = rows.map((e) => describeEngine(e, today, expected, intervals));
@@ -282,7 +282,7 @@ export default async function engineRoutes(app) {
     if (event.source === 'report') throw forbidden('Records taken from a condition report cannot be edited');
     const fromWork = event.source === 'work' && event.work_id;
     if (fromWork && ((b.kind && b.kind !== event.kind) || (b.done_on && b.done_on !== event.done_on))) {
-      throw badRequest(`The date and type come from WO-${String(event.work_id).padStart(4, '0')}. Edit the work order instead.`);
+      throw badRequest(`The date and type come from ${workRef(event.work_id)}. Edit the work order instead.`);
     }
     const next = {
       kind: b.kind ?? event.kind, done_on: b.done_on ?? event.done_on,

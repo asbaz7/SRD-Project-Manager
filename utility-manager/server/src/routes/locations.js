@@ -4,6 +4,7 @@ import { forbidden } from '../errors.js';
 import { id, idParam, one, optText, parse, text, updateSet } from '../http.js';
 import { projectVisible } from './projects.js';
 import { workVisible } from './work.js';
+import { refSql } from '../format.js';
 
 const atollBody = z.object({ code: text(10), name: text(100), active: z.boolean().optional() });
 const islandBody = z.object({
@@ -109,7 +110,7 @@ export default async function locationRoutes(app) {
       db.query(`select r.*, u.full_name as uploaded_by_name from powerhouse_reports r
                   join facilities f on f.id = r.facility_id left join users u on u.id = r.uploaded_by
                  where f.island_id = $1`, [islandId]),
-      db.query(`select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.service, w.kind, w.title, w.status, w.target_on, w.started_on,
+      db.query(`select w.id, ${refSql('WO', 'w.id')} as ref, w.service, w.kind, w.title, w.status, w.target_on, w.started_on,
                        s.tag as asset_tag, s.kind as asset_kind,
                        lu.body as last_update, lu.created_at as last_update_at, lu.by_name as last_update_by
                   from work_orders w left join assets s on s.id = w.asset_id

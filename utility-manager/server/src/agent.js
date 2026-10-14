@@ -12,6 +12,8 @@ import { randomBytes } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { ATOLL_NAMES, matchIsland } from './reportImport.js';
+import { LISTED_STATUSES, SERVICES, SETTABLE_STATUSES, WORK_KINDS as ALL_WORK_KINDS, WORK_STATES, WORK_STATE_LABEL } from './domain.js';
+import { assetLabel, esc, workRef } from './format.js';
 
 const MAX_STEPS = 8;
 // A conversation starts afresh after this long without a message, or once it
@@ -25,21 +27,10 @@ const MAX_MESSAGES = 60;
 const PENDING_TTL_MS = 60 * 60 * 1000;
 const RESULT_LIMIT = 40000;
 
-const ASSET_LABELS = {
-  genset: 'Genset', solar_inverter: 'Solar inverter', battery: 'Battery', transformer: 'Transformer',
-  ro_unit: 'RO unit', pump: 'Pump', blower: 'Blower', tank: 'Tank', other: '',
-};
-const STATE_LABEL = {
-  planned: 'Planned', in_progress: 'In progress', awaiting_parts: 'Awaiting parts', on_hold: 'On hold',
-  completed: 'Completed', cancelled: 'Cancelled', dismantling: 'Dismantling', in_transit: 'In transit', installing: 'Installing',
-};
-const WORK_STATES = Object.keys(STATE_LABEL);
-const WORK_KINDS = ['overhaul', 'top_overhaul', 'alternator_service', 'repair', 'service', 'inspection', 'installation', 'other'];
-const SERVICES = ['electricity', 'water', 'sewerage'];
-
-const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-const ref = (id) => `WO-${String(id).padStart(4, '0')}`;
-const assetLabel = (a) => `${a.atoll_code}. ${a.island_name} ${`${ASSET_LABELS[a.kind] ?? ''} ${a.tag}`.trim()}`;
+const STATE_LABEL = WORK_STATE_LABEL;
+// New work from the assistant: any kind but a genset move (moves start from the website).
+const WORK_KINDS = ALL_WORK_KINDS.filter((k) => k !== 'relocation');
+const ref = workRef;
 
 const SYSTEM = `You are the SRD Utility assistant on Telegram, for the head office of STELCO's South Regional Department (SRD) in the Maldives. SRD runs electricity (powerhouses with diesel gensets, plus solar and batteries), water (RO plants) and sewerage on islands across several atolls. Staff message you to look things up and to record what is happening in the field.
 
@@ -134,7 +125,7 @@ function buildTools(db) {
       schema: z.object({
         island_id: id.optional(),
         atoll,
-        status: z.enum(['running', 'standby', 'down', 'maintenance', 'disconnected', 'unknown']).optional()
+        status: z.enum(LISTED_STATUSES).optional()
           .describe("The genset's status as set on it; disconnected = installed but not connected to the network"),
         condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults', 'retired']).optional()
           .describe('From the condition reports. faults = minor, major or not running'),
@@ -149,7 +140,7 @@ function buildTools(db) {
         if (d.engines.length > 60) {
           return { today: d.today, summary: d.summary, note: 'Short form: island, genset, kW, status, condition, open work. Filter or use get_island for more.',
             engines: d.engines.map((e) => [`${e.atoll_code}. ${e.island_name} ${e.tag}`, `${e.rated_capacity ?? '?'} kW`, e.status,
-              e.condition || 'no report', e.overhaul_due && 'overhaul due', ...e.open_work.map((w) => `WO-${String(w.id).padStart(4, '0')}`)].filter(Boolean).join(' · ')) };
+              e.condition || 'no report', e.overhaul_due && 'overhaul due', ...e.open_work.map((w) => workRef(w.id))].filter(Boolean).join(' · ')) };
         }
         // One line's worth per genset: get_asset has the rest.
         return { today: d.today, summary: d.summary, engines: d.engines.map((e) => ({
@@ -159,7 +150,7 @@ function buildTools(db) {
           fault: (e.condition_source === 'status' ? e.condition_note : e.fault || e.status_text)?.slice(0, 120),
           total_hours: e.total_hours, hours_to_overhaul: e.hours_to_overhaul, overhaul_due: e.overhaul_due || undefined,
           alt_service_due: e.alt_service_due || undefined,
-          open_work: e.open_work.map((w) => `WO-${String(w.id).padStart(4, '0')} ${w.title} (${w.status})`),
+          open_work: e.open_work.map((w) => `${workRef(w.id)} ${w.title} (${w.status})`),
         })) };
       },
     },
@@ -254,7 +245,7 @@ function buildTools(db) {
       description: "Record an asset's status (e.g. a genset going down or back up). The person confirms before it's saved. A note is required when it goes down.",
       schema: z.object({
         asset_id: id,
-        status: z.enum(['running', 'standby', 'down', 'maintenance', 'disconnected']).describe('disconnected = installed but not connected to the network: not a fault'),
+        status: z.enum(SETTABLE_STATUSES).describe('disconnected = installed but not connected to the network: not a fault'),
         note: z.string().max(1000).optional().describe('What happened, in their words'),
       }),
       describe: async (user, { asset_id, status, note }, asUser) => {

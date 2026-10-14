@@ -3,8 +3,10 @@
 import { z } from 'zod';
 import { id, parse, service } from '../http.js';
 import { expectedMonth, isMissing, reportState } from '../reportImport.js';
-import { dueCounts, mvToday } from './engines.js';
+import { dueCounts } from './engines.js';
 import { projectVisible } from './projects.js';
+import { refSql } from '../format.js';
+import { localToday } from '../time.js';
 
 export default async function serviceRoutes(app) {
   const { db, config } = app;
@@ -13,7 +15,7 @@ export default async function serviceRoutes(app) {
     const { service: svc } = parse(z.object({ service }), req.params);
     const q = parse(z.object({ atoll_id: id.optional() }), req.query);
     const atoll = q.atoll_id ?? null;
-    const today = await mvToday(db, config.timezone);
+    const today = localToday(config.timezone);
     const expected = expectedMonth(today);
     const scope = '($2::uuid is null or i.atoll_id = $2)';
     const vis = projectVisible(req.user, 3);
@@ -85,7 +87,7 @@ export default async function serviceRoutes(app) {
          order by (c.condition = 'not_running' or s.status = 'down') desc, a.code, i.name, length(s.tag), s.tag
          limit 100`, [svc, atoll]),
       db.query(`
-        select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.kind, w.title, w.status, w.target_on,
+        select w.id, ${refSql('WO', 'w.id')} as ref, w.kind, w.title, w.status, w.target_on,
                (w.target_on < current_date) as overdue, i.id as island_id, i.name as island_name, a.code as atoll_code,
                s.id as asset_id, s.tag as asset_tag, s.kind as asset_kind,
                (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update
@@ -104,7 +106,7 @@ export default async function serviceRoutes(app) {
          order by array_position(array['critical','high','medium','low']::severity_level[], x.severity), x.started_at
          limit 50`, [svc, atoll]),
       db.query(`
-        select p.id, 'PRJ-' || lpad(p.id::text, 4, '0') as ref, p.title, p.status, p.progress_pct, p.target_date,
+        select p.id, ${refSql('PRJ', 'p.id')} as ref, p.title, p.status, p.progress_pct, p.target_date,
                (p.target_date < current_date) as overdue, i.id as island_id, i.name as island_name, a.code as atoll_code
           from projects p left join islands i on i.id = p.island_id left join atolls a on a.id = i.atoll_id
          where p.service = $1 and p.status in ('planned', 'ongoing', 'on_hold') and ($2::uuid is null or i.atoll_id = $2)

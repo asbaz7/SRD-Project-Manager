@@ -2,15 +2,12 @@ import { z } from 'zod';
 import { allowed, assertIslandWrite, canWriteIsland, hasRole, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { badRequest, forbidden, notFound } from '../errors.js';
-import { assetName, esc } from '../telegram.js';
+import { assetName, esc, refSql } from '../format.js';
 import { checkMovePlan, moveAsset } from '../assetMoves.js';
-import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, service, text, unitId, updateSet } from '../http.js';
+import { date, id, one, optText, pageOf, paging, parse, parsePatch, serialParam, service, text, unitId, updateSet, Where } from '../http.js';
+import { MOVE_STAGES, OPEN_WORK, WORK_KINDS, WORK_STATES } from '../domain.js';
 
-export const WORK_KINDS = ['overhaul', 'top_overhaul', 'alternator_service', 'repair', 'service', 'inspection', 'installation', 'relocation', 'other'];
-// Moving a genset (kind 'relocation') has its own stages instead of
-// in progress / awaiting parts.
-export const MOVE_STAGES = ['dismantling', 'in_transit', 'installing'];
-export const WORK_STATES = ['planned', 'in_progress', 'awaiting_parts', 'on_hold', ...MOVE_STAGES, 'completed', 'cancelled'];
+export { MOVE_STAGES, WORK_KINDS, WORK_STATES };
 const MOVE_STATES = ['planned', ...MOVE_STAGES, 'on_hold', 'completed', 'cancelled'];
 const STAGE_LABEL = { planned: 'Planned', dismantling: 'Dismantling', in_transit: 'In transit', installing: 'Installing',
   on_hold: 'On hold', completed: 'Completed', cancelled: 'Cancelled' };
@@ -36,7 +33,7 @@ function checkStatus(kind, status) {
   if (kind === 'relocation' && !MOVE_STATES.includes(status)) throw badRequest(`A move's stages are: ${MOVE_STATES.map((s) => STAGE_LABEL[s]).join(', ')}`);
   if (kind !== 'relocation' && MOVE_STAGES.includes(status)) throw badRequest(`${STAGE_LABEL[status]} is a stage of a genset move`);
 }
-const OPEN = "w.status not in ('completed', 'cancelled')";
+const OPEN = OPEN_WORK;
 
 // Corrects the text of an update (work or project): only its author, and
 // only within 8 hours of posting it.
@@ -74,7 +71,7 @@ const body = z.object({
 const COLS = ['kind', 'title', 'description', 'status', 'assigned_to', 'assigned_user_id', 'unit_id', 'fault_report_month', 'started_on', 'target_on', 'completed_on', 'dest_facility_id', 'dest_tag'];
 
 const SELECT = `
-  select w.*, 'WO-' || lpad(w.id::text, 4, '0') as ref,
+  select w.*, ${refSql('WO', 'w.id')} as ref,
          i.name as island_name, i.atoll_id, a.code as atoll_code, f.name as facility_name,
          s.tag as asset_tag, s.kind as asset_kind, s.make_model as asset_model,
          cu.full_name as created_by_name, au.full_name as assigned_user_name, un.name as unit_name,
@@ -167,7 +164,7 @@ export default async function workRoutes(app) {
   async function applyMoveProgress(t, workId, before, userId) {
     const { rows: [w] } = await t.query(`
       select w.id, w.kind, w.status, w.asset_id, w.dest_facility_id, w.dest_tag, w.completed_on,
-             'WO-' || lpad(w.id::text, 4, '0') as ref, df.name as dest_facility, di.name as dest_island, da.code as dest_atoll,
+             ${refSql('WO', 'w.id')} as ref, df.name as dest_facility, di.name as dest_island, da.code as dest_atoll,
              f.name as from_facility, i.name as from_island, a.code as from_atoll
         from work_orders w
         join assets s on s.id = w.asset_id join facilities f on f.id = s.facility_id
@@ -327,8 +324,7 @@ export default async function workRoutes(app) {
 
   app.patch('/work/:id', manager, async (req) => {
     const { id: workId } = parse(serialParam, req.params);
-    const patch = parse(body.omit({ island_id: true, facility_id: true, service: true }).partial(), req.body);
-    for (const k of Object.keys(patch)) if (!(k in (req.body || {}))) delete patch[k];
+    const patch = parsePatch(body.omit({ island_id: true, facility_id: true, service: true }).partial(), req.body);
     const current = one((await db.query(
       'select island_id, status, completed_on, kind, asset_id, dest_facility_id, dest_tag, unit_id, assigned_user_id from work_orders where id = $1', [workId])).rows, 'Work');
     technicalOr(req.user, current.unit_id);

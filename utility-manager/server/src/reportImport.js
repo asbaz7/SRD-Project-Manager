@@ -126,6 +126,7 @@ async function powerhouseOf(t, islandId) {
  * What an upload would change, without changing anything.
  */
 import { gensetBySerial, moveAsset, normSerial } from './assetMoves.js';
+import { localToday } from './time.js';
 
 const NO_FACILITY = '00000000-0000-0000-0000-000000000000';
 
@@ -191,7 +192,7 @@ export async function planImport(db, parsed, islandId) {
   if (relabelled.length) {
     warnings.push(`The "GENSET NO." label is missing on ${relabelled.length === 1 ? 'sheet' : 'sheets'} ${relabelled.map((s) => `"${s}"`).join(', ')}; the genset numbers were read from the row above "FIXED ASSET CODE". Please ask the island to fix the label.`);
   }
-  const expected = expectedMonth(new Date().toLocaleDateString('en-CA', { timeZone: 'Indian/Maldives' }));
+  const expected = expectedMonth(localToday('Indian/Maldives'));
   if (latest.month && latest.month < expected && (!currentMonth || latest.month >= currentMonth)) {
     warnings.push(`The newest report in this file is ${monthLabel(latest.month)}; ${monthLabel(expected)} will still show as missing.`);
   }

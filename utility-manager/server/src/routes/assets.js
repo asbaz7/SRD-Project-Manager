@@ -1,18 +1,18 @@
 import { z } from 'zod';
 import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
 import { expectedMonth } from '../reportImport.js';
-import { ENGINE_SELECT, describeEngine, loadIntervals, mvToday } from './engines.js';
+import { ENGINE_SELECT, describeEngine, loadIntervals } from './engines.js';
 import { sendCsv } from '../csv.js';
 import { conflict, forbidden } from '../errors.js';
 import { mergeAssets } from '../assetMoves.js';
-import { assetName, esc } from '../telegram.js';
+import { assetName, esc, refSql } from '../format.js';
+import { ASSET_KINDS, ASSET_STATUSES, FACILITY_KINDS } from '../domain.js';
 import {
   Where, date, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
 } from '../http.js';
+import { localToday } from '../time.js';
 
-const FACILITY_KINDS = ['powerhouse', 'solar_plant', 'water_plant', 'water_storage', 'sewerage_plant', 'sewerage_system', 'pump_station', 'other'];
-const ASSET_KINDS = ['genset', 'solar_inverter', 'battery', 'transformer', 'ro_unit', 'pump', 'blower', 'tank', 'other'];
-const STATUSES = ['running', 'standby', 'down', 'maintenance', 'disconnected', 'decommissioned', 'unknown'];
+const STATUSES = ASSET_STATUSES;
 
 const facilityBody = z.object({
   island_id: id,
@@ -207,10 +207,10 @@ export default async function assetRoutes(app) {
     const [condition, maintenance, work, hours, engine] = await Promise.all([
       db.query(`select c.*, u.full_name as uploaded_by_name from engine_current c
                   left join users u on u.id = c.uploaded_by where c.asset_id = $1`, [assetId]),
-      db.query(`select e.*, u.full_name as created_by_name, ed.full_name as edited_by_name, 'WO-' || lpad(e.work_id::text, 4, '0') as work_ref
+      db.query(`select e.*, u.full_name as created_by_name, ed.full_name as edited_by_name, ${refSql('WO', 'e.work_id')} as work_ref
                   from maintenance_events e left join users u on u.id = e.created_by left join users ed on ed.id = e.edited_by
                  where e.asset_id = $1 order by e.done_on desc, e.id desc`, [assetId]),
-      db.query(`select w.id, 'WO-' || lpad(w.id::text, 4, '0') as ref, w.kind, w.title, w.status, w.started_on, w.target_on,
+      db.query(`select w.id, ${refSql('WO', 'w.id')} as ref, w.kind, w.title, w.status, w.started_on, w.target_on,
                        w.completed_on, w.assigned_to,
                        (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update
                   from work_orders w where w.asset_id = $1
@@ -224,7 +224,7 @@ export default async function assetRoutes(app) {
     asset.work = work.rows;
     asset.hours_log = hours.rows.reverse();
     if (engine.rows[0]) {
-      const today = await mvToday(db, app.config.timezone);
+      const today = localToday(app.config.timezone);
       const e = describeEngine(engine.rows[0], today, expectedMonth(today), await loadIntervals(db));
       asset.engine = (({ last_overhaul_on, last_alt_service_on, hours_since_overhaul, hours_to_overhaul, overhaul_due, overhaul_rule,
         overhaul_requested, alt_service_due, alt_service_rule, alt_requested, next_alt_service_due, intervals, report_stale, shared_island }) => ({
@@ -308,7 +308,7 @@ export default async function assetRoutes(app) {
     // migration 017): say which, in the reply and the alert.
     const work = {};
     for (const item of body.items.filter((i) => i.status === 'down')) {
-      const { rows: [w] } = await db.query(`select id, 'WO-' || lpad(id::text, 4, '0') as ref, title from work_orders
+      const { rows: [w] } = await db.query(`select id, ${refSql('WO', 'id')} as ref, title from work_orders
         where asset_id = $1 and kind <> 'relocation' and status not in ('completed', 'cancelled') order by created_at desc limit 1`, [item.asset_id]);
       if (w) work[item.asset_id] = w;
     }

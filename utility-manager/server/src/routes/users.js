@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { hashPassword, passwordProblem, requireRole } from '../auth.js';
 import { badRequest } from '../errors.js';
-import { id, idParam, one, optText, parse, text, unitId, updateSet } from '../http.js';
+import { id, idParam, one, optText, parse, parsePatch, text, unitId, updateSet } from '../http.js';
 
 const role = z.enum(['admin', 'manager', 'staff', 'viewer']);
 const PERMISSIONS = ['documents', 'incidents', 'work', 'projects', 'surveys'];
@@ -98,9 +98,8 @@ export default async function userRoutes(app) {
 
   app.patch('/users/:id', admin, async (req) => {
     const { id: userId } = parse(idParam, req.params);
-    const body = parse(patch, req.body);
     // Only fields actually sent are updated; defaults from the create schema don't apply.
-    for (const k of Object.keys(body)) if (!(k in (req.body || {}))) delete body[k];
+    const body = parsePatch(patch, req.body);
     if (userId === req.user.id && (body.active === false || (body.role && body.role !== 'admin'))) {
       throw badRequest('You cannot deactivate or demote your own account');
     }

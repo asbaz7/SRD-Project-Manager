@@ -4,6 +4,7 @@ import { parseConditionReport } from '../conditionReport.js';
 import { badRequest } from '../errors.js';
 import { date, id, one, parse } from '../http.js';
 import { REPORTS_TRACKED_FROM, applyImport, expectedMonth, isMissing, matchIsland, planImport, reportState } from '../reportImport.js';
+import { localToday } from '../time.js';
 
 const upload = z.object({
   file_name: z.string().trim().max(300).default(''),
@@ -23,9 +24,6 @@ function decodeBase64(data) {
   }
 }
 
-async function today(db, tz) {
-  return (await db.query('select to_char((now() at time zone $1)::date, \'YYYY-MM-DD\') as d', [tz])).rows[0].d;
-}
 
 export default async function conditionReportRoutes(app) {
   const { db, config } = app;
@@ -33,7 +31,7 @@ export default async function conditionReportRoutes(app) {
   // Every powerhouse with its latest report and whether it is up to date.
   app.get('/condition-reports', async (req) => {
     const q = parse(z.object({ atoll_id: id.optional() }), req.query);
-    const day = await today(db, config.timezone);
+    const day = localToday(config.timezone);
     const expected = expectedMonth(day);
     const { rows } = await db.query(`
       select f.id as facility_id, f.name as facility_name, f.reports_from, i.id as island_id, i.name as island_name,

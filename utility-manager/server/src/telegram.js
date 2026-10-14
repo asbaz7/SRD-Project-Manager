@@ -11,17 +11,14 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { createAgent, toTelegram } from './agent.js';
 import { ATOLL_NAMES, matchIsland } from './reportImport.js';
+import { SERVICE_LABEL, WORK_STATE_LABEL } from './domain.js';
+import { assetName, esc, workRef } from './format.js';
 
 const API = 'https://api.telegram.org';
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_TTL_MINUTES = 15;
 
-const ASSET_LABELS = {
-  genset: 'Genset', solar_inverter: 'Solar inverter', battery: 'Battery', transformer: 'Transformer',
-  ro_unit: 'RO unit', pump: 'Pump', blower: 'Blower', tank: 'Tank', other: '',
-};
 const SERVICE_ICON = { electricity: '⚡', water: '💧', sewerage: '♻️' };
-const SERVICE_LABEL = { electricity: 'Electricity', water: 'Water', sewerage: 'Sewerage' };
 const STATUS_WORDS = { up: 'running', running: 'running', standby: 'standby', down: 'down', maintenance: 'maintenance', disconnected: 'disconnected', disconnect: 'disconnected' };
 const STATUS_ICON = { running: '🟢', standby: '⚪', down: '🔴', maintenance: '🟠', disconnected: '⊘', decommissioned: '⚫', unknown: '❔' };
 const CONDITION_LABEL = { ok: 'OK', minor_fault: 'minor fault', major_fault: 'major fault', not_running: 'not running' };
@@ -33,14 +30,9 @@ const WORK_STATE_WORDS = {
   dismantling: 'dismantling', dismantle: 'dismantling', transit: 'in_transit', in_transit: 'in_transit', shipping: 'in_transit',
   shipped: 'in_transit', installing: 'installing', install: 'installing', arrived: 'installing',
 };
-const WORK_STATE_LABEL = {
-  planned: 'Planned', in_progress: 'In progress', awaiting_parts: 'Awaiting parts', on_hold: 'On hold',
-  completed: 'Completed', cancelled: 'Cancelled', dismantling: 'Dismantling', in_transit: 'In transit', installing: 'Installing',
-};
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 
-export const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-export const assetName = (a) => `${ASSET_LABELS[a.kind] ?? ''} ${a.tag}`.trim();
+export { assetName, esc };
 const where = (a) => `${a.atoll_code}. ${a.island_name}`;
 
 // Telegram signs nothing, so the webhook URL is registered with a secret that
@@ -330,7 +322,7 @@ export function createTelegram({ db, config, log }) {
         const state = a.status === 'maintenance' ? 'in maintenance' : fault ? `${a.status}, ${fault}` : a.status;
         const note = (a.condition_source === 'status' ? a.condition_note : null) || a.status_note || a.fault;
         const why = note && (out || fault) ? `: ${esc(String(note).replace(/^Condition report \d{4}-\d{2}: /, '').slice(0, 90))}` : '';
-        const work = (a.open_work || []).map((w) => `🔧 WO-${String(w.id).padStart(4, '0')} (${WORK_STATE_LABEL[w.status] || w.status})`).join(' ');
+        const work = (a.open_work || []).map((w) => `🔧 ${workRef(w.id)} (${WORK_STATE_LABEL[w.status] || w.status})`).join(' ');
         lines.push(`${STATUS_ICON[a.status] || ''} ${esc(assetName(a))}: ${esc(state)}${why}${work ? ` · ${work}` : ''}`);
       }
     }
@@ -405,11 +397,11 @@ export function createTelegram({ db, config, log }) {
     if (!body) return 'Add the update text after the work number.';
     const res = await asUser(user.id, 'POST', `/work/${m[1]}/updates`, { body: body.slice(0, 5000), status });
     if (res.status === 201 && res.body?.auto_status) status = res.body.auto_status;
-    if (res.status === 404) return `There's no work order WO-${m[1].padStart(4, '0')}.`;
+    if (res.status === 404) return `There's no work order ${workRef(m[1])}.`;
     if (res.status !== 201) return apiError(res);
     const w = await asUser(user.id, 'GET', `/work/${m[1]}`);
     const title = w.body?.title ? `: ${esc(w.body.title)}` : '';
-    return `🔧 Update added to <b>WO-${m[1].padStart(4, '0')}</b>${title}${status ? `\nStatus: <b>${WORK_STATE_LABEL[status]}</b>` : ''}\n${link(`/work/${m[1]}`, 'Open')}`;
+    return `🔧 Update added to <b>${workRef(m[1])}</b>${title}${status ? `\nStatus: <b>${WORK_STATE_LABEL[status]}</b>` : ''}\n${link(`/work/${m[1]}`, 'Open')}`;
   }
 
   async function cmdWork(user, words, asUser) {
