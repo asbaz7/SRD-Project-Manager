@@ -7,7 +7,9 @@ import { Link } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, ErrorBox, Modal, Select } from '../components/ui.jsx';
-import { CONDITIONS, dateTime, month, num } from '../format.js';
+import { ASSET_STATUS, FAULTS, dateTime, month, num } from '../format.js';
+
+const STATUSES = ['running', 'standby', 'down', 'maintenance', 'disconnected'];
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 const SOURCE = { update: 'Monthly update', upload: 'Workbook', fleet_manager: 'Fleet Manager' };
@@ -61,14 +63,15 @@ export function GensetUpdateForm({ facilityId, onClose, onSaved }) {
 function UpdateRows({ data: d, onClose, onSaved }) {
   const [rows, setRows] = useState(() => d.gensets.map((g) => ({
     id: g.id, tag: g.tag, model: g.make_model, status: g.status, last: g.total_hours == null ? null : Number(g.total_hours), lastMonth: g.report_month,
-    total_hours: '', meter_replaced: false, condition: g.condition || 'ok', fault: g.condition && g.condition !== 'ok' ? g.fault || '' : '',
+    total_hours: '', meter_replaced: false, status: g.status === 'unknown' ? 'running' : g.status, faultLevel: g.fault_level || 'none', fault: g.fault_note || '',
     needs_overhaul: !!g.needs_overhaul, alt_needs_service: !!g.alt_needs_service, skip: g.status === 'disconnected',
   })));
   const set = (i, change) => setRows((all) => all.map((r, j) => (j === i ? { ...r, ...change } : r)));
   const save = useSubmit(async () => {
     const items = rows.filter((r) => !r.skip).map((r) => ({
-      asset_id: r.id, total_hours: Number(r.total_hours), meter_replaced: r.meter_replaced || undefined, condition: r.condition,
-      fault: r.condition === 'ok' ? null : r.fault.trim() || null, needs_overhaul: r.needs_overhaul, alt_needs_service: r.alt_needs_service,
+      asset_id: r.id, total_hours: Number(r.total_hours), meter_replaced: r.meter_replaced || undefined, status: r.status,
+      fault_level: r.faultLevel, fault: r.faultLevel === 'none' ? null : r.fault.trim() || null,
+      needs_overhaul: r.needs_overhaul, alt_needs_service: r.alt_needs_service,
     }));
     if (!items.length) throw new Error('Include at least one genset');
     const blank = rows.find((r) => !r.skip && r.total_hours === '');
@@ -82,7 +85,7 @@ function UpdateRows({ data: d, onClose, onSaved }) {
       <br /><span className="muted small">{ph.report_month ? `Last update: ${month(ph.report_month)}${ph.updated_by_name ? ` by ${ph.updated_by_name}` : ''}` : 'No update yet'}. This update is for {month(`${d.today.slice(0, 7)}-01`)}.</span></p>
     <ErrorBox error={save.error} />
     <div className="table-scroll wide"><table className="update-table">
-      <thead><tr><th>Genset</th><th className="num">Running hours</th><th>Condition</th><th>Fault</th><th>Needs</th></tr></thead>
+      <thead><tr><th>Genset</th><th className="num">Running hours</th><th>Status</th><th>Faults</th><th>Needs</th></tr></thead>
       <tbody>{rows.map((r, i) => <tr key={r.id} className={r.skip ? 'muted' : ''}>
         <td><strong>G{r.tag}</strong>{r.model && <><br /><small className="muted">{r.model}</small></>}
           {r.status === 'disconnected' && <><br /><label className="check small"><input type="checkbox" checked={!r.skip} onChange={(e) => set(i, { skip: !e.target.checked })} /> include (disconnected)</label></>}</td>
@@ -91,15 +94,17 @@ function UpdateRows({ data: d, onClose, onSaved }) {
           {r.last != null && <><br /><small className="muted">last {num(r.last)}{r.lastMonth && ` (${month(r.lastMonth)})`}</small></>}
           {r.last != null && r.total_hours !== '' && Number(r.total_hours) < r.last && <><br /><label className="check small warn-text">
             <input type="checkbox" checked={r.meter_replaced} onChange={(e) => set(i, { meter_replaced: e.target.checked })} /> meter replaced</label></>}</td>
-        <td><Select value={r.condition} disabled={r.skip} onChange={(v) => set(i, { condition: v })}
-          options={Object.entries(CONDITIONS).map(([k, c]) => [k, c.label])} aria-label={`G${r.tag} condition`} /></td>
-        <td><input value={r.fault} disabled={r.skip || r.condition === 'ok'} required={!r.skip && r.condition !== 'ok'} maxLength="2000"
-          onChange={(e) => set(i, { fault: e.target.value })} placeholder={r.condition === 'ok' ? '' : 'What is wrong'} aria-label={`G${r.tag} fault`} /></td>
+        <td><Select value={r.status} disabled={r.skip} onChange={(v) => set(i, ['down', 'maintenance'].includes(r.status) && ['running', 'standby'].includes(v) ? { status: v, faultLevel: 'none', fault: '' } : { status: v })}
+          options={STATUSES.map((k) => [k, ASSET_STATUS[k].label])} aria-label={`G${r.tag} status`} /></td>
+        <td><Select value={r.faultLevel} disabled={r.skip} onChange={(v) => set(i, { faultLevel: v })}
+          options={Object.entries(FAULTS).map(([k, f]) => [k, f.label])} aria-label={`G${r.tag} faults`} />
+          {r.faultLevel !== 'none' && <input value={r.fault} disabled={r.skip} required={!r.skip} maxLength="2000"
+            onChange={(e) => set(i, { fault: e.target.value })} placeholder="What is wrong" aria-label={`G${r.tag} fault`} />}</td>
         <td className="small"><label className="check"><input type="checkbox" disabled={r.skip} checked={r.needs_overhaul} onChange={(e) => set(i, { needs_overhaul: e.target.checked })} /> Overhaul</label>
           <label className="check"><input type="checkbox" disabled={r.skip} checked={r.alt_needs_service} onChange={(e) => set(i, { alt_needs_service: e.target.checked })} /> Alternator service</label></td>
       </tr>)}</tbody>
     </table></div>
-    <p className="muted small wide">Not running sets the genset down (and opens repair work); a disconnected genset keeps its status.
+    <p className="muted small wide">Setting a genset down opens repair work; bringing one back to running clears its faults unless you give new ones.
       Record overhauls and other services on the genset (or by completing the work order) so due dates stay right.</p>
     <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={save.busy}>Save update</button></div>

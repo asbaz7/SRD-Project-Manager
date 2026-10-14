@@ -6,8 +6,8 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { AssetForm } from '../components/forms.jsx';
-import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
+import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Fault, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
+import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, FAULTS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 const ago = (iso) => {
@@ -49,30 +49,21 @@ export default function Asset() {
       </PageHead>
 
       {isEngine && <div className="panels">
-        <Card title="Condition">
-          {/* One current state, then labelled facts: why, where it came from,
-              and what the last report said when that differs. */}
-          <div className="big"><Condition value={c?.condition} /></div>
-          {(() => {
-            const fromStatus = c?.condition_source === 'status';
-            const why = fromStatus ? c.condition_note : c?.fault;
-            return <dl className="facts condition-facts">
-              {why && <><dt>{fromStatus && a.status !== 'down' ? 'Note' : 'Fault'}</dt><dd>{why}</dd></>}
-              {fromStatus && <>
-                <dt>Source</dt><dd>Status update · {dateTime(c.condition_at)}{a.status_by_name && ` · ${a.status_by_name}`}</dd>
-                {c.report_month && <><dt>Last update</dt><dd className="muted">{month(c.report_month)}: <Condition value={c.report_condition} text={c.status_text} />{c.fault && ` · ${c.fault}`}</dd></>}
-              </>}
-              {!fromStatus && c?.report_month && <>
-                <dt>Source</dt><dd>{c.source === 'update' ? `${month(c.report_month)} monthly update` : `${month(c.report_month)} report`}{c.uploaded_by_name && ` · ${c.uploaded_by_name}`}</dd>
-                {c.status_text && c.source !== 'update' && <><dt>Report says</dt><dd className="muted">{c.status_text}</dd></>}
-              </>}
-              {!c && <><dt>Source</dt><dd className="muted">No monthly update yet</dd></>}
-            </dl>;
-          })()}
-          <p className={`small ${e.report_stale ? 'bad' : 'muted'}`}>
-            {e.report_stale ? '⚠ This month\'s update is due. ' : c?.condition_source === 'status' ? 'The next monthly update will update this. ' : ''}
-            <Link to={`/electricity/reports`}>Monthly updates</Link>
-          </p>
+        <Card title="Status and faults">
+          {/* One current state: is it available (status), is anything wrong
+              (faults). Both change from status updates, the monthly update,
+              Telegram and here. */}
+          <div className="big"><AssetStatus status={a.status} /></div>
+          <dl className="facts condition-facts">
+            <dt>Status</dt><dd>{ASSET_STATUS[a.status]?.label || a.status}{a.status_at && <span className="muted"> · {dateTime(a.status_at)}{a.status_by_name && ` · ${a.status_by_name}`}</span>}
+              {a.status_note && <><br />{a.status_note}</>}</dd>
+            <dt>Faults</dt><dd><Fault level={a.fault_level} />{a.fault_note && <><br />{a.fault_note}</>}
+              {a.fault_at && <><br /><span className="muted small">{dateTime(a.fault_at)}{a.fault_by_name && ` · ${a.fault_by_name}`}</span></>}</dd>
+            <dt>Monthly update</dt><dd className={e.report_stale ? 'bad' : ''}>{c?.report_month ? `${month(c.report_month)}${c.source && c.source !== 'update' ? ` (${c.source === 'fleet_manager' ? 'Fleet Manager' : 'workbook'})` : ''}` : 'None yet'}
+              {e.report_stale && ' · this month\'s is due'}</dd>
+          </dl>
+          {manage && <FaultForm asset={a} reload={state.reload} />}
+          <p className="small muted"><Link to="/electricity/reports">Monthly updates</Link></p>
         </Card>
 
         <Card title="Overhaul">
@@ -197,7 +188,7 @@ export default function Asset() {
 // the reports received before them. When two sources gave the same month,
 // both rows show and the figures that disagree are marked.
 const REPORT_COLS = [
-  ['status_text', 'Report says'], ['total_hours', 'Hours', num], ['last_overhaul_on', 'Overhaul', date],
+  ['status_text', 'State'], ['total_hours', 'Hours', num], ['last_overhaul_on', 'Overhaul', date],
   ['last_alt_service_on', 'Alternator', date], ['last_valve_on', 'Valves', date], ['last_battery_on', 'Battery', date],
 ];
 function ReportHistory({ assetId }) {
@@ -307,4 +298,23 @@ function DeleteEvent({ id, onDone }) {
     onDone();
   });
   return <button className="btn ghost small" disabled={busy} onClick={submit} aria-label="Remove record">✕</button>;
+}
+
+// Change a genset's faults: none, minor or major, with what is wrong.
+function FaultForm({ asset: a, reload }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ level: a.fault_level || 'none', note: a.fault_note || '' });
+  const { submit, busy, error } = useSubmit(async () => {
+    await api(`/assets/${a.id}/fault`, { method: 'POST', body: { level: f.level, note: f.level === 'none' ? null : f.note.trim() || null } });
+    setOpen(false);
+    reload();
+  });
+  if (!open) return <button className="btn small ghost" onClick={() => setOpen(true)}>Change faults</button>;
+  return <form className="inline-add" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+    <ErrorBox error={error} />
+    <Select value={f.level} onChange={(v) => setF({ ...f, level: v })} options={Object.entries(FAULTS).map(([k, x]) => [k, x.label])} aria-label="Faults" />
+    {f.level !== 'none' && <input required maxLength="2000" placeholder="What is wrong" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} aria-label="Fault" />}
+    <button className="btn small primary" disabled={busy}>Save</button>
+    <button type="button" className="btn small ghost" onClick={() => setOpen(false)}>Cancel</button>
+  </form>;
 }

@@ -300,21 +300,20 @@ describe('work and maintenance history', () => {
     assert.equal((await call('GET', `/assets/${a.id}`, T)).status, 404);
   });
 
-  test('a status update newer than the report decides the engine state (never "OK" and "Down" at once)', async () => {
+  test('status and faults are one current state (never "OK" and "Down" at once)', async () => {
     const tagId = async (tag) => (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.kind = 'genset' and s.tag = $2`, [maafushi.id, tag])).rows[0].id;
     const g1 = await tagId('1');
     const g9 = await tagId('9');
-    const state = async (id) => (await call('GET', `/assets/${id}`, { token: admin })).body.condition;
-    assert.equal((await state(g1)).condition, 'ok');
+    const state = async (id) => (await call('GET', `/assets/${id}`, { token: admin })).body;
+    assert.equal((await state(g1)).condition.condition, 'ok');
     const before = (await call('GET', '/dashboard', { token: admin })).body.engines;
 
-    // G1: the report says OK; a manager then sets it down.
+    // G1 is set down: not running, wherever it shows.
     await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g1, status: 'down', note: 'radiator leak' }] } });
-    const s1 = await state(g1);
-    assert.equal(s1.condition, 'not_running');
-    assert.equal(s1.condition_source, 'status');
-    assert.equal(s1.condition_note, 'radiator leak');
-    assert.equal(s1.report_condition, 'ok');
+    let s1 = await state(g1);
+    assert.equal(s1.condition.condition, 'not_running');
+    assert.equal(s1.status_note, 'radiator leak');
+    assert.equal(s1.condition.report_condition, 'ok', 'the monthly record is kept as it was');
     const list = (await call('GET', '/engines?condition=not_running', { token: admin })).body.engines;
     assert.ok(list.some((e) => e.id === g1 && e.status === 'down'));
     assert.ok(!(await call('GET', '/engines?condition=ok', { token: admin })).body.engines.some((e) => e.id === g1));
@@ -322,21 +321,20 @@ describe('work and maintenance history', () => {
     assert.equal(+after.not_running, +before.not_running + 1);
     assert.equal(+after.ok, +before.ok - 1);
 
-    // Back to running: the report's OK applies again.
+    // Back to running: OK again.
     await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g1, status: 'running' }] } });
-    assert.deepEqual(((s) => [s.condition, s.condition_source])(await state(g1)), ['ok', 'report']);
+    assert.equal((await state(g1)).condition.condition, 'ok');
 
-    // G9: the report says NOT RUNNING; once set running it is back in service.
-    assert.equal((await state(g9)).condition, 'not_running');
+    // G9: down with a major fault; back in service clears the fault.
+    s1 = await state(g9);
+    assert.deepEqual([s1.status, s1.fault_level, s1.fault_note], ['down', 'major', 'Crankshaft damage']);
     await call('POST', '/assets/status', { token: manager, body: { items: [{ asset_id: g9, status: 'running', note: 'crankshaft replaced' }] } });
     const s9 = await state(g9);
-    assert.equal(s9.condition, 'ok');
-    assert.equal(s9.condition_source, 'status');
-    assert.match(s9.condition_note, /Back in service: crankshaft replaced/);
+    assert.deepEqual([s9.condition.condition, s9.fault_level, s9.fault_note], ['ok', 'none', null]);
 
     // No engine anywhere reads as running in one place and down in another.
     const all = (await call('GET', '/engines', { token: admin })).body.engines;
-    const conflicts = all.filter((e) => (e.condition === 'not_running') !== ['down', 'maintenance'].includes(e.status) && e.status !== 'unknown');
+    const conflicts = all.filter((e) => (e.condition === 'not_running') !== ['down', 'maintenance'].includes(e.status) && e.condition);
     assert.deepEqual(conflicts.map((e) => `${e.island_name} ${e.tag}: ${e.condition}/${e.status}`), []);
   });
 
@@ -686,12 +684,14 @@ describe('reports Fleet Manager sent, and report history', () => {
   });
 
   test('work logged from a fault clears it from Needs attention when completed; work is assigned to a person', async () => {
-    // Dhigurah G2 reports a major fault and is still running.
+    // Dhigurah G2 has a major fault and is still running.
     const g2 = gensets.find((g) => g.tag === '2');
-    await send({ report_month: EXPECTED, engines: [{ srd_asset_id: g2.id, condition: 'major_fault', status_text: 'RUNNING; MAJOR FAULT', fault: 'Turbo noise' }] });
     await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g2.id, status: 'running' }] } });
+    const set = await call('POST', `/assets/${g2.id}/fault`, { token: admin, body: { level: 'major', note: 'Turbo noise' } });
+    assert.equal(set.status, 200, JSON.stringify(set.body));
+    assert.equal((await call('POST', `/assets/${g2.id}/fault`, { token: admin, body: { level: 'minor' } })).status, 400, 'a fault needs a description');
     const attention = async () => (await call('GET', `/services/electricity?atoll_id=${dhigurah.atoll_id}`, { token: admin })).body.attention;
-    assert.ok((await attention()).some((a) => a.id === g2.id && a.report_month === EXPECTED));
+    assert.ok((await attention()).some((a) => a.id === g2.id && a.fault === 'Turbo noise'));
 
     const people = (await call('GET', '/users/directory', { token: admin })).body;
     const person = people.find((p) => p.technical);
@@ -705,8 +705,9 @@ describe('reports Fleet Manager sent, and report history', () => {
 
     await call('POST', `/work/${w.body.id}/updates`, { token: admin, body: { body: 'Turbo replaced', status: 'completed' } });
     assert.ok(!(await attention()).some((a) => a.id === g2.id), 'cleared once the work is completed');
-    // A newer report with the fault brings it back.
-    await send({ report_month: shift(EXPECTED, 1), engines: [{ srd_asset_id: g2.id, condition: 'major_fault', fault: 'Turbo noise again' }] });
+    assert.equal((await call('GET', `/assets/${g2.id}`, { token: admin })).body.condition.condition, 'ok');
+    // Recorded again: back on the list.
+    await call('POST', `/assets/${g2.id}/fault`, { token: admin, body: { level: 'major', note: 'Turbo noise again' } });
     assert.ok((await attention()).some((a) => a.id === g2.id));
 
     const svc = (await db.query("select id from users where service_account limit 1")).rows[0];
@@ -804,6 +805,20 @@ describe('monthly genset updates', () => {
     r = await send(admin, [{ asset_id: g1.id, total_hours: 50, meter_replaced: true, condition: 'ok' }]);
     assert.equal(r.status, 200);
     assert.equal((await call('GET', `/assets/${g1.id}`, { token: admin })).body.condition.hours_since_overhaul, null, 'unknown after a new meter');
+  });
+
+  test('status and faults are set directly; back in service clears the faults', async () => {
+    const [g1] = form.gensets;
+    const state = async () => (await db.query('select status, fault_level, fault_note from assets where id = $1', [g1.id])).rows[0];
+    let r = await send(admin, [{ asset_id: g1.id, total_hours: 1300, status: 'maintenance', fault_level: 'minor', fault: 'Fuel filter blocked' }]);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(await state(), { status: 'maintenance', fault_level: 'minor', fault_note: 'Fuel filter blocked' });
+    assert.equal((await send(admin, [{ asset_id: g1.id, total_hours: 1300, fault_level: 'major' }])).status, 400, 'a new fault level needs its description');
+    r = await send(admin, [{ asset_id: g1.id, total_hours: 1310, status: 'running' }]);
+    assert.equal(r.status, 200);
+    assert.deepEqual(await state(), { status: 'running', fault_level: 'none', fault_note: null });
+    const h = (await call('GET', `/condition-reports/history?asset_id=${g1.id}`, { token: admin })).body.engines[0];
+    assert.equal(h.condition, 'ok', 'the month is kept with the state it ended in');
   });
 
   test('not running sets the genset down (opening work); a disconnected genset stays disconnected', async () => {

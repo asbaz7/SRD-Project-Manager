@@ -102,7 +102,7 @@ export default function Island() {
                   {a.status_note && <><br /><small className="muted">{a.status_note}</small></>}
                   {a.status_at && <><br /><small className="muted">{date(a.status_at)}{a.status_by_name && ` · ${a.status_by_name}`}</small></>}</td>
                 {f.kind === 'powerhouse' && <>
-                  <td className="wrap"><EngineState e={a} compact />{(a.condition_source === 'status' ? a.condition_note : a.fault) && <><br /><small className="muted">{a.condition_source === 'status' ? `Updated ${date(a.condition_at)}${a.condition_note ? `: ${a.condition_note}` : ''}` : a.fault}</small></>}</td>
+                  <td className="wrap"><EngineState e={a} compact />{(['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault) && <><br /><small className="muted">{['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault}</small></>}</td>
                   <td className="num hide-sm">{a.hours_since_overhaul != null ? `${num(a.hours_since_overhaul)} h` : '—'}</td>
                   <td className="hide-sm small nowrap">{date(a.last_overhaul_on)}</td>
                 </>}

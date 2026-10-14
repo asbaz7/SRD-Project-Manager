@@ -76,6 +76,13 @@ export const ACCESS_STATUSES = ['Not Requested', 'Requested', 'Granted', 'Reject
 export const AVAILABILITY = ['Available', 'Not Available', 'Partial', 'Requested'];
 export const CHECKLISTS = { diesel: 'Diesel checklist', safety_ppe: 'Safety PPE', stationery: 'Stationery' };
 export const PROJECT_STATES = { planned: 'Planned', ongoing: 'Ongoing', on_hold: 'On hold', completed: 'Completed', cancelled: 'Cancelled' };
+// A genset's faults (with its status, its current state).
+export const FAULTS = {
+  none: { label: 'No faults', icon: '✓', tone: 'ok' },
+  minor: { label: 'Minor fault', icon: '▲', tone: 'warn' },
+  major: { label: 'Major fault', icon: '■', tone: 'serious' },
+};
+
 export const CONDITIONS = {
   ok: { label: 'OK', icon: '●', tone: 'ok' },
   minor_fault: { label: 'Minor fault', icon: '▲', tone: 'warn' },

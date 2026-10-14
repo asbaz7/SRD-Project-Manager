@@ -117,16 +117,17 @@ function ServiceOverview({ svc }) {
             <ul className="attention-list scroll-y">{d.attention.map((a) => {
               const serious = a.condition === 'not_running' || a.status === 'down';
               // No work yet: log it from here, filled in from the fault.
-              const fault = (a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || '';
+              const fault = (['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault) || '';
               const logWork = canLog && !a.work_title && `/work/new${qs({ asset_id: a.id, kind: 'repair',
                 title: `${assetLabel(a)}: ${fault || (a.condition ? 'fault in the monthly update' : 'out of service')}`.slice(0, 200),
-                description: [a.status_text && `Report says: ${a.status_text}`, fault].filter(Boolean).join('\n') || undefined,
-                fault_report_month: a.condition_source === 'report' ? a.report_month : undefined })}`;
+                description: fault || undefined,
+                // Marks it as work for this fault: completing it clears the fault.
+                fault_report_month: a.fault_level && a.fault_level !== 'none' ? a.report_month || `${new Date().toISOString().slice(0, 7)}-01` : undefined })}`;
               return <li key={a.id} className={logWork ? 'with-action' : ''}><Link to={`/assets/${a.id}`}>
                 <span className={`dot ${serious ? 'bad' : 'serious'}`} aria-hidden="true">{serious ? '✕' : '■'}</span>
                 <span className="grow"><strong>{a.atoll_code} · {a.island_name} · {assetLabel(a)}</strong>
                   <small>{a.condition ? <Condition value={a.condition} /> : <AssetStatus status={a.status} />}{' '}
-                    {(a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || a.make_model || ''}{a.work_title && ` · 🔧 ${a.work_title}`}</small></span>
+                    {(['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault) || a.make_model || ''}{a.work_title && ` · 🔧 ${a.work_title}`}</small></span>
                 <Icon name="arrow" />
               </Link>{logWork && <Link className="act" to={logWork}>Log work</Link>}</li>;
             })}</ul>}

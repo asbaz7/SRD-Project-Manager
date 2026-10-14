@@ -55,7 +55,7 @@ export async function keepPowerhouseReport(t, facilityId, month, p) {
 // status. `at`: when the record was made (default: the morning after the
 // month, as for workbooks). Returns 1 if it became the latest.
 const NOTE_PREFIX = { update: 'Monthly update', upload: 'Condition report', fleet_manager: 'Condition report' };
-export async function setLatest(t, asset, month, reportedOn, r, { source, userId, at: when }) {
+export async function setLatest(t, asset, month, reportedOn, r, { source, userId, at: when, setStatus = true }) {
   const { rowCount } = await t.query(`
     insert into engine_conditions (asset_id, report_month, reported_on, source, uploaded_by, updated_at, ${cols})
     values ($1, $2, $3, $4, $5, now(), ${params(6)})
@@ -66,7 +66,7 @@ export async function setLatest(t, asset, month, reportedOn, r, { source, userId
   [asset.id, month, reportedOn ?? null, source, userId, ...values(r)]);
   const status = STATUS_FOR[r.condition];
   const at = when || `${reportedOn || addMonths(month, 1)}T08:00:00+05:00`;
-  if (rowCount && status && status !== asset.status && !['disconnected', 'decommissioned'].includes(asset.status)
+  if (setStatus && rowCount && status && status !== asset.status && !['disconnected', 'decommissioned'].includes(asset.status)
       && (!asset.status_at || new Date(asset.status_at) < new Date(at))) {
     await t.query(`
       insert into asset_status_log (asset_id, status, note, reported_at, reported_by)
@@ -125,6 +125,39 @@ export function expectedMonth(today, dueDay = 10) {
 // --- The in-app monthly update ------------------------------------------------
 
 const CONDITION_TEXT = { ok: 'RUNNING; OK', minor_fault: 'RUNNING; MINOR FAULT', major_fault: 'RUNNING; MAJOR FAULT', not_running: 'NOT RUNNING' };
+// The old single "condition" (still accepted from Telegram and the assistant):
+// its fault level, and the status it implies.
+const FROM_CONDITION = { ok: ['none'], minor_fault: ['minor'], major_fault: ['major'], not_running: [undefined, 'down'] };
+// For counts and the monthly history: status and faults in one word.
+export const conditionOf = (status, level) => (['down', 'maintenance'].includes(status) ? 'not_running'
+  : { major: 'major_fault', minor: 'minor_fault', none: 'ok' }[level] ?? null);
+
+/**
+ * What an update item changes on a genset: status and faults (its level and
+ * description). Left out, they stay as they are. Coming back into service
+ * clears the faults unless new ones are given (as a status change does).
+ */
+export function resolveItem(it, cur) {
+  let status = it.status;
+  let level = it.fault_level;
+  if (it.condition) {
+    const [l, s] = FROM_CONDITION[it.condition];
+    level ??= l;
+    if (s) status ??= s;
+    else if (status === undefined && ['down', 'maintenance'].includes(cur.status)) status = 'running';
+    if (it.condition === 'not_running' && it.fault && level === undefined) level = 'major';
+  }
+  // A status implied by a condition word doesn't change a disconnected or
+  // retired genset; one chosen on the form does.
+  if (status !== undefined && it.status === undefined && ['disconnected', 'decommissioned'].includes(cur.status)) status = undefined;
+  const newStatus = status ?? cur.status;
+  const backInService = ['down', 'maintenance'].includes(cur.status) && ['running', 'standby'].includes(newStatus);
+  const newLevel = level ?? (backInService ? 'none' : cur.fault_level ?? null);
+  const note = newLevel === 'none' ? null
+    : it.fault ?? (newLevel === cur.fault_level ? cur.fault_note ?? null : null);
+  return { status: newStatus, statusChanged: newStatus !== cur.status, level: newLevel, note,
+    faultChanged: newLevel !== (cur.fault_level ?? null) || note !== (cur.fault_note ?? null) };
+}
 
 // Hours since a service, carried forward: the last figure plus the hours run
 // since, unless that service was done again after the last record (then from
@@ -137,20 +170,32 @@ function since(prev, total, metered, done) {
 
 /**
  * A powerhouse's monthly update, entered in the app: for each genset its
- * running hours, condition, fault and whether it needs an overhaul or an
- * alternator service. Service dates and the hours since them carry forward
- * from the last record (and from maintenance records added since), so the
- * due dates keep working. Kept in the history and made the latest.
- * items: [{ asset, total_hours, meter_replaced, condition, fault, needs_overhaul, alt_needs_service }]
- * Condition, fault and the flags may be left out (e.g. hours sent from
- * Telegram): they stay as last recorded. The powerhouse counts as updated
- * for the month once every genset in use (not disconnected) has its figures.
+ * running hours, and if given its status, faults (level and description) and
+ * whether it needs an overhaul or an alternator service. Service dates and
+ * the hours since them carry forward from the last record (and from
+ * maintenance records added since), so due dates keep working. Status and
+ * faults are the genset's own (assets); the month's figures are kept in the
+ * history and made the latest. The powerhouse counts as updated for the
+ * month once every genset in use (not disconnected) has its figures.
+ * items: [{ asset, total_hours, meter_replaced, status, fault_level, fault, condition, needs_overhaul, alt_needs_service }]
  */
 export async function applyGensetUpdate(t, { facilityId, items, userId, today }) {
   const month = `${today.slice(0, 7)}-01`;
   const at = new Date().toISOString();
   for (const it of items) {
+    const { rows: [cur] } = await t.query('select id, status, status_at, fault_level, fault_note from assets where id = $1', [it.asset.id]);
     const { rows: [prev] } = await t.query('select * from engine_conditions where asset_id = $1', [it.asset.id]);
+    const x = resolveItem(it, cur);
+    const condition = conditionOf(x.status, x.level) ?? prev?.condition ?? null;
+    if (x.statusChanged) {
+      await t.query(`insert into asset_status_log (asset_id, status, note, reported_at, reported_by) values ($1, $2, $3, $4, $5)`,
+        [it.asset.id, x.status, ['running', 'standby'].includes(x.status) ? null
+          : `Monthly update ${month.slice(0, 7)}: ${[CONDITION_TEXT[condition] || x.status, x.note].filter(Boolean).join(' — ')}`, at, userId]);
+    }
+    if (x.faultChanged) {
+      await t.query('update assets set fault_level = $2, fault_note = $3, fault_at = now(), fault_by = $4 where id = $1',
+        [it.asset.id, x.level, x.note, userId]);
+    }
     const after = prev?.reported_on || (prev ? addMonths(prev.report_month, 1) : null);
     const { rows: done } = await t.query(`
       select distinct on (kind in ('overhaul', 'top_overhaul')) kind, done_on, running_hours from maintenance_events
@@ -159,11 +204,10 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
     const overhaul = done.find((e) => e.kind !== 'valve_clearance');
     const valve = done.find((e) => e.kind === 'valve_clearance');
     const metered = !it.meter_replaced;
-    const condition = it.condition ?? prev?.condition ?? 'ok';
     const r = {
-      status_text: CONDITION_TEXT[condition],
+      status_text: CONDITION_TEXT[condition] ?? null,
       condition,
-      fault: condition === 'ok' ? null : it.fault ?? (it.condition ? null : prev?.fault ?? null),
+      fault: x.note,
       total_hours: it.total_hours,
       hours_since_overhaul: since({ since: prev?.hours_since_overhaul, total: prev?.total_hours }, it.total_hours, metered, overhaul),
       last_overhaul_on: prev?.last_overhaul_on ?? null,
@@ -177,7 +221,7 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
       alt_needs_service: it.alt_needs_service ?? prev?.alt_needs_service ?? false,
       overhaul_spares_received: prev?.overhaul_spares_received ?? null,
     };
-    const opts = { source: 'update', userId, sourceRef: it.meter_replaced ? 'meter replaced' : null, at };
+    const opts = { source: 'update', userId, sourceRef: it.meter_replaced ? 'meter replaced' : null, at, setStatus: false };
     await keepEngineReport(t, it.asset.id, month, today, r, opts);
     await setLatest(t, it.asset, month, today, r, opts);
     await t.query(`insert into hours_log (asset_id, month, total_hours) values ($1, $2, $3)

@@ -47,7 +47,13 @@ export async function seedHistory(db, { islandId, months, gensets = maafushiGens
           await t.query('update assets set serial_no = coalesce(serial_no, $2), make_model = coalesce(make_model, $3) where id = $1', [a.id, g.serial, g.make_model]);
         }
         await keepEngineReport(t, a.id, month, reportedOn, g.r, { source, userId });
-        await setLatest(t, a, month, reportedOn, g.r, { source, userId });
+        const latest = await setLatest(t, a, month, reportedOn, g.r, { source, userId });
+        // Its faults, as migration 051 took them from the latest record.
+        if (latest) {
+          const level = { ok: 'none', minor_fault: 'minor', major_fault: 'major', not_running: g.r.fault ? 'major' : null }[g.r.condition];
+          await t.query('update assets set fault_level = $2, fault_note = $3, fault_at = $4 where id = $1',
+            [a.id, level, level === 'none' ? null : g.r.fault ?? null, `${reportedOn}T08:00:00+05:00`]);
+        }
         if (g.r.total_hours != null) {
           await t.query(`insert into hours_log (asset_id, month, total_hours) values ($1, $2, $3)
                          on conflict (asset_id, month) do update set total_hours = excluded.total_hours`, [a.id, month, g.r.total_hours]);

@@ -5,7 +5,8 @@
 import { z } from 'zod';
 import { assertIslandWrite, requireRole } from '../auth.js';
 import { badRequest } from '../errors.js';
-import { applyGensetUpdate, expectedMonth, reportState } from '../gensetRecords.js';
+import { SETTABLE_STATUSES } from '../domain.js';
+import { applyGensetUpdate, expectedMonth, reportState, resolveItem } from '../gensetRecords.js';
 import { idParam, one, optText, parse } from '../http.js';
 import { localToday } from '../time.js';
 
@@ -16,9 +17,13 @@ const updateBody = z.object({
     total_hours: z.number().nonnegative().max(1_000_000),
     // The hours meter was replaced: a lower reading is allowed.
     meter_replaced: z.boolean().optional(),
-    // Left out: stays as last recorded (with its fault).
-    condition: z.enum(CONDITIONS).optional(),
+    // Status and faults: left out, they stay as they are.
+    status: z.enum(SETTABLE_STATUSES).optional(),
+    fault_level: z.enum(['none', 'minor', 'major']).optional(),
     fault: optText(2000),
+    // The old single condition (Telegram, the assistant): ok, minor_fault,
+    // major_fault or not_running.
+    condition: z.enum(CONDITIONS).optional(),
     needs_overhaul: z.boolean().optional(),
     alt_needs_service: z.boolean().optional(),
   })).min(1).max(40),
@@ -37,7 +42,7 @@ export default async function gensetUpdateRoutes(app) {
   }
   async function gensets(facilityId) {
     return (await db.query(`
-      select s.id, s.tag, s.make_model, s.rated_capacity, s.status,
+      select s.id, s.tag, s.make_model, s.rated_capacity, s.status, s.status_note, s.fault_level, s.fault_note,
              c.total_hours, c.condition, c.fault, c.needs_overhaul, c.alt_needs_service, c.report_month, c.reported_on, c.source
         from assets s left join engine_conditions c on c.asset_id = s.id
        where s.facility_id = $1 and s.kind = 'genset' and s.active and s.status <> 'decommissioned'
@@ -67,7 +72,9 @@ export default async function gensetUpdateRoutes(app) {
       if (!g) throw badRequest('Each genset must be one of this powerhouse\'s, in use');
       if (seen.has(g.id)) throw badRequest(`Genset ${g.tag} is listed twice`);
       seen.add(g.id);
-      if (it.condition && it.condition !== 'ok' && !it.fault) throw badRequest(`Genset ${g.tag}: say what the fault is`);
+      const x = resolveItem(it, g);
+      if (['minor', 'major'].includes(x.level) && !x.note) throw badRequest(`Genset ${g.tag}: say what the fault is`);
+      if (it.condition === 'not_running' && !it.fault) throw badRequest(`Genset ${g.tag}: say what the fault is`);
       if (g.total_hours != null && it.total_hours < Number(g.total_hours) && !it.meter_replaced) {
         throw badRequest(`Genset ${g.tag}: ${it.total_hours} hours is less than the last reading (${Number(g.total_hours)}). Tick "meter replaced" if it was.`);
       }

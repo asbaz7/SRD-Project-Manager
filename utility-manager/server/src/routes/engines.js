@@ -21,7 +21,7 @@ export const ENGINE_SELECT = `
          (select count(*) from facilities f2 where f2.island_id = f.island_id and f2.active and f2.service = 'electricity'
              and f2.kind = 'powerhouse') > 1 as shared_island,
          i.id as island_id, i.name as island_name, i.atoll_id, a.code as atoll_code,
-         c.report_month, c.reported_on, c.condition, c.report_condition, c.condition_source, c.condition_note, c.condition_at, c.status_text, c.fault, c.total_hours, c.hours_since_overhaul,
+         c.report_month, c.reported_on, c.condition, c.report_condition, c.fault_level, c.fault_at, c.status_text, c.fault, c.total_hours, c.hours_since_overhaul,
          c.last_overhaul_on as report_overhaul_on, c.last_alt_service_on as report_alt_service_on,
          c.needs_overhaul, c.alt_needs_service, c.max_load_kw, c.capable_kw, c.last_valve_on, c.last_battery_on,
          (select max(done_on) from maintenance_events e where e.asset_id = s.id and e.kind in ('overhaul', 'top_overhaul')) as last_overhaul_event,

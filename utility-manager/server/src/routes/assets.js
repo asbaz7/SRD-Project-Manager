@@ -3,7 +3,7 @@ import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
 import { expectedMonth } from '../gensetRecords.js';
 import { ENGINE_SELECT, describeEngine, loadIntervals } from './engines.js';
 import { sendCsv } from '../csv.js';
-import { conflict, forbidden } from '../errors.js';
+import { badRequest, conflict, forbidden } from '../errors.js';
 import { mergeAssets } from '../assetMoves.js';
 import { assetName, esc, refSql } from '../format.js';
 import { ASSET_KINDS, ASSET_STATUSES, FACILITY_KINDS } from '../domain.js';
@@ -75,7 +75,8 @@ const statusBatch = z.object({
 
 const ASSET_LIST = `
   select s.*, f.name as facility_name, f.service, f.island_id, i.atoll_id, i.name as island_name,
-         a.code as atoll_code, u.full_name as status_by_name, count(*) over () as total_count
+         a.code as atoll_code, u.full_name as status_by_name,
+         (select full_name from users where id = s.fault_by) as fault_by_name, count(*) over () as total_count
     from assets s
     join facilities f on f.id = s.facility_id
     join islands i on i.id = f.island_id
@@ -271,6 +272,20 @@ export default async function assetRoutes(app) {
       [assetId, ...set.values, ...(lock ? [body.serial_no] : [])])).rows, 'Asset'));
   });
 
+  // A genset's faults now: none, minor or major, with what is wrong. Also
+  // set by the monthly update; cleared when it comes back into service.
+  app.post('/assets/:id/fault', manager, async (req) => {
+    const { id: assetId } = parse(idParam, req.params);
+    const b = parse(z.object({ level: z.enum(['none', 'minor', 'major']), note: optText(2000) }), req.body);
+    if (b.level !== 'none' && !b.note) throw badRequest('Say what the fault is');
+    await assertIslandWrite(db, req.user, { assetId });
+    const row = await db.tx(req.user.id, async (t) => one((await t.query(
+      `update assets set fault_level = $2, fault_note = $3, fault_at = now(), fault_by = $4
+        where id = $1 and kind = 'genset' returning id, fault_level, fault_note, fault_at`,
+      [assetId, b.level, b.level === 'none' ? null : b.note, req.user.id])).rows, 'Genset'));
+    return row;
+  });
+
   // Folds a duplicate record of this asset into it (e.g. a genset
   // decommissioned at the island it left and registered again here),
   // keeping both histories and recording the move.
@@ -302,6 +317,13 @@ export default async function assetRoutes(app) {
           `insert into asset_status_log (asset_id, status, note, running_hours, reported_at, reported_by)
            values ($1, $2, $3, $4, $5, $6)`,
           [item.asset_id, item.status, item.note, item.running_hours ?? null, reportedAt, req.user.id]);
+      }
+      // Back in service after being down: its faults were dealt with.
+      const back = body.items.filter((i) => ['running', 'standby'].includes(i.status)
+        && ['down', 'maintenance'].includes(before.find((b) => b.id === i.asset_id)?.status)).map((i) => i.asset_id);
+      if (back.length) {
+        await t.query(`update assets set fault_level = 'none', fault_note = null, fault_at = now(), fault_by = $2
+                        where id = any($1::uuid[]) and kind = 'genset'`, [back, req.user.id]);
       }
     });
     // A genset set down has open work (created or updated by a trigger,

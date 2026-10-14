@@ -373,12 +373,12 @@ export function createTelegram({ db, config, log }) {
       const assets = f.assets.filter((a) => a.active);
       lines.push('', `${SERVICE_ICON[f.service] || ''} <b>${esc(f.name)}</b> (${assets.filter((a) => a.status === 'running').length}/${assets.length} running)`);
       for (const a of assets) {
-        // One state per line: out of service says so; running gensets show
-        // a fault from the report if any. The reason once; work by reference.
+        // One state per line: out of service says so (and why); running
+        // gensets show their fault if any. Work by reference.
         const out = ['down', 'maintenance', 'disconnected', 'decommissioned'].includes(a.status);
         const fault = !out && ['minor_fault', 'major_fault'].includes(a.condition) ? CONDITION_LABEL[a.condition] : null;
         const state = a.status === 'maintenance' ? 'in maintenance' : fault ? `${a.status}, ${fault}` : a.status;
-        const note = (a.condition_source === 'status' ? a.condition_note : null) || a.status_note || a.fault;
+        const note = out ? a.status_note || a.fault : a.fault;
         const why = note && (out || fault) ? `: ${esc(String(note).replace(/^(Condition report|Monthly update) \d{4}-\d{2}: /, '').slice(0, 90))}` : '';
         const work = (a.open_work || []).map((w) => `🔧 ${workRef(w.id)} (${WORK_STATE_LABEL[w.status] || w.status})`).join(' ');
         lines.push(`${STATUS_ICON[a.status] || ''} ${esc(assetName(a))}: ${esc(state)}${why}${work ? ` · ${work}` : ''}`);
