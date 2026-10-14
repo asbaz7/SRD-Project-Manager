@@ -453,6 +453,28 @@ test('the assistant looks up projects with the project tools, not work', async (
   assert.equal(repliesTo(MANAGER_TG), 'One project.');
 });
 
+test('the assistant records running hours once confirmed, and calls them the monthly update', async () => {
+  const g5 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '5' and s.kind = 'genset'`, [maafushi.id])).rows[0];
+  const hours = async () => (await db.query('select total_hours from engine_conditions where asset_id = $1', [g5.id])).rows[0]?.total_hours;
+  claudeScript = [(body) => {
+    assert.match(body.system.map((b) => b.text).join(' '), /never a "report"/);
+    assert.ok(body.tools.some((t) => t.name === 'record_hours'));
+    return [toolUse('record_hours', { asset_id: g5.id, total_hours: 41200 })];
+  }];
+  await say(MANAGER_TG, 'maafushi g5 is at 41200 hours');
+  const proposal = sent.find((m) => m.chat_id === MANAGER_TG);
+  assert.match(proposal.text, /Record <b>K\. Maafushi Genset 5<\/b>: <b>41,200 h<\/b>/, proposal.text);
+  assert.equal(await hours(), undefined, 'nothing saved before the tap');
+  await tap(MANAGER_TG, proposal.reply_markup.inline_keyboard[0][0].callback_data);
+  assert.match(repliesTo(MANAGER_TG), /✅ Hours recorded/);
+  assert.equal(Number(await hours()), 41200);
+  // A lower reading is questioned before anything is proposed.
+  claudeScript = [() => [toolUse('record_hours', { asset_id: g5.id, total_hours: 100 })],
+    (body) => { assert.match(lastToolResults(body)[0].content, /less than the last reading/); return [{ type: 'text', text: 'Was the meter replaced?' }]; }];
+  await say(MANAGER_TG, 'g5 100 hours');
+  assert.equal(repliesTo(MANAGER_TG), 'Was the meter replaced?');
+});
+
 test('the assistant only writes after the person taps ✅', async () => {
   const g3 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '3'`, [maafushi.id])).rows[0];
   const statusOf = async () => (await db.query('select status from assets where id = $1', [g3.id])).rows[0].status;

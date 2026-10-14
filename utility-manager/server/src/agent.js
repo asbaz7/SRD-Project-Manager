@@ -37,7 +37,8 @@ const SYSTEM = `You are the SRD Utility assistant on Telegram, for the head offi
 How to work:
 - Look things up with the tools. Never guess figures, names, statuses or dates. If a tool returns an error or nothing, say so plainly.
 - Islands are written with their atoll code, like "ADh. Fenfushi" or "K. Maafushi". Use find_island to turn a name into an id; if several islands match, ask which one.
-- Gensets are called "Genset 2", "G2" or "engine 2". Each powerhouse is updated once a month in the app (each genset's running hours, condition, faults, overhaul / alternator flags); get_island and list_engines include the latest. Older months came from condition report workbooks, no longer used.
+- Gensets are called "Genset 2", "G2" or "engine 2". Each powerhouse is updated once a month in the app (each genset's running hours, condition, faults, overhaul / alternator flags); get_island and list_engines include the latest. In the data, report_month is the month of that last monthly update. Call it "the last monthly update (October 2026)", never a "report": condition reports are no longer used. If it is older than this month, say this month's update is due rather than guessing.
+- When someone gives a genset's running hours ("Maafushi G1 is at 41200 hours"), record them with record_hours; add the condition and fault only if they say it.
 - Work orders (WO-0001, WO-0002…; the number is the work_id) are jobs on equipment: repairs, overhauls, services, genset moves. Use list_work / get_work for them.
 - Projects (PRJ-0001, PRJ-0002…; the number is the project_id) are separate from work orders: larger efforts such as installations, studies or the Powerhouse Takeover, with a progress % and often a task list (codes like TKO-001, priorities P1-P4). When someone asks about projects, use list_projects / get_project, never the work tools; when they ask about works, jobs or repairs, use list_work.
 - To record anything (a genset's status, an update on work, an interruption, new work), call the matching tool. The person is then shown exactly what will be written and taps ✅ or ❌, so don't ask "shall I?" first. Do ask first when it's unclear which island, genset or work order they mean.
@@ -146,7 +147,7 @@ function buildTools(db) {
         return { today: d.today, summary: d.summary, engines: d.engines.map((e) => ({
           asset_id: e.id, genset: `${e.atoll_code}. ${e.island_name} ${e.tag}`, model: e.make_model, kw: e.rated_capacity,
           operating_kw: e.operating_capacity !== e.rated_capacity ? e.operating_capacity : undefined, status: e.status,
-          condition: e.condition, report_month: e.report_month, report_stale: e.report_stale || undefined,
+          condition: e.condition, last_update_month: e.report_month, update_due: e.report_stale || undefined,
           fault: (e.condition_source === 'status' ? e.condition_note : e.fault || e.status_text)?.slice(0, 120),
           total_hours: e.total_hours, hours_to_overhaul: e.hours_to_overhaul, overhaul_due: e.overhaul_due || undefined,
           alt_service_due: e.alt_service_due || undefined,
@@ -240,6 +241,36 @@ function buildTools(db) {
     },
 
     // -- Changes: describe() says what will be written; run() writes it once confirmed.
+    record_hours: {
+      write: true,
+      description: "Record a genset's running hours for this month's update (and its condition and fault, if given). The person confirms before it's saved. Condition left out stays as it was.",
+      schema: z.object({
+        asset_id: id,
+        total_hours: z.number().nonnegative().max(1_000_000),
+        meter_replaced: z.boolean().optional().describe('Only when they say the hours meter was replaced (a lower reading)'),
+        condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running']).optional(),
+        fault: z.string().max(2000).optional().describe('What is wrong, in their words; needed for a fault'),
+      }),
+      describe: async (user, x, asUser) => {
+        const a = await get(asUser, user, `/assets/${x.asset_id}`);
+        if (a.kind !== 'genset') throw new ToolError('Hours are recorded for gensets only');
+        if (x.condition && x.condition !== 'ok' && !x.fault) throw new ToolError('Ask what is wrong first: a fault needs a description');
+        const last = a.condition?.total_hours;
+        if (last != null && x.total_hours < Number(last) && !x.meter_replaced) {
+          throw new ToolError(`That is less than the last reading (${Number(last)} h). Ask whether the meter was replaced.`);
+        }
+        const cond = { ok: 'OK', minor_fault: 'minor fault', major_fault: 'major fault', not_running: 'not running' };
+        return `Record <b>${esc(assetLabel(a))}</b>: <b>${Number(x.total_hours).toLocaleString('en-GB')} h</b>${x.meter_replaced ? ' (new meter)' : ''}`
+          + `${x.condition ? ` · ${cond[x.condition]}${x.fault ? `: ${esc(x.fault)}` : ''}` : ''}${last != null ? `\nLast reading: ${Number(last).toLocaleString('en-GB')} h` : ''}`;
+      },
+      run: async (user, x, asUser) => {
+        const a = await get(asUser, user, `/assets/${x.asset_id}`);
+        const body = check(await asUser(user.id, 'POST', `/facilities/${a.facility_id}/genset-update`, { items: [{
+          asset_id: x.asset_id, total_hours: x.total_hours, meter_replaced: x.meter_replaced, condition: x.condition, fault: x.fault }] }));
+        const left = body.complete ? ' · the powerhouse is up to date' : body.still_due?.length ? ` · still to do: ${body.still_due.map((t) => `G${t}`).join(', ')}` : '';
+        return { text: `Hours recorded${left}`, result: { saved: true, ...body } };
+      },
+    },
     set_asset_status: {
       write: true,
       description: "Record an asset's status (e.g. a genset going down or back up). The person confirms before it's saved. A note is required when it goes down.",
