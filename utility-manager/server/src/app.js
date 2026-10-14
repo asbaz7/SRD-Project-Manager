@@ -23,6 +23,7 @@ import projectRoutes from './routes/projects.js';
 import dashboardRoutes from './routes/dashboard.js';
 import auditRoutes from './routes/audit.js';
 import conditionReportRoutes from './routes/conditionReports.js';
+import gensetUpdateRoutes from './routes/gensetUpdates.js';
 import engineRoutes from './routes/engines.js';
 import workRoutes from './routes/work.js';
 import serviceRoutes from './routes/services.js';
@@ -40,7 +41,7 @@ const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // administrators) may use these, whatever their role.
 const TECHNICAL_PREFIXES = ['/engines', '/maintenance', '/service-intervals', '/condition-reports', '/assets', '/facilities', '/services']
   .map((p) => PREFIX + p);
-const BODY_LIMIT = 15 * 1024 * 1024; // report imports and document files (base64)
+const BODY_LIMIT = 1024 * 1024; // JSON only: no files are uploaded
 
 export const SECURITY_HEADERS = {
   contentSecurityPolicy: {
@@ -223,7 +224,7 @@ export async function buildApp({ db, config, logger = true }) {
     await db.query('select 1');
     return { ok: true };
   });
-  for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes,
+  for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes, gensetUpdateRoutes,
     workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes, documentRoutes, surveyRoutes]) {
     await routes(api);
   }

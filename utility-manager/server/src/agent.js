@@ -11,7 +11,7 @@
 import { randomBytes } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { ATOLL_NAMES, matchIsland } from './reportImport.js';
+import { ATOLL_NAMES, matchIsland } from './islandNames.js';
 import { LISTED_STATUSES, SERVICES, SETTABLE_STATUSES, WORK_KINDS as ALL_WORK_KINDS, WORK_STATES, WORK_STATE_LABEL } from './domain.js';
 import { assetLabel, esc, workRef } from './format.js';
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { assertIslandWrite, canWriteIsland, requireRole } from '../auth.js';
-import { expectedMonth } from '../reportImport.js';
+import { expectedMonth } from '../gensetRecords.js';
 import { ENGINE_SELECT, describeEngine, loadIntervals } from './engines.js';
 import { sendCsv } from '../csv.js';
 import { conflict, forbidden } from '../errors.js';

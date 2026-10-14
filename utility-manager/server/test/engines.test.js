@@ -1,20 +1,20 @@
-// Engine condition reports, maintenance history and work orders.
+// Gensets: monthly updates, the history received before them, maintenance
+// history and work orders.
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { buildApp } from '../src/app.js';
-import { applyFleetReport } from '../src/reportImport.js';
 import { hashPassword } from '../src/auth.js';
-import { classifyCondition, fixSinceHours, parseConditionReport, toDate, toHours } from '../src/conditionReport.js';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
+import { expectedMonth, keepEngineReport, keepPowerhouseReport, setLatest, setLatestPowerhouse } from '../src/gensetRecords.js';
+import { matchIsland } from '../src/islandNames.js';
 import { migrate } from '../src/migrate.js';
-import { expectedMonth, matchIsland } from '../src/reportImport.js';
 import { inferStatus } from '../src/routes/work.js';
 import { seedRegister } from '../scripts/seed.js';
-import { makeXlsx, reportSheet } from './xlsxFixture.js';
+import { seedHistory } from './historyFixture.js';
 
 const PASSWORD = 'correct horse 42';
-let app, db, admin, manager, maafushi, dhigurah;
+let app, db, admin, manager, managerId, maafushi, dhigurah;
 
 async function call(method, url, { token, body } = {}) {
   const res = await app.inject({
@@ -38,33 +38,6 @@ const mvToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Indian
 const shift = (month, n) => { const d = new Date(`${month}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
 const EXPECTED = expectedMonth(mvToday());
 const PREVIOUS = shift(EXPECTED, -1);
-const MONTH_NAMES = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-const sheetName = (month, i) => `${i}. ${MONTH_NAMES[+month.slice(5, 7) - 1]} ${month.slice(0, 4)}`;
-
-// serial: a suffix so another island's report has its own engines.
-function maafushiReport({ months = [PREVIOUS, EXPECTED], powerhouse = 'K. MAAFUSHI', serial = '' } = {}) {
-  const sheets = months.map((month, i) => reportSheet({
-    name: sheetName(month, i + 1),
-    powerhouse,
-    updated: shift(month, 1),
-    peak: '3686 KW 29/08/2026 14:37',
-    gensets: [
-      { number: 1, make: 'CATERPILLAR', model: '3516B', kw: 1600, serial: `YBT00586${serial}`, altMake: 'STAMFORD', altKw: 1600,
-        status: 'RUNNING; OK', fault: 'No Fault', overhaul: { date: '2025-06-01' }, sinceOverhaul: { hours: 3457.3 + i * 500 },
-        total: { hours: 37057 + i * 500 }, altService: '24/9/2024', valve: '31/05/2025', capable: '1300 KW', maxLoad: '1047 KW',
-        needsOverhaul: 'NO', altNeedsService: 'NO', connected: 'YES' },
-      { number: 2, make: 'CUMMINS', model: 'KTA 50-G3', kw: 1000, serial: `41374910${serial}`, status: 'RUNNING; MINOR FAULT',
-        fault: 'Oil Leaking (Front & Back Seal)', total: '10603:00', altService: i ? '15.06.2026' : '-',
-        needsOverhaul: 'NO', altNeedsService: 'YES' },
-      // A genset the register does not have yet (Maafushi has 8 in the seed; use 9).
-      { number: 9, make: 'CUMMINS', model: 'QSK 60-G4', kw: 1600, serial: `NEW-9${serial}`, status: 'NOT RUNNING; MAJOR FAULT',
-        fault: 'Crankshaft damage', overhaul: '09.05.2025', sinceOverhaul: '879:30', total: '63226:30',
-        needsOverhaul: 'YES', altNeedsService: 'No' },
-    ],
-  }));
-  return Buffer.from(makeXlsx(sheets)).toString('base64');
-}
-
 before(async () => {
   db = await createDb({ pgliteDir: ':memory:' });
   await migrate(db, {});
@@ -81,6 +54,7 @@ before(async () => {
   dhigurah = islands.find((i) => i.name === 'Dhigurah');
   await db.query(`insert into user_scopes (user_id, island_id) select id, $1 from users where email = 'mgr@srd.mv'`, [maafushi.id]);
   manager = await login('mgr@srd.mv');
+  managerId = (await db.query("select id from users where email = 'mgr@srd.mv'")).rows[0].id;
 });
 
 after(async () => {
@@ -88,55 +62,7 @@ after(async () => {
   await db?.close();
 });
 
-describe('reading the report template', () => {
-  test('dates and running hours in the formats the islands use', () => {
-    assert.equal(toDate({ v: '21.02.2021' }), '2021-02-21');
-    assert.equal(toDate({ v: '13/07/2019' }), '2019-07-13');
-    assert.equal(toDate({ v: '27-06-2021' }), '2021-06-27');
-    assert.equal(toDate({ v: '25 Feb. 2023' }), '2023-02-25');
-    assert.equal(toDate({ v: 'Nill' }), null);
-    assert.equal(toHours({ v: '13886:22' }), 13886.4);
-    assert.equal(toHours({ v: '4189 Hours.' }), 4189);
-    assert.equal(toHours({ v: '35721 HRM' }), 35721);
-    assert.equal(toHours({ v: '62851;22' }), 62851.4);
-    assert.equal(toHours({ v: 285.132, fmt: '[h]:mm' }), 6843.2);
-    assert.equal(toHours({ v: '-' }), null);
-  });
-
-  test('hours "since" a service that are really the hours AT the service are corrected', () => {
-    const g = { valve_on: '2025-06-08', hours_since_valve: 59691, total_hours: 63227 };
-    fixSinceHours(g, 'valve_on', 'hours_since_valve', 'valve_hours', '2026-09-01');
-    assert.equal(g.valve_hours, 59691);
-    assert.equal(g.hours_since_valve, 3536);
-    const ok = { overhaul_on: '2025-06-01', hours_since_overhaul: 6527, total_hours: 40630 };
-    fixSinceHours(ok, 'overhaul_on', 'hours_since_overhaul', 'overhaul_hours', '2026-09-01');
-    assert.equal(ok.hours_since_overhaul, 6527, 'a possible figure is left alone');
-  });
-
-  test('engine status text becomes a condition', () => {
-    assert.equal(classifyCondition('RUNNING; OK'), 'ok');
-    assert.equal(classifyCondition('RUNNING; MINOR FAULT'), 'minor_fault');
-    assert.equal(classifyCondition('RUNNING; MAJOR FAULT'), 'major_fault');
-    assert.equal(classifyCondition('NOT RUNNING; DISCONNECTED'), 'not_running');
-    assert.equal(classifyCondition('RUNNING', 'Radiator leak'), 'minor_fault');
-  });
-
-  test('a workbook gives the latest month and every month before it', () => {
-    const parsed = parseConditionReport(Buffer.from(maafushiReport(), 'base64'), 'K.MAAFUSHI ENGINE CONDITION REPORT 2026.xlsx');
-    assert.equal(parsed.powerhouse, 'K. MAAFUSHI');
-    assert.deepEqual(parsed.reports.map((r) => r.month), [PREVIOUS, EXPECTED]);
-    const [g1, g2, g9] = parsed.latest.gensets;
-    assert.equal(g1.total_hours, 37557);
-    assert.equal(g1.overhaul_on, '2025-06-01');
-    assert.equal(g1.alt_serviced_on, '2024-09-24');
-    assert.equal(g1.capable_kw, 1300);
-    assert.equal(g1.fault, undefined, '"No Fault" is not a fault');
-    assert.equal(g2.condition, 'minor_fault');
-    assert.equal(g2.alt_needs_service, true);
-    assert.equal(g9.condition, 'not_running');
-    assert.equal(g9.hours_since_overhaul, 879.5);
-  });
-
+describe('island names', () => {
   test('island names are matched despite spelling differences', () => {
     const islands = [
       { id: '1', name: 'Kunburudhoo', atoll_code: 'ADh' }, { id: '2', name: 'Villingili', atoll_code: 'K' },
@@ -158,46 +84,22 @@ describe('reading the report template', () => {
   });
 });
 
-describe('uploading condition reports', () => {
+describe('history received before monthly updates', () => {
+  before(async () => {
+    // Maafushi's two-month workbook, uploaded by its manager.
+    await seedHistory(db, { islandId: maafushi.id, months: [PREVIOUS, EXPECTED], userId: managerId });
+  });
+
   test('Alif Alif powerhouses are in the register', async () => {
     const atolls = (await call('GET', '/atolls', { token: admin })).body;
     assert.equal(atolls.find((a) => a.code === 'AA').island_count, 8);
   });
 
-  test('preview finds the island and says what will change, saving nothing', async () => {
-    const res = await call('POST', '/condition-reports/preview', { token: manager, body: { file_name: 'report.xlsx', data: maafushiReport() } });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.island.id, maafushi.id);
-    assert.equal(res.body.ok, true);
-    assert.equal(res.body.report_month, EXPECTED);
-    assert.equal(res.body.gensets.length, 3);
-    assert.equal(res.body.gensets.find((g) => g.number === '9').exists, false);
-    assert.ok(res.body.new_events >= 4);
-    assert.match(res.body.warnings.join(' '), /Genset 9 will be added/);
-    const { rows } = await db.query('select count(*)::int as n from engine_conditions');
-    assert.equal(rows[0].n, 0);
-  });
-
-  test('a manager cannot upload for an island that is not theirs', async () => {
-    const data = maafushiReport({ powerhouse: 'ADH. DHIGURAH' });
-    const preview = await call('POST', '/condition-reports/preview', { token: manager, body: { data } });
-    assert.equal(preview.body.island.id, dhigurah.id);
-    assert.equal(preview.body.ok, false);
-    const res = await call('POST', '/condition-reports/import', { token: manager, body: { data, island_id: dhigurah.id } });
-    assert.equal(res.status, 403);
-  });
-
-  test('importing keeps the latest condition and builds the maintenance history', async () => {
-    const res = await call('POST', '/condition-reports/import', { token: manager, body: { file_name: 'report.xlsx', data: maafushiReport(), island_id: maafushi.id } });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.gensets_added, 1);
-    assert.equal(res.body.gensets_updated, 3);
-
+  test('the latest month gives each genset its condition, with its maintenance history and hours', async () => {
     const island = (await call('GET', `/islands/${maafushi.id}`, { token: admin })).body;
     assert.equal(island.reports[0].report_month, EXPECTED);
     const gensets = island.facilities[0].assets;
     const g1 = gensets.find((a) => a.tag === '1');
-    assert.equal(g1.serial_no, 'YBT00586', 'register filled from the report');
     assert.equal(g1.condition, 'ok');
     assert.equal(g1.last_overhaul_on, '2025-06-01');
     const g9 = gensets.find((a) => a.tag === '9');
@@ -208,19 +110,14 @@ describe('uploading condition reports', () => {
     assert.equal(asset.engine.alt_service_due, true);
     assert.deepEqual(asset.maintenance.map((e) => [e.kind, e.done_on, e.source]), [['alternator_service', '2026-06-15', 'report']]);
     assert.equal(asset.hours_log.length, 2);
-
     const g1Detail = (await call('GET', `/assets/${g1.id}`, { token: admin })).body;
-    const overhaul = g1Detail.maintenance.find((e) => e.kind === 'overhaul');
-    assert.equal(overhaul.running_hours, 37557 - 3957, 'hours at overhaul = total - hours since');
+    assert.equal(g1Detail.maintenance.find((e) => e.kind === 'overhaul').running_hours, 37557 - 3957, 'hours at overhaul = total - hours since');
   });
 
-  test('uploading the same report again changes nothing; an older one keeps the newer condition', async () => {
-    const again = await call('POST', '/condition-reports/import', { token: manager, body: { data: maafushiReport(), island_id: maafushi.id } });
-    assert.equal(again.body.events_added, 0);
-    const older = await call('POST', '/condition-reports/import', { token: manager, body: { data: maafushiReport({ months: [shift(PREVIOUS, -2)] }), island_id: maafushi.id } });
-    assert.equal(older.body.gensets_updated, 0);
-    const island = (await call('GET', `/islands/${maafushi.id}`, { token: admin })).body;
-    assert.equal(island.reports[0].report_month, EXPECTED);
+  test('workbooks can no longer be uploaded', async () => {
+    for (const path of ['/condition-reports/preview', '/condition-reports/import']) {
+      assert.equal((await call('POST', path, { token: admin, body: { data: 'eA==' } })).status, 404, path);
+    }
   });
 
   test('the tracker shows who is up to date and who is missing', async () => {
@@ -319,11 +216,9 @@ describe('work and maintenance history', () => {
   });
 
   test('powerhouses whose latest report is before 2024 are not chased', async () => {
-    const data = maafushiReport({ powerhouse: 'K. DHIFFUSHI', months: ['2023-11-01', '2023-12-01'], serial: 'DH' });
     const islands = (await call('GET', '/islands', { token: admin })).body;
     const dhiffushi = islands.find((i) => i.name === 'Dhiffushi');
-    const res = await call('POST', '/condition-reports/import', { token: admin, body: { data, island_id: dhiffushi.id } });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
+    await seedHistory(db, { islandId: dhiffushi.id, months: ['2023-11-01', '2023-12-01'], serial: 'DH' });
     const t = (await call('GET', '/condition-reports', { token: admin })).body;
     assert.equal(t.powerhouses.find((p) => p.island_id === dhiffushi.id).state, 'untracked');
     const e = (await call('GET', '/services/electricity', { token: admin })).body;
@@ -445,40 +340,6 @@ describe('work and maintenance history', () => {
     assert.deepEqual(conflicts.map((e) => `${e.island_name} ${e.tag}: ${e.condition}/${e.status}`), []);
   });
 
-  test('a sheet whose "GENSET NO." label was typed over is still read, with a warning', async () => {
-    const month = (n) => shift(EXPECTED, n);
-    const sheets = [-1, 0].map((n, i) => {
-      const sheet = reportSheet({
-        name: sheetName(month(n), i + 1), powerhouse: 'ADH. DHIGURAH', updated: shift(month(n), 1),
-        gensets: [{ number: 1, make: 'CUMMINS', model: 'KTA 38', kw: 800, status: 'RUNNING; OK', total: { hours: 1000 + n } },
-          { number: 2, make: 'CUMMINS', model: 'KTA 38', kw: 800, status: 'RUNNING; OK', total: { hours: 2000 + n } }],
-      });
-      if (n === 0) sheet.rows[3][0] = 'pr';   // as in Thulusdhoo's April–August sheets
-      return sheet;
-    });
-    const data = Buffer.from(makeXlsx(sheets)).toString('base64');
-    const parsed = parseConditionReport(Buffer.from(data, 'base64'), 'ADH. DHIGURAH ENGINE CONDITION REPORT 2025.xlsx');
-    assert.equal(parsed.latest.month, EXPECTED);
-    assert.equal(parsed.latest.number_label_missing, true);
-    assert.deepEqual(parsed.skipped, []);
-    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'dhigurah.xlsx', data } })).body;
-    assert.equal(preview.report_month, EXPECTED);
-    assert.ok(preview.warnings.some((w) => /"GENSET NO\." label is missing/.test(w)), preview.warnings.join(' | '));
-  });
-
-  test('sheets that cannot be read are named, and an old latest month is called out', async () => {
-    const good = reportSheet({ name: sheetName(PREVIOUS, 1), powerhouse: 'ADH. DHIGURAH', updated: shift(PREVIOUS, 1),
-      gensets: [{ number: 1, make: 'CUMMINS', model: 'KTA 38', kw: 800, status: 'RUNNING; OK' }, { number: 2, status: 'RUNNING; OK', make: 'X' }] });
-    const broken = reportSheet({ name: sheetName(EXPECTED, 2), powerhouse: 'ADH. DHIGURAH', updated: shift(EXPECTED, 1),
-      gensets: [{ number: 1, make: 'CUMMINS', status: 'RUNNING; OK' }] });
-    broken.rows[3] = ['pr'];   // no numbers left at all
-    const data = Buffer.from(makeXlsx([good, broken])).toString('base64');
-    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'dhigurah.xlsx', data } })).body;
-    assert.equal(preview.report_month, PREVIOUS);
-    assert.ok(preview.warnings.some((w) => w.includes(`Could not read sheet "${sheetName(EXPECTED, 2)}"`)), preview.warnings.join(' | '));
-    assert.ok(preview.warnings.some((w) => /will still show as missing/.test(w)), preview.warnings.join(' | '));
-  });
-
   test("a report's 'needs service / overhaul' clears once the work is recorded after the report", async () => {
     const tagId = async (tag) => (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.kind = 'genset' and s.tag = $2`, [maafushi.id, tag])).rows[0].id;
     const g2 = await tagId('2');   // the report says its alternator needs service
@@ -563,71 +424,6 @@ describe('work and maintenance history', () => {
     assert.equal((await call('PATCH', `/work/${repair.id}`, { token: admin, body: { status: 'in_transit' } })).status, 400);
   });
 
-  test('a report listing a genset registered at another island moves it instead of adding a duplicate', async () => {
-    const isl = (await call('GET', '/islands', { token: admin })).body;
-    const huraa = isl.find((i) => i.name === 'Huraa');
-    // Maafushi's G2 (S/N 41374910) turns up in Huraa's report as Genset 9;
-    // and Huraa's Genset 1 has been replaced by Maafushi's G9 (S/N NEW-9).
-    const g2 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '2' and s.kind = 'genset'`, [maafushi.id])).rows[0].id;
-    const huraaG1 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '1' and s.kind = 'genset'`, [huraa.id])).rows[0].id;
-    await db.query(`update assets set serial_no = 'OLD-HURAA-1' where id = $1`, [huraaG1]);
-    await db.query(`update assets s set serial_no = '6600-NEW9' from facilities f where f.id = s.facility_id and f.island_id = $1 and s.tag = '9'`, [maafushi.id]);
-    const sheet = reportSheet({ name: sheetName(EXPECTED, 1), powerhouse: 'K. HURAA', updated: shift(EXPECTED, 1), gensets: [
-      { number: 1, make: 'CUMMINS', model: 'QSK 60-G4', kw: 1600, serial: '6600 NEW9', status: 'RUNNING; OK', total: { hours: 63500 } },
-      { number: 9, make: 'CUMMINS', model: 'KTA 50-G3', kw: 1000, serial: '41374910', status: 'RUNNING; OK', total: { hours: 11000 } },
-    ] });
-    const data = Buffer.from(makeXlsx([sheet])).toString('base64');
-    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'huraa.xlsx', data } })).body;
-    assert.equal(preview.moves.length, 2, JSON.stringify(preview.warnings));
-    assert.ok(preview.warnings.some((w) => /Genset 9 \(S\/N 41374910\) is registered at K\. Maafushi as Genset 2/.test(w)), preview.warnings.join(' | '));
-    assert.ok(preview.warnings.some((w) => /previously registered here as Genset 1 .* marked as removed/.test(w)), preview.warnings.join(' | '));
-    assert.ok(!preview.warnings.some((w) => /will be added to the register/.test(w)));
-
-    const res = await call('POST', '/condition-reports/import', { token: admin, body: { file_name: 'huraa.xlsx', data, island_id: huraa.id } });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.gensets_moved, 2);
-    assert.equal(res.body.gensets_added, 0);
-    const moved = (await call('GET', `/assets/${g2}`, { token: admin })).body;
-    assert.equal(moved.island_name, 'Huraa');
-    assert.equal(moved.tag, '9');
-    assert.equal(moved.moves[0].source, 'report');
-    const tracked = (await call('GET', `/work/${moved.moves[0].work_id}`, { token: admin })).body;
-    assert.equal(tracked.kind, 'relocation');
-    assert.equal(tracked.status, 'completed');
-    assert.ok(moved.maintenance.length > 0, 'history kept');
-    const old = (await db.query('select active, tag, status from assets where id = $1', [huraaG1])).rows[0];
-    assert.equal(old.active, false);
-    assert.match(old.tag, /^1 \(removed/);
-    assert.equal(old.status, 'decommissioned');
-  });
-
-  test('a serial number corrected by hand is kept over the report, and not mistaken for a move', async () => {
-    const isl = (await call('GET', '/islands', { token: admin })).body;
-    const gaafaru = isl.find((i) => i.name === 'Gaafaru');
-    const gulhi = isl.find((i) => i.name === 'Gulhi');
-    const at = async (island, tag) => (await db.query(`select s.id, s.serial_no, s.facility_id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = $2 and s.kind = 'genset'`, [island.id, tag])).rows[0];
-    const real = await at(gulhi, '2');
-    await db.query(`update assets set serial_no = 'REAL-12345' where id = $1`, [real.id]);   // Gulhi G2 really has this serial
-    const g1 = await at(gaafaru, '1');
-    // Gaafaru's report wrongly gives its G1 Gulhi G2's serial; corrected by hand.
-    const fix = await call('PATCH', `/assets/${g1.id}`, { token: admin, body: { serial_no: 'GAAF-99999' } });
-    assert.equal(fix.status, 200);
-    assert.equal(fix.body.serial_locked, true);
-    const sheet = reportSheet({ name: sheetName(EXPECTED, 1), powerhouse: 'K. GAAFARU', updated: shift(EXPECTED, 1), gensets: [
-      { number: 1, make: 'CUMMINS', serial: 'REAL 12345', status: 'RUNNING; OK', total: { hours: 5000 } },
-      { number: 2, make: 'CUMMINS', status: 'RUNNING; OK', total: { hours: 4000 } },
-    ] });
-    const data = Buffer.from(makeXlsx([sheet])).toString('base64');
-    const preview = (await call('POST', '/condition-reports/preview', { token: admin, body: { file_name: 'gaafaru.xlsx', data } })).body;
-    assert.deepEqual(preview.moves, []);
-    assert.ok(preview.warnings.some((w) => /corrected to GAAF-99999 in the register, which is kept/.test(w)), preview.warnings.join(' | '));
-    const res = await call('POST', '/condition-reports/import', { token: admin, body: { file_name: 'gaafaru.xlsx', data, island_id: gaafaru.id } });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.gensets_moved, 0);
-    assert.equal((await at(gaafaru, '1')).serial_no, 'GAAF-99999');
-    assert.equal((await at(gulhi, '2')).facility_id, real.facility_id);
-  });
-
   test('setting a genset down opens work automatically, or updates its open work', async () => {
     const tagId = async (tag) => (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = $2 and s.kind = 'genset' and s.active`, [maafushi.id, tag])).rows[0]?.id;
     const g = await tagId('6');
@@ -700,29 +496,36 @@ describe('work and maintenance history', () => {
   });
 });
 
-describe('reports sent by Fleet Manager, and report history', () => {
+describe('reports Fleet Manager sent, and report history', () => {
   let gensets;
   before(async () => {
     // A fresh powerhouse: Dhigurah's two-month workbook.
-    const data = maafushiReport({ powerhouse: 'ADH. DHIGURAH', serial: 'DG' });
-    const res = await call('POST', '/condition-reports/import', { token: admin, body: { data, island_id: dhigurah.id } });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
+    await seedHistory(db, { islandId: dhigurah.id, months: [PREVIOUS, EXPECTED], serial: 'DG' });
     gensets = (await db.query(`select s.id, s.tag from assets s join facilities f on f.id = s.facility_id
                                 where f.island_id = $1 and s.kind = 'genset' and s.active and s.serial_no like '%DG'
                                 order by length(s.tag), s.tag`, [dhigurah.id])).rows;
   });
   // Fleet Manager no longer sends reports (disconnected 14 Oct 2026); the
-  // ones it sent are kept as history. These tests write such history
-  // directly, the way it was stored.
-  const send = async (body) => {
-    const ids = body.engines.map((e) => e.srd_asset_id);
-    const { rows } = await db.query(`select a.id, a.tag, a.kind, a.active, a.status, a.status_at, a.facility_id from assets a where a.id = any($1::uuid[])`, [ids]);
-    const assets = new Map(rows.map((a) => [a.id, a]));
-    const facilityId = body.facility_id || rows[0].facility_id;
-    const report = { held_rows: [], ...body, engines: body.engines.map((e) => ({ ...e })) };
-    const result = await db.tx(null, (t) => applyFleetReport(t, report, { facilityId, assets, userId: null }));
-    return { status: 200, body: { ok: true, facility_id: facilityId, report_month: body.report_month, ...result } };
-  };
+  // ones it sent are kept as history. These tests write such history the
+  // way it was stored.
+  const send = (body) => db.tx(null, async (t) => {
+    const { rows } = await t.query('select id, tag, status, status_at, facility_id from assets where id = any($1::uuid[])', [body.engines.map((e) => e.srd_asset_id)]);
+    let updated = 0;
+    for (const { srd_asset_id: assetId, ...r } of body.engines) {
+      const a = rows.find((x) => x.id === assetId);
+      await keepEngineReport(t, a.id, body.report_month, body.reported_on, r, { source: 'fleet_manager', userId: null });
+      updated += await setLatest(t, a, body.report_month, body.reported_on, r, { source: 'fleet_manager', userId: null });
+      if (r.last_alt_service_on) {
+        await t.query(`insert into maintenance_events (asset_id, kind, done_on, source, origin) values ($1, 'alternator_service', $2, 'report', 'fleet_manager')
+                       on conflict (asset_id, kind, done_on) do nothing`, [a.id, r.last_alt_service_on]);
+      }
+    }
+    const p = { source: 'fleet_manager', reported_on: body.reported_on, peak_load_kw: body.peak_load?.kw, peak_load_at: body.peak_load?.at,
+      genset_count: body.engines.length, file_name: body.file_name, held_rows: body.held_rows, source_ref: body.source_ref, userId: null };
+    await keepPowerhouseReport(t, body.facility_id || rows[0].facility_id, body.report_month, p);
+    const latest = await setLatestPowerhouse(t, body.facility_id || rows[0].facility_id, body.report_month, p);
+    return { status: 200, body: { latest: !!latest, engines_updated: updated } };
+  });
 
   test('uploads are kept month by month', async () => {
     const h = (await call('GET', `/condition-reports/history?asset_id=${gensets[0].id}`, { token: admin })).body;
@@ -731,7 +534,7 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.deepEqual(h.powerhouse.map((r) => r.report_month).slice(0, 2), [EXPECTED, PREVIOUS]);
   });
 
-  test('a checked report becomes the latest, keeps its history and says where it differs from the upload', async () => {
+  test('a report from Fleet Manager became the latest and is kept next to the upload', async () => {
     const [g1, g2] = gensets;
     const res = await send({
       report_month: EXPECTED, reported_on: mvToday(), file_name: 'K. Maafushi ECR.xlsx', source_ref: 'ECR import #412',
@@ -745,10 +548,6 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.equal(res.body.latest, true);
     assert.equal(res.body.engines_updated, 2);
-    assert.equal(res.body.held_rows, 1);
-    assert.ok(res.body.events_added >= 1);
-    const d1 = res.body.differences.find((x) => x.srd_asset_id === g1.id);
-    assert.equal(Number(d1.fields.total_hours.fleet_manager), 99999);
 
     const engine = (await call('GET', `/assets/${g1.id}`, { token: admin })).body;
     assert.equal(engine.condition.total_hours, 99999);
@@ -924,5 +723,89 @@ describe('reports sent by Fleet Manager, and report history', () => {
     assert.equal(kudagiri?.atoll_code, 'K');
     const island = (await call('GET', `/islands/${kudagiri.id}`, { token: admin })).body;
     assert.deepEqual(island.facilities.map((f) => f.name), ['Kudagiri Powerhouse']);
+  });
+});
+
+describe('monthly genset updates', () => {
+  let huraa, ph, form;
+  const thisMonth = () => `${mvToday().slice(0, 7)}-01`;
+  before(async () => {
+    huraa = (await call('GET', '/islands', { token: admin })).body.find((i) => i.name === 'Huraa');
+    ph = (await db.query("select id from facilities where island_id = $1 and kind = 'powerhouse' and active", [huraa.id])).rows[0].id;
+    form = (await call('GET', `/facilities/${ph}/genset-update`, { token: admin })).body;
+  });
+  const send = (token, items) => call('POST', `/facilities/${ph}/genset-update`, { token, body: { items } });
+
+  test('the form lists the powerhouse\'s gensets with their last figures', async () => {
+    assert.ok(form.gensets.length >= 2, JSON.stringify(form));
+    assert.equal(form.powerhouse.island_name, 'Huraa');
+    assert.equal(form.expected_month, EXPECTED);
+    assert.ok(form.gensets.every((g) => g.total_hours == null));
+  });
+
+  test('only managers of the island update it; faults need a description', async () => {
+    const [g1] = form.gensets;
+    assert.equal((await send(manager, [{ asset_id: g1.id, total_hours: 100, condition: 'ok' }])).status, 403, 'Maafushi\'s manager');
+    const r = await send(admin, [{ asset_id: g1.id, total_hours: 100, condition: 'minor_fault' }]);
+    assert.equal(r.status, 400);
+    assert.match(r.body.error, /fault/);
+    const other = (await db.query("select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.kind = 'genset' limit 1", [maafushi.id])).rows[0].id;
+    assert.equal((await send(admin, [{ asset_id: other, total_hours: 1, condition: 'ok' }])).status, 400, 'another powerhouse\'s genset');
+  });
+
+  test('an update sets each genset\'s condition and hours, and the powerhouse is up to date', async () => {
+    const [g1, g2] = form.gensets;
+    // G1 was overhauled at 900 hours before this first update.
+    await call('POST', `/assets/${g1.id}/maintenance`, { token: admin, body: { kind: 'overhaul', done_on: mvToday(), running_hours: 900 } });
+    const res = await send(admin, [
+      { asset_id: g1.id, total_hours: 1000, condition: 'ok' },
+      { asset_id: g2.id, total_hours: 5000, condition: 'minor_fault', fault: 'Coolant leak', alt_needs_service: true },
+    ]);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.month, thisMonth());
+
+    const a1 = (await call('GET', `/assets/${g1.id}`, { token: admin })).body;
+    assert.equal(a1.condition.condition, 'ok');
+    assert.equal(Number(a1.condition.total_hours), 1000);
+    assert.equal(Number(a1.condition.hours_since_overhaul), 100, 'from the overhaul recorded before it');
+    const a2 = (await call('GET', `/assets/${g2.id}`, { token: admin })).body;
+    assert.equal(a2.condition.fault, 'Coolant leak');
+    assert.equal(a2.engine.alt_service_due, true);
+
+    const t = (await call('GET', '/condition-reports', { token: admin })).body.powerhouses.find((p) => p.facility_id === ph);
+    assert.equal(t.state, 'up_to_date');
+    assert.equal(t.source, 'update');
+    assert.equal(t.uploaded_by_name, 'Admin');
+    const h = (await call('GET', `/condition-reports/history?asset_id=${g1.id}`, { token: admin })).body;
+    assert.deepEqual(h.engines.map((r) => [r.report_month, r.source]), [[thisMonth(), 'update']]);
+    assert.ok(a1.hours_log.some((x) => x.month === thisMonth() && Number(x.total_hours) === 1000));
+  });
+
+  test('hours carry forward; a lower reading needs "meter replaced"', async () => {
+    const [g1] = form.gensets;
+    let r = await send(admin, [{ asset_id: g1.id, total_hours: 1200, condition: 'ok' }]);
+    assert.equal(r.status, 200);
+    assert.equal(Number((await call('GET', `/assets/${g1.id}`, { token: admin })).body.condition.hours_since_overhaul), 300, '100 + 200 run since');
+    r = await send(admin, [{ asset_id: g1.id, total_hours: 50, condition: 'ok' }]);
+    assert.equal(r.status, 400);
+    assert.match(r.body.error, /less than the last reading \(1200\)/);
+    r = await send(admin, [{ asset_id: g1.id, total_hours: 50, meter_replaced: true, condition: 'ok' }]);
+    assert.equal(r.status, 200);
+    assert.equal((await call('GET', `/assets/${g1.id}`, { token: admin })).body.condition.hours_since_overhaul, null, 'unknown after a new meter');
+  });
+
+  test('not running sets the genset down (opening work); a disconnected genset stays disconnected', async () => {
+    const [, g2, g3] = form.gensets;
+    await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g3.id, status: 'disconnected', note: 'Not connected to the panel' }] } });
+    const r = await send(admin, [
+      { asset_id: g2.id, total_hours: 5100, condition: 'not_running', fault: 'Crankshaft' },
+      { asset_id: g3.id, total_hours: 10, condition: 'not_running', fault: 'Disconnected' },
+    ]);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const status = async (id) => (await db.query('select status, status_note from assets where id = $1', [id])).rows[0];
+    assert.equal((await status(g2.id)).status, 'down');
+    assert.match((await status(g2.id)).status_note, /^Monthly update \d{4}-\d{2}: NOT RUNNING — Crankshaft/);
+    assert.equal((await call('GET', `/work?asset_id=${g2.id}`, { token: admin })).body.items.length, 1, 'down opens work');
+    assert.equal((await status(g3.id)).status, 'disconnected');
   });
 });

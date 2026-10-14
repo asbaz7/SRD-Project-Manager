@@ -1,29 +1,11 @@
+// Monthly genset records per powerhouse: who is up to date (the Updates
+// tab) and each genset's or powerhouse's history month by month. Updates are
+// entered in the app (routes/gensetUpdates.js); workbooks are no longer
+// uploaded, and the ones received before stay in the history.
 import { z } from 'zod';
-import { assertIslandWrite, requireRole } from '../auth.js';
-import { parseConditionReport } from '../conditionReport.js';
-import { badRequest } from '../errors.js';
 import { date, id, one, parse } from '../http.js';
-import { REPORTS_TRACKED_FROM, applyImport, expectedMonth, isMissing, matchIsland, planImport, reportState } from '../reportImport.js';
+import { REPORTS_TRACKED_FROM, expectedMonth, isMissing, reportState } from '../gensetRecords.js';
 import { localToday } from '../time.js';
-
-const upload = z.object({
-  file_name: z.string().trim().max(300).default(''),
-  data: z.string().min(10).max(4_000_000),     // base64 of the .xlsx (≈3 MB max)
-  island_id: id.optional(),                    // confirms or overrides the matched island
-});
-
-function decodeBase64(data) {
-  const clean = data.replace(/^data:[^,]*,/, '');
-  try {
-    const binary = atob(clean);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  } catch {
-    throw badRequest('The file could not be read');
-  }
-}
-
 
 export default async function conditionReportRoutes(app) {
   const { db, config } = app;
@@ -77,54 +59,4 @@ export default async function conditionReportRoutes(app) {
   });
 
   // Reads an uploaded workbook and says what it would change. Nothing is saved.
-  app.post('/condition-reports/preview', { preHandler: requireRole('manager') }, async (req) => {
-    const body = parse(upload, req.body);
-    let parsed;
-    try {
-      parsed = parseConditionReport(decodeBase64(body.data), body.file_name);
-    } catch (err) {
-      throw badRequest(err.message);
-    }
-    const { rows: islands } = await db.query(`
-      select i.id, i.name, i.atoll_id, a.code as atoll_code from islands i join atolls a on a.id = i.atoll_id where i.active`);
-    let island;
-    let candidates = [];
-    if (body.island_id) {
-      island = islands.find((i) => i.id === body.island_id);
-      if (!island) throw badRequest('Unknown island');
-    } else {
-      ({ island, candidates } = matchIsland(islands, parsed.powerhouse, body.file_name));
-    }
-    const result = {
-      file_name: body.file_name,
-      powerhouse: parsed.powerhouse,
-      island: island || null,
-      candidates,
-      islands: islands.map(({ id: islandId, name, atoll_code }) => ({ id: islandId, name, atoll_code }))
-        .sort((a, b) => a.atoll_code.localeCompare(b.atoll_code) || a.name.localeCompare(b.name)),
-    };
-    if (!island) return { ...result, ok: false };
-    let canWrite = true;
-    try {
-      await assertIslandWrite(db, req.user, { islandId: island.id });
-    } catch {
-      canWrite = false;
-    }
-    return { ...result, ok: canWrite, can_write: canWrite, ...(await planImport(db, parsed, island.id)) };
-  });
-
-  app.post('/condition-reports/import', { preHandler: requireRole('manager') }, async (req) => {
-    const body = parse(upload.required({ island_id: true }), req.body);
-    await assertIslandWrite(db, req.user, { islandId: body.island_id });
-    let parsed;
-    try {
-      parsed = parseConditionReport(decodeBase64(body.data), body.file_name);
-    } catch (err) {
-      throw badRequest(err.message);
-    }
-    const counts = await db.tx(req.user.id, (t) => applyImport(t, parsed, {
-      islandId: body.island_id, userId: req.user.id, fileName: body.file_name,
-    }));
-    return { ok: true, report_month: parsed.latest.month, ...counts };
-  });
 }

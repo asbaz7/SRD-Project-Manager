@@ -3,7 +3,7 @@ import { assertIslandWrite, requireRole } from '../auth.js';
 import { sendCsv } from '../csv.js';
 import { badRequest, forbidden } from '../errors.js';
 import { Where, date, id, idParam, one, optText, parse, serialParam, text } from '../http.js';
-import { REPORTS_TRACKED_FROM, expectedMonth } from '../reportImport.js';
+import { REPORTS_TRACKED_FROM, expectedMonth } from '../gensetRecords.js';
 import { LISTED_STATUSES } from '../domain.js';
 import { workRef } from '../format.js';
 import { localToday } from '../time.js';

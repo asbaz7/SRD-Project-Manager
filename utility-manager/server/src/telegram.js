@@ -10,7 +10,7 @@
 // PUBLIC_URL (for links). Without a token the bot is off and alerts are no-ops.
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { createAgent, toTelegram } from './agent.js';
-import { ATOLL_NAMES, matchIsland } from './reportImport.js';
+import { ATOLL_NAMES, matchIsland } from './islandNames.js';
 import { SERVICE_LABEL, WORK_STATE_LABEL } from './domain.js';
 import { assetName, esc, workRef } from './format.js';
 
