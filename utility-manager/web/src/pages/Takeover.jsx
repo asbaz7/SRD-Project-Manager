@@ -148,84 +148,180 @@ function hull(points, pad) {
   });
 }
 
-// The viewBox eases from one view to the next.
-function useEased(target) {
-  const [view, setView] = useState(target);
-  const key = target.join(',');
-  useEffect(() => {
-    const from = view;
-    const start = performance.now();
-    let frame;
-    const step = (now) => {
-      const k = Math.min(1, (now - start) / 350);
-      const e = 1 - (1 - k) ** 3;
-      setView(from.map((v, n) => v + (target[n] - v) * e));
-      if (k < 1) frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return view;
+// The map moves like an online map: drag to pan, scroll or pinch to zoom
+// (round the pointer), + / − / ⌂ buttons; picking an atoll glides to it.
+// The view is kept to the map's own shape, so a screen pixel is the same
+// distance across and down (px map units).
+const MIN_W = 6;
+function fitTo(v, box) {
+  const [x, y, w, h] = v;
+  const want = box.w / box.h;
+  let nw = w; let nh = h;
+  if (w / h < want) nw = h * want; else nh = w / want;
+  return [x + (w - nw) / 2, y + (h - nh) / 2, nw, nh];
 }
 
 function AtollMap({ atolls, islands, match, selected, onPick, picked, onIsland }) {
   const placed = islands.filter((i) => i.lat != null && i.lon != null);
   const byAtoll = Object.fromEntries(atolls.map((a) => [a.code, placed.filter((i) => i.atoll_code === a.code)]));
-  const target = (() => {
-    const list = selected && byAtoll[selected];
+  const ref = useRef(null);
+  const [box, setBox] = useState({ w: 800, h: 800 });
+  const [view, setView] = useState(() => fitTo(FULL, { w: 800, h: 800 }));
+  const frame = useRef(0);
+  const measured = useRef(false);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const now = useRef(view);
+  now.current = view;
+  const drag = useRef({ pointers: new Map(), moved: false });
+
+  const targetFor = (code) => {
+    const list = code && byAtoll[code];
     if (!list?.length) return FULL;
     const xy = list.map(toXY);
     const xs = xy.map((p) => p[0]); const ys = xy.map((p) => p[1]);
-    const pad = 8;
-    let [x0, x1, y0, y1] = [Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad];
-    // Wide enough for the island names.
-    const w = Math.max(x1 - x0, (y1 - y0) * 0.75, 30); const h = Math.max(y1 - y0, 30);
-    const cx = (x0 + x1) / 2; const cy = (y0 + y1) / 2;
-    return [cx - w / 2, cy - h / 2, w, h];
-  })();
-  const view = useEased(target);
-  const zoomed = view[2] < FULL[2] * 0.6;
-  // Map units to a screen pixel, so text and dots keep their size on screen
-  // whatever the zoom and window.
-  const ref = useRef(null);
-  const [box, setBox] = useState({ w: 800, h: 800 });
+    const pad = 10;
+    return [Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) - Math.min(...xs) + pad * 2, Math.max(...ys) - Math.min(...ys) + pad * 2];
+  };
+  const glide = (to) => {
+    cancelAnimationFrame(frame.current);
+    const goal = fitTo(to, box);
+    const from = now.current;
+    const start = performance.now();
+    const step = (t) => {
+      const k = Math.min(1, (t - start) / 400);
+      const e = 1 - (1 - k) ** 3;
+      setView(from.map((v, n) => v + (goal[n] - v) * e));
+      if (k < 1) frame.current = requestAnimationFrame(step);
+    };
+    frame.current = requestAnimationFrame(step);
+  };
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width || 800, h: e.contentRect.height || 800 }));
+    const ro = new ResizeObserver(([e]) => {
+      const nb = { w: e.contentRect.width || 800, h: e.contentRect.height || 800 };
+      setBox(nb);
+      // The first measure frames the map to fit; after that, keep the view.
+      if (!measured.current) { measured.current = true; cancelAnimationFrame(frame.current); setView(fitTo(targetFor(selectedRef.current), nb)); }
+      else setView((v) => fitTo(v, nb));
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const px = Math.max(view[2] / box.w, view[3] / box.h);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (measured.current) glide(targetFor(selected)); }, [selected]);
+
+  const px = view[2] / box.w;
+  const zoomAt = (factor, cx = box.w / 2, cy = box.h / 2) => {
+    cancelAnimationFrame(frame.current);
+    setView(([x, y, w, h]) => {
+      const nw = Math.min(Math.max(w * factor, MIN_W), FULL[3] * 2 * (box.w / box.h));
+      const f = nw / w;
+      const mx = x + (cx / box.w) * w; const my = y + (cy / box.h) * h;
+      return [mx - (mx - x) * f, my - (my - y) * f, nw, h * f];
+    });
+  };
+
+  // Mouse wheel / trackpad, round the pointer.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      zoomAt(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0025)), e.clientX - r.left, e.clientY - r.top);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  });
+
+  // Drag to pan; two fingers to pinch.
+  const onPointerDown = (e) => {
+    const d = drag.current;
+    if (d.pointers.size === 0) d.moved = false;
+    d.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    cancelAnimationFrame(frame.current);
+  };
+  const onPointerMove = (e) => {
+    const d = drag.current;
+    const prev = d.pointers.get(e.pointerId);
+    if (!prev) return;
+    const r = ref.current.getBoundingClientRect();
+    if (d.pointers.size === 1) {
+      const dx = e.clientX - prev.x; const dy = e.clientY - prev.y;
+      // Held only once it is a drag, so a plain click still reaches the island.
+      if (!d.moved && Math.abs(dx) + Math.abs(dy) > 3) { d.moved = true; ref.current.setPointerCapture?.(e.pointerId); }
+      if (!d.moved) return;
+      setView(([x, y, w, h]) => [x - dx * (w / box.w), y - dy * (w / box.w), w, h]);
+    } else if (d.pointers.size === 2) {
+      const [other] = [...d.pointers.entries()].filter(([id]) => id !== e.pointerId).map(([, p]) => p);
+      const before = Math.hypot(prev.x - other.x, prev.y - other.y);
+      const after = Math.hypot(e.clientX - other.x, e.clientY - other.y);
+      if (before > 0) zoomAt(before / after, (e.clientX + other.x) / 2 - r.left, (e.clientY + other.y) / 2 - r.top);
+      d.moved = true;
+    }
+    d.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  };
+  const onPointerUp = (e) => { drag.current.pointers.delete(e.pointerId); };
+  // A click that ended a drag is not a pick.
+  const click = (fn) => (e) => { e.stopPropagation(); if (!drag.current.moved) fn(); };
+
+  const showNames = px < 0.09;
   const tone = (a) => (!a.islands ? 'none' : a.taken_over === a.islands ? 'taken' : 'pending');
-  return <svg ref={ref} className="tko-map" viewBox={view.join(' ')} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Islands by takeover status">
-    {atolls.map((a) => {
-      const xy = byAtoll[a.code].map(toXY);
-      if (!xy.length) return null;
-      const ring = hull(xy, 4);
-      const [lx, ly] = [Math.max(...xy.map((p) => p[0])) + 5, xy.reduce((n, p) => n + p[1], 0) / xy.length];
-      return <g key={a.code} className={`tko-atoll ${tone(a)}${selected === a.code ? ' selected' : ''}`}
-        onClick={() => onPick(a.code)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onPick(a.code)}>
-        <title>{`${a.name}: ${a.taken_over} of ${a.islands} taken over`}</title>
-        <polygon points={ring.map((p) => p.join(',')).join(' ')} strokeWidth={px * 1.5} strokeLinejoin="round" />
-        {!zoomed && <text x={lx + px * 4} y={ly + px * 5} fontSize={px * 14} className="atoll-name">{a.code}
-          <tspan className="name" dx={px * 6} fontSize={px * 12}>{a.name}</tspan>
-          <tspan className="count" dx={px * 6} fontSize={px * 12}>{a.taken_over}/{a.islands}</tspan></text>}
-      </g>;
-    })}
-    {placed.map((i) => {
-      const [x, y] = toXY(i);
-      const on = match(i);
-      return <g key={i.id} className={`tko-island ${i.state}${picked === i.id ? ' picked' : ''}${on ? '' : ' dim'}`}
-        onClick={(e) => { e.stopPropagation(); if (!zoomed) onPick(i.atoll_code); else onIsland(i); }}>
-        <title>{`${i.atoll_code}. ${i.name}: ${STATE[i.state]}`}</title>
-        <circle cx={x} cy={y} r={px * 10} className="hit" />
-        <circle cx={x} cy={y} r={px * (zoomed ? 6 : 3.5)} strokeWidth={px * 1.2} />
-        {zoomed && selected === i.atoll_code && <text x={x + px * 10} y={y + px * 4.5} fontSize={px * 13}>{i.name}</text>}
-      </g>;
-    })}
-  </svg>;
+
+  // Atoll labels beside their atoll, west atolls to the left, the rest to
+  // the right; on each side pushed apart so none overlap.
+  const labels = [];
+  for (const a of atolls) {
+    const xy = byAtoll[a.code].map(toXY);
+    if (!xy.length) continue;
+    const xs = xy.map((p) => p[0]);
+    const cx = xs.reduce((n, v) => n + v, 0) / xs.length;
+    const cy = xy.reduce((n, p) => n + p[1], 0) / xy.length;
+    const left = cx < (72.99 - BOUNDS.west) * 100;
+    labels.push({ a, left, x: left ? Math.min(...xs) - px * 12 : Math.max(...xs) + px * 12, y: cy });
+  }
+  for (const side of [true, false]) {
+    const list = labels.filter((l) => l.left === side).sort((p, q) => p.y - q.y);
+    for (let n = 1; n < list.length; n++) list[n].y = Math.max(list[n].y, list[n - 1].y + px * 19);
+  }
+
+  return <>
+    <svg ref={ref} className="tko-map" viewBox={view.join(' ')} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Islands by takeover status"
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+      {atolls.map((a) => {
+        const xy = byAtoll[a.code].map(toXY);
+        if (!xy.length) return null;
+        const ring = hull(xy, Math.max(4, px * 8));
+        return <g key={a.code} className={`tko-atoll ${tone(a)}${selected === a.code ? ' selected' : ''}`}
+          onClick={click(() => onPick(a.code))} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onPick(a.code)}>
+          <title>{`${a.name}: ${a.taken_over} of ${a.islands} taken over`}</title>
+          <polygon points={ring.map((p) => p.join(',')).join(' ')} strokeWidth={px * 1.5} strokeLinejoin="round" />
+        </g>;
+      })}
+      {placed.map((i) => {
+        const [x, y] = toXY(i);
+        return <g key={i.id} className={`tko-island ${i.state}${picked === i.id ? ' picked' : ''}${match(i) ? '' : ' dim'}`}
+          onClick={click(() => (showNames || selected === i.atoll_code ? onIsland(i) : onPick(i.atoll_code)))}>
+          <title>{`${i.atoll_code}. ${i.name}: ${STATE[i.state]}`}</title>
+          <circle cx={x} cy={y} r={px * 10} className="hit" />
+          <circle cx={x} cy={y} r={px * (showNames ? 6 : 4)} strokeWidth={px * 1.2} />
+          {showNames && <text x={x + px * 10} y={y + px * 4.5} fontSize={px * 13}>{i.name}</text>}
+        </g>;
+      })}
+      {!showNames && labels.map(({ a, left, x, y }) =>
+        <text key={a.code} x={x} y={y + px * 5} fontSize={px * 14} textAnchor={left ? 'end' : 'start'} className="tko-label"
+          onClick={click(() => onPick(a.code))}>
+          {a.code}<tspan className="count" dx={px * 5} fontSize={px * 12}>{a.taken_over}/{a.islands}</tspan></text>)}
+    </svg>
+    <div className="tko-zoom glass">
+      <button onClick={() => zoomAt(1 / 1.6)} aria-label="Zoom in">+</button>
+      <button onClick={() => zoomAt(1.6)} aria-label="Zoom out">−</button>
+      <button onClick={() => (selected ? onPick('') : glide(FULL))} aria-label="Whole country" title="Whole country">⌂</button>
+    </div>
+  </>;
 }
 
 function AtollList({ atolls, onPick }) {

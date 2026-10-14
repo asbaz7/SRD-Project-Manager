@@ -592,7 +592,15 @@ input.qty { width: 80px; text-align: right; }
 .tko-map-wrap { position: absolute; inset: 0; transition: right .25s;
   background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--water) 18%, transparent), transparent 75%); }
 .tko-stage.drawer-open .tko-map-wrap { right: 396px; }
-.tko-map { width: 100%; height: 100%; display: block; }
+.tko-map { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.tko-map:active { cursor: grabbing; }
+.tko-label { fill: var(--text); font-weight: 700; cursor: pointer; paint-order: stroke; stroke: color-mix(in srgb, #000 55%, transparent); stroke-width: 3px; stroke-linejoin: round; }
+.tko-label .count { fill: var(--text-2); font-weight: 500; }
+.tko-zoom { position: absolute; right: 16px; bottom: 16px; z-index: 5; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; }
+.tko-zoom button { width: 40px; height: 40px; border: 0; background: none; color: var(--text); font-size: 1.25rem; cursor: pointer; }
+.tko-zoom button + button { border-top: 1px solid var(--glass-border); }
+.tko-zoom button:hover { background: var(--glass-hover); }
+@media (max-width: 860px) { .tko-zoom { bottom: auto; top: 50%; transform: translateY(-50%); right: 10px; } }
 .tko-float { position: absolute; z-index: 5; border-radius: 18px; }
 .tko-float header { display: flex; align-items: center; gap: 8px; }
 .tko-float header h1, .tko-float header h2 { margin: 0; font-size: 1rem; flex: 1; min-width: 0; }
