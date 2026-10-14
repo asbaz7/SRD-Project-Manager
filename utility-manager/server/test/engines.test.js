@@ -821,6 +821,34 @@ describe('monthly genset updates', () => {
     assert.equal(h.condition, 'ok', 'the month is kept with the state it ended in');
   });
 
+  test('every fault is logged, with who cleared it and why', async () => {
+    const [g1] = form.gensets;
+    const log = async () => (await call('GET', `/assets/${g1.id}`, { token: admin })).body.fault_log;
+    const before = (await log()).length;
+    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'minor', note: 'Exhaust leak' } });
+    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'major', note: 'Exhaust manifold cracked' } });
+    let l = await log();
+    assert.equal(l.length, before + 2);
+    assert.deepEqual([l[0].level, l[0].note, l[0].cleared_at], ['major', 'Exhaust manifold cracked', null]);
+    assert.equal(l[1].cleared_reason, 'Replaced by a newer fault');
+    assert.equal(l[0].logged_by_name, 'Admin');
+    // Down, then back in service: cleared, saying why.
+    await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g1.id, status: 'down', note: 'manifold' }] } });
+    await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g1.id, status: 'running' }] } });
+    l = await log();
+    assert.equal(l[0].cleared_reason, 'Back in service');
+    assert.equal(l[0].cleared_by_name, 'Admin');
+    // Marked fixed by hand.
+    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'minor', note: 'Loose belt' } });
+    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'none' } });
+    assert.equal((await log())[0].cleared_reason, 'Marked fixed');
+    // Completed work logged from the fault says which work.
+    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'major', note: 'Turbo whine' } });
+    const w = (await call('POST', '/work', { token: admin, body: { asset_id: g1.id, kind: 'repair', title: 'Turbo', fault_report_month: thisMonth() } })).body;
+    await call('PATCH', `/work/${w.id}`, { token: admin, body: { status: 'completed' } });
+    assert.equal((await log())[0].cleared_reason, `Work ${w.ref} completed`);
+  });
+
   test('not running sets the genset down (opening work); a disconnected genset stays disconnected', async () => {
     const [, g2, g3] = form.gensets;
     await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g3.id, status: 'disconnected', note: 'Not connected to the panel' }] } });

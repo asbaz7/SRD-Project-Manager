@@ -316,6 +316,26 @@ test('non-technical staff cannot use the technical bot commands', async () => {
   assert.match(repliesTo(4004), /needs technical access/);
 });
 
+test('/fault logs a genset fault, and clears it', async () => {
+  const g4 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id join islands i on i.id = f.island_id
+    where i.name = 'Maafushi' and s.kind = 'genset' and s.tag = '4' and s.active`)).rows[0].id;
+  const fault = async () => (await db.query('select fault_level, fault_note from assets where id = $1', [g4])).rows[0];
+  await say(ADMIN_TG, '/fault Maafushi G4 oil leak at the front seal');
+  assert.match(repliesTo(ADMIN_TG), /Genset 4: <b>minor fault<\/b> logged: oil leak at the front seal/);
+  assert.deepEqual(await fault(), { fault_level: 'minor', fault_note: 'oil leak at the front seal' });
+  await say(ADMIN_TG, '/fault Maafushi G4 major crankshaft knock');
+  assert.deepEqual(await fault(), { fault_level: 'major', fault_note: 'crankshaft knock' });
+  await say(ADMIN_TG, '/fault Maafushi G4');
+  assert.match(repliesTo(ADMIN_TG), /e\.g\./);
+  await say(ADMIN_TG, '/fault Maafushi G4 fixed');
+  assert.match(repliesTo(ADMIN_TG), /fault cleared/);
+  assert.deepEqual(await fault(), { fault_level: 'none', fault_note: null });
+  const log = (await db.query('select level, cleared_reason from fault_log where asset_id = $1 order by logged_at', [g4])).rows;
+  assert.deepEqual(log.slice(-2).map((l) => [l.level, l.cleared_reason]), [['minor', 'Replaced by a newer fault'], ['major', 'Marked fixed']]);
+  await say(4004, '/fault Maafushi G4 leak');
+  assert.match(repliesTo(4004), /needs technical access/);
+});
+
 test('/hours records the monthly running hours, with or without a condition', async () => {
   const at = async (tag) => (await db.query(`select s.id, c.total_hours, c.condition, c.fault, c.source from assets s
     join facilities f on f.id = s.facility_id join islands i on i.id = f.island_id
@@ -392,6 +412,15 @@ test('the morning summary lists ongoing work with its status and latest update',
   const text = repliesTo(GROUP);
   assert.match(text, /<b>Ongoing work<\/b> \(\d+\)/);
   assert.match(text, /WO-\d{4}<\/a> K\. Maafushi Genset 7: Genset 7 down: voltage issue · <b>In progress<\/b>\n   ↳ AVR replaced, testing tomorrow \(\d+ \w+\)/);
+
+  // Work on hold is counted, not listed.
+  const held = (await call('POST', '/work', { token: admin, body: { island_id: maafushi.id, service: 'water', kind: 'repair', title: 'Parked job', status: 'on_hold' } })).body;
+  sent = [];
+  await app.daily();
+  const again = repliesTo(GROUP);
+  assert.ok(!again.includes('Parked job'), again);
+  assert.match(again, /work in progress \(\d+ more on hold\)/);
+  await call('PATCH', `/work/${held.id}`, { token: admin, body: { status: 'cancelled' } });
 });
 
 test('plain messages go to the assistant, which looks things up as the person asking', async () => {

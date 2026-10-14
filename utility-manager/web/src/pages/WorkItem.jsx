@@ -59,7 +59,7 @@ function WorkView({ work: w, reload }) {
           {w.asset_id && <><dt>Asset</dt><dd>{technical ? <Link to={`/assets/${w.asset_id}`}>{assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}</Link> : `${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`}{w.asset_model && <span className="muted"> · {w.asset_model}</span>}</dd></>}
           <dt>Unit</dt><dd>{w.unit_name || '—'}</dd>
           <dt>Assigned to</dt><dd>{[w.assigned_user_name, w.assigned_to].filter(Boolean).join(' · ') || '—'}</dd>
-          {w.fault_report_month && <><dt>From</dt><dd>Fault in the {w.fault_report_month.slice(0, 7)} monthly update</dd></>}
+          {w.fault_report_month && <><dt>From</dt><dd>A fault on the genset: completing this clears it</dd></>}
           <dt>Started</dt><dd>{date(w.started_on)}</dd>
           <dt>Target</dt><dd className={w.overdue ? 'bad' : ''}>{date(w.target_on)}{w.overdue && ' · overdue'}</dd>
           {w.completed_on && <><dt>Completed</dt><dd>{date(w.completed_on)}</dd></>}
@@ -241,7 +241,7 @@ function WorkForm({ work, onDone }) {
           options={assignable.slice().sort((a, b) => b.technical - a.technical || a.full_name.localeCompare(b.full_name))
             .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}`])} /></Field>
         <Field label="Team or contractor" hint="Optional, e.g. the island's mechanical team or an outside firm."><input value={f.assigned_to || ''} onChange={set('assigned_to')} /></Field>
-        {f.fault_report_month && !work && <p className="muted small wide">Logged from the fault in the {f.fault_report_month.slice(0, 7)} monthly update: once this work is completed, that fault leaves the Needs attention list.</p>}
+        {f.fault_report_month && !work && <p className="muted small wide">Logged for the genset's fault: once this work is completed, the fault is cleared (it stays in the fault log).</p>}
         <Field label="Started"><input type="date" value={f.started_on || ''} onChange={set('started_on')} /></Field>
         <Field label="Target date"><input type="date" value={f.target_on || ''} onChange={set('target_on')} /></Field>
         {work && <Field label="Completed on" hint={work.status === 'completed' && work.asset_id && !isMove ? "Changing it moves the date in the engine's history." : ''}><input type="date" value={f.completed_on || ''} onChange={set('completed_on')} /></Field>}

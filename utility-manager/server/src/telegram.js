@@ -53,6 +53,7 @@ Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator b
 /down Maafushi G3 radiator leak
 /up Maafushi G3
 /standby, /maintenance or /disconnected work the same way
+/fault Maafushi G3 oil leak  <i>(a minor fault; add</i> major <i>first for a major one,</i> fixed <i>to clear it)</i>
 /hours Maafushi G1 12345 G2 23456  <i>(monthly running hours; condition stays as it was)</i>
 /hours Maafushi G3 12345 minor oil leak  <i>(with its condition: ok, minor, major or down, and the fault)</i>
   <i>(add</i> newmeter <i>after the hours if the meter was replaced)</i>
@@ -158,6 +159,7 @@ export function createTelegram({ db, config, log }) {
         ['work', 'Ongoing work'],
         ['down', 'Asset down: /down Maafushi G3 reason'],
         ['up', 'Asset running again: /up Maafushi G3'],
+        ['fault', 'Log a fault: /fault Maafushi G3 oil leak'],
         ['hours', 'Monthly hours: /hours Maafushi G1 12345 G2 23456'],
         ['interruption', 'Report an interruption'],
         ['update', 'Work update: /update WO-12 text'],
@@ -366,6 +368,34 @@ export function createTelegram({ db, config, log }) {
     const status = res.body.complete ? `✅ ${esc(r.island.name)} is up to date for ${monthName}.`
       : `Still to do for ${monthName}: ${res.body.still_due.map((t) => esc(assetName({ kind: 'genset', tag: t }))).join(', ')}`;
     return `⏱ Hours recorded for <b>${esc(r.island.atoll_code)}. ${esc(r.island.name)}</b>\n${lines.join('\n')}\n${status}`;
+  }
+
+  // /fault: log a genset's fault (minor unless "major" comes first), or clear
+  // it with "fixed" / "clear" / "none". For one that has stopped, /down.
+  async function cmdFault(user, words, asUser) {
+    const example = 'e.g. <code>/fault Maafushi G3 oil leak</code>, <code>/fault Maafushi G3 major crankshaft knock</code> or <code>/fault Maafushi G3 fixed</code>';
+    if (words.length < 3) return example;
+    const r = await takeIsland(words);
+    if (!r.island) return islandHelp(r);
+    const a = await takeAsset(r.island.id, r.rest);
+    if (a.ambiguous) return `More than one matches: ${a.ambiguous.map((x) => esc(assetName(x))).join(', ')}. Use the full tag.`;
+    if (!a.asset || a.asset.kind !== 'genset') {
+      const gensets = (a.options || []).filter((x) => x.kind === 'genset').map((x) => esc(assetName(x))).join(', ');
+      return gensets ? `Which genset? ${esc(r.island.name)} has: ${gensets}` : example;
+    }
+    let rest = a.rest;
+    const first = norm(rest[0] ?? '');
+    let level = 'minor';
+    if (['fixed', 'clear', 'cleared', 'none', 'ok', 'resolved'].includes(first) && rest.length === 1) level = 'none';
+    else if (['major', 'minor'].includes(first)) { level = first; rest = rest.slice(1); }
+    const note = rest.join(' ').trim().slice(0, 2000);
+    if (level !== 'none' && !note) return `Say what's wrong, ${example}`;
+    const res = await asUser(user.id, 'POST', `/assets/${a.asset.id}/fault`, { level, note: level === 'none' ? null : note });
+    if (res.status !== 200) return apiError(res);
+    const where = `${esc(r.island.atoll_code)}. ${esc(r.island.name)} ${esc(assetName(a.asset))}`;
+    return level === 'none' ? `✅ ${where}: fault cleared\n${link(`/assets/${a.asset.id}`, 'Open')}`
+      : `${level === 'major' ? '■' : '▲'} ${where}: <b>${level} fault</b> logged: ${esc(note)}\n${link(`/assets/${a.asset.id}`, 'Open')}`
+        + (a.asset.status === 'running' && level === 'major' ? '\nIf it has stopped, also send /down.' : '');
   }
 
   async function cmdStatus(user, words, asUser) {
@@ -596,13 +626,14 @@ export function createTelegram({ db, config, log }) {
     const user = await linkedUser(msg.from.id);
     if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
 
-    const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance', 'disconnected', 'disconnect', 'hours']);
+    const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance', 'disconnected', 'disconnect', 'hours', 'fault']);
     if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /interruption, /summary, and comment on work you have been added to with /update.');
     try {
       let text;
       if (cmd === 'status') text = await cmdStatus(user, words, asUser);
       else if (STATUS_WORDS[cmd]) text = await cmdSetStatus(user, STATUS_WORDS[cmd], words, asUser);
       else if (cmd === 'hours') text = await cmdHours(user, words, asUser);
+      else if (cmd === 'fault') text = await cmdFault(user, words, asUser);
       else if (cmd === 'interruption' || cmd === 'incident') text = await cmdIncident(user, words, asUser);
       else if (cmd === 'update') text = await cmdWorkUpdate(user, words, asUser);
       else if (cmd === 'done') text = await cmdWorkUpdate(user, words, asUser, 'completed');

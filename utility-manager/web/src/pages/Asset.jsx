@@ -6,8 +6,9 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { AssetForm } from '../components/forms.jsx';
+import { LogFaultButton } from '../components/LogFault.jsx';
 import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Fault, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, FAULTS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
+import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 
 const ago = (iso) => {
@@ -35,6 +36,7 @@ export default function Asset() {
         crumbs={[{ to: `/${a.service}${isEngine ? '/engines' : ''}`, label: isEngine ? 'Engines' : SERVICES[a.service]?.label || 'Assets' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${assetLabel(a)}` }]}
         actions={manage && <>
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
+          {isEngine && <LogFaultButton asset={a} onSaved={state.reload} />}
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
           {isEngine && <button className="btn" onClick={() => setModal('event')}>Add maintenance record</button>}
           {!a.work.some((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status))
@@ -62,7 +64,7 @@ export default function Asset() {
             <dt>Monthly update</dt><dd className={e.report_stale ? 'bad' : ''}>{c?.report_month ? `${month(c.report_month)}${c.source && c.source !== 'update' ? ` (${c.source === 'fleet_manager' ? 'Fleet Manager' : 'workbook'})` : ''}` : 'None yet'}
               {e.report_stale && ' · this month\'s is due'}</dd>
           </dl>
-          {manage && <FaultForm asset={a} reload={state.reload} />}
+          {manage && a.fault_level && a.fault_level !== 'none' && <MarkFixed asset={a} reload={state.reload} />}
           <p className="small muted"><Link to="/electricity/reports">Monthly updates</Link></p>
         </Card>
 
@@ -152,6 +154,7 @@ export default function Asset() {
           </table>}
       </Card>}
 
+      {isEngine && <FaultLog log={a.fault_log} />}
       {isEngine && <ReportHistory assetId={a.id} />}
 
       {isEngine && a.hours_log.length > 1 && <Card title="Running hours by month">
@@ -300,21 +303,27 @@ function DeleteEvent({ id, onDone }) {
   return <button className="btn ghost small" disabled={busy} onClick={submit} aria-label="Remove record">✕</button>;
 }
 
-// Change a genset's faults: none, minor or major, with what is wrong.
-function FaultForm({ asset: a, reload }) {
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ level: a.fault_level || 'none', note: a.fault_note || '' });
+// Clear a genset's fault once it is fixed (it stays in the fault log).
+function MarkFixed({ asset: a, reload }) {
   const { submit, busy, error } = useSubmit(async () => {
-    await api(`/assets/${a.id}/fault`, { method: 'POST', body: { level: f.level, note: f.level === 'none' ? null : f.note.trim() || null } });
-    setOpen(false);
+    if (!window.confirm(`Mark the ${a.fault_level} fault on ${assetLabel(a)} as fixed?`)) return;
+    await api(`/assets/${a.id}/fault`, { method: 'POST', body: { level: 'none' } });
     reload();
   });
-  if (!open) return <button className="btn small ghost" onClick={() => setOpen(true)}>Change faults</button>;
-  return <form className="inline-add" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-    <ErrorBox error={error} />
-    <Select value={f.level} onChange={(v) => setF({ ...f, level: v })} options={Object.entries(FAULTS).map(([k, x]) => [k, x.label])} aria-label="Faults" />
-    {f.level !== 'none' && <input required maxLength="2000" placeholder="What is wrong" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} aria-label="Fault" />}
-    <button className="btn small primary" disabled={busy}>Save</button>
-    <button type="button" className="btn small ghost" onClick={() => setOpen(false)}>Cancel</button>
-  </form>;
+  return <><ErrorBox error={error} /><button className="btn small ghost" disabled={busy} onClick={submit}>Mark fixed</button></>;
+}
+
+// Every fault logged on this genset, newest first, and how each was cleared.
+function FaultLog({ log }) {
+  if (!log?.length) return null;
+  return <Card title={`Fault log (${log.length})`}>
+    <div className="scroll-y"><table>
+      <thead><tr><th>Logged</th><th>Fault</th><th className="hide-sm">Cleared</th></tr></thead>
+      <tbody>{log.map((l) => <tr key={l.id}>
+        <td className="small nowrap">{dateTime(l.logged_at)}{l.logged_by_name && <><br /><span className="muted">{l.logged_by_name}</span></>}</td>
+        <td className="wrap"><Fault level={l.level} /><br />{l.note}</td>
+        <td className="small hide-sm">{l.cleared_at ? <>{dateTime(l.cleared_at)}<br /><span className="muted">{[l.cleared_reason, l.cleared_by_name].filter(Boolean).join(' · ')}</span></> : <strong className="bad">Open</strong>}</td>
+      </tr>)}</tbody>
+    </table></div>
+  </Card>;
 }
