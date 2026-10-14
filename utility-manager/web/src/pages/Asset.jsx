@@ -154,7 +154,7 @@ export default function Asset() {
           </table>}
       </Card>}
 
-      {isEngine && <FaultLog log={a.fault_log} />}
+      {isEngine && <FaultLog log={a.fault_log} asset={a} manage={manage} reload={state.reload} />}
       {isEngine && <ReportHistory assetId={a.id} />}
 
       {isEngine && a.hours_log.length > 1 && <Card title="Running hours by month">
@@ -313,17 +313,20 @@ function MarkFixed({ asset: a, reload }) {
   return <><ErrorBox error={error} /><button className="btn small ghost" disabled={busy} onClick={submit}>Mark fixed</button></>;
 }
 
-// Every fault logged on this genset, newest first, and how each was cleared.
-function FaultLog({ log }) {
-  if (!log?.length) return null;
-  return <Card title={`Fault log (${log.length})`}>
+// Every fault logged on this genset, newest first, and how each was cleared;
+// a fault can be logged from here too.
+function FaultLog({ log, asset, manage, reload }) {
+  if (!log?.length && !manage) return null;
+  return <Card title={`Fault log (${log?.length || 0})`} actions={manage && <LogFaultButton asset={asset} onSaved={reload} small />}>
+    {!log?.length ? <p className="muted small">No faults logged.</p> :
     <div className="scroll-y"><table>
       <thead><tr><th>Logged</th><th>Fault</th><th className="hide-sm">Cleared</th></tr></thead>
       <tbody>{log.map((l) => <tr key={l.id}>
         <td className="small nowrap">{dateTime(l.logged_at)}{l.logged_by_name && <><br /><span className="muted">{l.logged_by_name}</span></>}</td>
         <td className="wrap"><Fault level={l.level} /><br />{l.note}</td>
-        <td className="small hide-sm">{l.cleared_at ? <>{dateTime(l.cleared_at)}<br /><span className="muted">{[l.cleared_reason, l.cleared_by_name].filter(Boolean).join(' · ')}</span></> : <strong className="bad">Open</strong>}</td>
+        <td className="small hide-sm">{l.cleared_at ? <>{dateTime(l.cleared_at)}<br /><span className="muted">{[l.cleared_reason, l.cleared_by_name].filter(Boolean).join(' · ')}</span></> : <><strong className="bad">Open</strong>
+          {manage && ['minor', 'major'].includes(asset.fault_level) && <div><MarkFixed asset={asset} reload={reload} /></div>}</>}</td>
       </tr>)}</tbody>
-    </table></div>
+    </table></div>}
   </Card>;
 }
