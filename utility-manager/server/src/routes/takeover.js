@@ -41,18 +41,21 @@ export default async function takeoverRoutes(app) {
   app.get('/takeover', async () => {
     const { rows } = await db.query(`${SELECT} order by t.atoll_code, t.name`);
     const islands = rows.map((i) => ({ ...i, state: islandState(i) }));
+    // Islands outside the census's 187 (counted = false) are on the list and
+    // the map, but not in the counts.
+    const counted = islands.filter((i) => i.counted !== false);
     const count = (list, state) => list.filter((i) => i.state === state).length;
     const atolls = NATIONAL_ATOLLS.map((a) => {
-      const list = islands.filter((i) => i.atoll_code === a.code);
+      const list = counted.filter((i) => i.atoll_code === a.code);
       return { ...a, islands: list.length, taken_over: count(list, 'taken_over'), pending: count(list, 'pending'), not_set: count(list, 'not_set') };
     });
     const services = Object.fromEntries(TAKEOVER_SERVICES.map((k) => [k, {
-      taken_over: islands.filter((i) => i[`${k}_status`] === 'taken_over').length,
-      pending: islands.filter((i) => i[`${k}_status`] === 'pending').length,
+      taken_over: counted.filter((i) => i[`${k}_status`] === 'taken_over').length,
+      pending: counted.filter((i) => i[`${k}_status`] === 'pending').length,
     }]));
     return {
       expected_islands: INHABITED_ISLANDS,
-      totals: { islands: islands.length, taken_over: count(islands, 'taken_over'), pending: count(islands, 'pending'), not_set: count(islands, 'not_set') },
+      totals: { islands: counted.length, taken_over: count(counted, 'taken_over'), pending: count(counted, 'pending'), not_set: count(counted, 'not_set') },
       services, atolls, islands,
     };
   });
