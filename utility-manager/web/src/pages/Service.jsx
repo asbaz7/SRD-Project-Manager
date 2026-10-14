@@ -7,11 +7,11 @@ import { Icon } from '../components/icons.jsx';
 import { AssetStatus, Async, Card, Condition, ConditionMeter, Empty, PageHead, Pager, Progress, ProjectState, Select, Severity, Stat, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, licenceSummary, month, num, power, since, withUnit } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
-import ConditionReports from './ConditionReports.jsx';
+import GensetUpdates from './GensetUpdates.jsx';
 import Engines from './Engines.jsx';
 
 const TABS = {
-  electricity: [['', 'Overview'], ['engines', 'Engines'], ['reports', 'Condition reports'], ['plants', 'Powerhouses']],
+  electricity: [['', 'Overview'], ['engines', 'Engines'], ['reports', 'Updates'], ['plants', 'Powerhouses']],
   water: [['', 'Overview'], ['assets', 'Assets'], ['plants', 'Plants']],
   sewerage: [['', 'Overview'], ['assets', 'Assets'], ['plants', 'Plants']],
 };
@@ -26,7 +26,7 @@ export default function Service({ svc }) {
   const { can, allowed, technical } = useAuth();
   if (!technical) return <>
     <PageHead title={SERVICES[svc].label} icon={svc} tone={svc} />
-    <Card><p>This section holds technical information (engines, condition reports, assets and plants) and is available to technical staff.</p>
+    <Card><p>This section holds technical information (engines, monthly updates, assets and plants) and is available to technical staff.</p>
       <p className="muted small">You can follow <Link to={`/work?service=${svc}`}>{SERVICES[svc].label.toLowerCase()} work</Link>, <Link to={`/interruptions?service=${svc}`}>interruptions</Link> and <Link to={`/projects?service=${svc}`}>projects</Link>.</p></Card>
   </>;
   return <>
@@ -42,7 +42,7 @@ export default function Service({ svc }) {
     </nav>
     {tab === '' && <ServiceOverview svc={svc} />}
     {tab === 'engines' && svc === 'electricity' && <Engines embedded />}
-    {tab === 'reports' && svc === 'electricity' && <ConditionReports embedded />}
+    {tab === 'reports' && svc === 'electricity' && <GensetUpdates />}
     {tab === 'assets' && <ServiceAssets svc={svc} />}
     {tab === 'plants' && <Plants svc={svc} />}
   </>;
@@ -86,7 +86,7 @@ function ServiceOverview({ svc }) {
             sub={`${d.engines.alt_service_due} alternator services due${d.engines.alt_requested ? ` (${d.engines.alt_requested} requested by islands)` : ''}`} to="/electricity/engines?flag=overhaul" />}
           <Stat label="Work ongoing" value={d.work.length} to={`/work?service=${svc}`} />
           <Stat label="Open interruptions" value={d.incidents.length} tone={d.incidents.some((x) => x.severity === 'critical') ? 'alert' : ''} to={`/interruptions?service=${svc}&status=open`} />
-          {isEl && <Stat label={`Reports for ${month(d.reports.expected_month)}`} value={d.reports.missing.length ? `${d.reports.missing.length} missing` : 'All in'}
+          {isEl && <Stat label={`Updates for ${month(d.reports.expected_month)}`} value={d.reports.missing.length ? `${d.reports.missing.length} due` : 'All in'}
             tone={d.reports.missing.length ? 'warn' : ''} to="/electricity/reports" />}
         </div>
 
@@ -94,9 +94,9 @@ function ServiceOverview({ svc }) {
           <Card title="Engine condition" actions={<Link to="/electricity/engines" className="btn small ghost">All engines</Link>}>
             <ConditionMeter e={d.engines} />
           </Card>
-          <Card title={`Condition reports for ${month(d.reports.expected_month)}`} actions={<Link to="/electricity/reports" className="btn small">Upload</Link>}>
-            {d.reports.missing.length === 0 ? <p className="all-clear"><Icon name="check" /> Every powerhouse that reports has sent it.</p> : <>
-              <p className="small">{d.reports.missing.length} powerhouse{d.reports.missing.length === 1 ? ' has' : 's have'} not sent this month's report:</p>
+          <Card title={`Monthly updates for ${month(d.reports.expected_month)}`} actions={<Link to="/electricity/reports" className="btn small">Updates</Link>}>
+            {d.reports.missing.length === 0 ? <p className="all-clear"><Icon name="check" /> Every powerhouse is up to date.</p> : <>
+              <p className="small">{d.reports.missing.length} powerhouse{d.reports.missing.length === 1 ? ' is' : 's are'} due an update:</p>
               <p className="small">{d.reports.missing.map((r, i) => <span key={r.facility_id}>{i > 0 && ' · '}<Link to={`/islands/${r.island_id}`}>{r.atoll_code} {r.island_name}</Link>
                 <span className="muted"> ({r.report_month ? `last ${month(r.report_month)}` : 'none yet'})</span></span>)}</p>
             </>}
@@ -119,7 +119,7 @@ function ServiceOverview({ svc }) {
               // No work yet: log it from here, filled in from the fault.
               const fault = (a.condition_source === 'status' ? a.condition_note : a.fault) || a.status_note || '';
               const logWork = canLog && !a.work_title && `/work/new${qs({ asset_id: a.id, kind: 'repair',
-                title: `${assetLabel(a)}: ${fault || (a.condition ? 'fault in condition report' : 'out of service')}`.slice(0, 200),
+                title: `${assetLabel(a)}: ${fault || (a.condition ? 'fault in the monthly update' : 'out of service')}`.slice(0, 200),
                 description: [a.status_text && `Report says: ${a.status_text}`, fault].filter(Boolean).join('\n') || undefined,
                 fault_report_month: a.condition_source === 'report' ? a.report_month : undefined })}`;
               return <li key={a.id} className={logWork ? 'with-action' : ''}><Link to={`/assets/${a.id}`}>
@@ -189,7 +189,7 @@ function Plants({ svc }) {
                 {f.open_work > 0 && <span className="flag info">🔧 {f.open_work}</span>}
               </div>
               {licenceState(f) && <div className="row"><span className={`flag ${licenceState(f).tone}`}>{licenceState(f).text}</span></div>}
-              {f.report_state && <div className="row"><span className={`state ${f.report_state}`}>Report: {f.report_month ? month(f.report_month) : 'none yet'}</span></div>}
+              {f.report_state && <div className="row"><span className={`state ${f.report_state}`}>Updated: {f.report_month ? month(f.report_month) : 'none yet'}</span></div>}
             </Link>
           ))}</div>
         </Card>

@@ -321,7 +321,7 @@ export function createTelegram({ db, config, log }) {
         const fault = !out && ['minor_fault', 'major_fault'].includes(a.condition) ? CONDITION_LABEL[a.condition] : null;
         const state = a.status === 'maintenance' ? 'in maintenance' : fault ? `${a.status}, ${fault}` : a.status;
         const note = (a.condition_source === 'status' ? a.condition_note : null) || a.status_note || a.fault;
-        const why = note && (out || fault) ? `: ${esc(String(note).replace(/^Condition report \d{4}-\d{2}: /, '').slice(0, 90))}` : '';
+        const why = note && (out || fault) ? `: ${esc(String(note).replace(/^(Condition report|Monthly update) \d{4}-\d{2}: /, '').slice(0, 90))}` : '';
         const work = (a.open_work || []).map((w) => `🔧 ${workRef(w.id)} (${WORK_STATE_LABEL[w.status] || w.status})`).join(' ');
         lines.push(`${STATUS_ICON[a.status] || ''} ${esc(assetName(a))}: ${esc(state)}${why}${work ? ` · ${work}` : ''}`);
       }
@@ -333,7 +333,7 @@ export function createTelegram({ db, config, log }) {
         ? `\n   ↳ ${esc(String(w.last_update).replace(/\s+/g, ' ').slice(0, 160))} · ${when(w.last_update_at)}${w.last_update_by ? ` · ${esc(w.last_update_by)}` : ''}` : ''}`));
     }
     const month = isl.reports?.[0]?.report_month;
-    if (month) lines.push('', `Latest condition report: ${new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}`);
+    if (month) lines.push('', `Last monthly update: ${new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}`);
     lines.push('', link(`/islands/${r.island.id}`, 'Open on the website'));
     return lines.join('\n');
   }

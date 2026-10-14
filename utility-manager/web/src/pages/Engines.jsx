@@ -73,7 +73,7 @@ export default function Engines({ embedded }) {
                 </td>
                 <td><EngineState e={e} /></td>
                 <td className="wrap hide-sm small">{(e.condition_source === 'status' ? e.condition_note : e.fault) || <span className="muted">—</span>}
-                  {e.condition_source === 'status' && e.fault && <><br /><span className="muted">Report: {e.fault}</span></>}</td>
+                  {e.condition_source === 'status' && e.fault && <><br /><span className="muted">Monthly update: {e.fault}</span></>}</td>
                 <td className="num">{e.hours_since_overhaul != null ? `${num(e.hours_since_overhaul)} h` : '—'}
                   {e.hours_to_overhaul != null && <><br /><small className={e.hours_to_overhaul <= 0 ? 'bad' : 'muted'}>{e.hours_to_overhaul <= 0 ? `${num(-e.hours_to_overhaul)} h over` : `${num(e.hours_to_overhaul)} h to go`}</small></>}</td>
                 <td className="num hide-sm">{e.total_hours != null ? num(e.total_hours) : '—'}</td>

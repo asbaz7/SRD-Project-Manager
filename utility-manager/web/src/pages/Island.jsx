@@ -4,6 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
+import { GensetUpdateForm } from './GensetUpdates.jsx';
 import { useApi, useRowLink } from '../hooks.js';
 
 export default function Island() {
@@ -67,6 +68,7 @@ export default function Island() {
         <Card key={f.id} className={f.active ? '' : 'inactive'}
           title={<><Service value={f.service} short /> {f.name} <span className="muted small">· {FACILITY_KINDS[f.kind]}{!f.active && ' · not in use'}</span></>}
           actions={<>
+            {manage && island.technical && f.active && f.kind === 'powerhouse' && f.service === 'electricity' && <button className="btn small" onClick={() => setModal({ type: 'update', facilityId: f.id })}>Monthly update</button>}
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'asset', facilityId: f.id })}>Add asset</button>}
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'facility', facility: f })}>Edit</button>}
           </>}>
@@ -74,8 +76,8 @@ export default function Island() {
             {f.water_capacity_m3 && `Water storage ${num(f.water_capacity_m3)} m³`}
             {f.kind === 'powerhouse' && (() => {
               const r = island.reports.find((x) => x.facility_id === f.id);
-              return <> · Condition report: {r ? <strong>{month(r.report_month)}</strong> : 'none yet'}
-                {peakLoad(r) && ` · peak ${peakLoad(r)}`} · <Link to="/electricity/reports">upload</Link></>;
+              return <> · Last monthly update: {r ? <strong>{month(r.report_month)}</strong> : 'none yet'}
+                {peakLoad(r) && ` · peak ${peakLoad(r)}`}</>;
             })()}
           </p>}
           {f.service !== 'electricity' && (f.handover_on || licenceState(f)) && <p className="small">
@@ -122,6 +124,7 @@ export default function Island() {
       ))}
       {island.notes && <Card title="Notes"><p className="pre">{island.notes}</p></Card>}
 
+      {modal?.type === 'update' && <GensetUpdateForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.type === 'facility' && <FacilityForm islandId={island.id} facility={modal.facility} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.type === 'asset' && <AssetForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
     </>;

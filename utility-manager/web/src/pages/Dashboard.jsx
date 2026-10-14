@@ -25,13 +25,13 @@ function attentionItems(d) {
       sub: waiting.slice(0, 4).map((x) => `${x.doc_type} ${x.ref}`).join(' · ') + (waiting.length > 4 ? ' …' : '') });
   }
   const e = d.engines || {};
-  if (e.not_running) items.push({ tone: 'bad', mark: e.not_running, to: '/electricity/engines?condition=not_running', text: `${e.not_running} engine${e.not_running === 1 ? '' : 's'} not running`, sub: 'From the latest condition reports' });
+  if (e.not_running) items.push({ tone: 'bad', mark: e.not_running, to: '/electricity/engines?condition=not_running', text: `${e.not_running} engine${e.not_running === 1 ? '' : 's'} not running`, sub: 'From the latest monthly updates' });
   if (e.major_fault) items.push({ tone: 'serious', mark: e.major_fault, to: '/electricity/engines?condition=major_fault', text: `${e.major_fault} engine${e.major_fault === 1 ? '' : 's'} with a major fault`, sub: 'Still running — check before they fail' });
   for (const svc of ['water', 'sewerage']) {
     const down = (d.assets_down || []).filter((a) => a.service === svc);
     if (down.length) items.push({ tone: 'bad', mark: down.length, to: `/${svc}`, text: `${down.length} ${SERVICES[svc].label.toLowerCase()} asset${down.length === 1 ? '' : 's'} out of service`, sub: down.slice(0, 3).map((a) => `${a.atoll_code} ${a.island_name} ${assetLabel(a)}`).join(' · ') });
   }
-  if (d.reports?.missing.length) items.push({ tone: 'warn', mark: d.reports.missing.length, to: '/electricity/reports', text: `${d.reports.missing.length} condition report${d.reports.missing.length === 1 ? '' : 's'} missing for ${month(d.reports.expected_month)}`, sub: d.reports.missing.slice(0, 4).map((r) => `${r.atoll_code} ${r.island_name}`).join(' · ') + (d.reports.missing.length > 4 ? ' …' : '') });
+  if (d.reports?.missing.length) items.push({ tone: 'warn', mark: d.reports.missing.length, to: '/electricity/reports', text: `${d.reports.missing.length} powerhouse${d.reports.missing.length === 1 ? '' : 's'} due a monthly update for ${month(d.reports.expected_month)}`, sub: d.reports.missing.slice(0, 4).map((r) => `${r.atoll_code} ${r.island_name}`).join(' · ') + (d.reports.missing.length > 4 ? ' …' : '') });
   for (const w of d.work.filter((x) => x.overdue)) {
     items.push({ tone: 'warn', mark: '⏱', to: `/work/${w.id}`, text: `${w.title} — past target date`, sub: `${w.atoll_code} ${w.island_name} · target ${date(w.target_on)}` });
   }
@@ -92,7 +92,7 @@ export default function Dashboard() {
         <div className={d.technical ? 'grid-2' : ''}>
           {d.technical && <Card title="Engine condition" actions={<Link to="/electricity/engines" className="btn small ghost">All engines</Link>}>
             <ConditionMeter e={d.engines} />
-            <p className="muted small">{d.engines.total} gensets · from the latest monthly condition reports</p>
+            <p className="muted small">{d.engines.total} gensets · from the latest monthly updates</p>
           </Card>}
           <Card title={`Work in progress (${d.work.length})`} actions={can('manager') && (technical || user?.headOf?.length > 0) && <Link to="/work/new" className="btn small">Log work</Link>}>
             {d.work.length === 0 ? <Empty>No work in progress.</Empty> :

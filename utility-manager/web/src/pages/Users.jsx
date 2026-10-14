@@ -13,7 +13,7 @@ export default function Users() {
       <p className="muted small">
         <strong>Managers</strong> make changes across all islands; <strong>staff</strong> do what is ticked for them (send documents, report interruptions, update work, create projects); <strong>viewers</strong> only look;
         <strong> administrators</strong> manage everything, including users. The system is for head office staff. <strong>Technical</strong> staff also see engines,
-        condition reports, assets and plants; <strong>non-technical</strong> staff see work, interruptions and the projects shared with them.
+        monthly genset updates, assets and plants; <strong>non-technical</strong> staff see work, interruptions and the projects shared with them.
       </p>
       <Async state={state}>{(users) => (
         <table>
@@ -75,7 +75,7 @@ function UserForm({ user, onClose, onSaved }) {
           ))}
           <p className="muted small">Otherwise staff can view, sign documents sent to them and comment on work they are added to.</p>
         </fieldset>}
-        {f.role !== 'admin' && <Field label="Staff type" hint={f.technical ? `Sees engines, condition reports, assets and plants${f.role === 'manager' ? ', and runs work' : ''}.` : 'Sees work, interruptions and the projects shared with them; can comment on work they are added to.'}>
+        {f.role !== 'admin' && <Field label="Staff type" hint={f.technical ? `Sees engines, monthly genset updates, assets and plants${f.role === 'manager' ? ', and runs work' : ''}.` : 'Sees work, interruptions and the projects shared with them; can comment on work they are added to.'}>
           <Select value={f.technical ? 'technical' : 'non'} onChange={(v) => setF({ ...f, technical: v === 'technical' })}
             options={[['technical', 'Technical'], ['non', 'Non-technical']]} /></Field>}
         <Field label={user ? 'Reset password (optional)' : 'Temporary password'} hint="At least 10 characters with letters and numbers. They must change it at first sign-in.">

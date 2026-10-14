@@ -575,3 +575,8 @@ input.qty { width: 80px; text-align: right; }
 .small-pill { margin-left: 6px; font-size: .7rem; padding: 1px 7px; }
 .versions { margin: 6px 0 0; padding-left: 18px; font-size: .85rem; }
 .versions li { margin: 2px 0; }
+
+/* Monthly genset update form */
+.update-table td { vertical-align: top; }
+.update-table input:not([type=checkbox]) { min-width: 0; }
+.update-table td:nth-child(4) input { width: 100%; min-width: 160px; }

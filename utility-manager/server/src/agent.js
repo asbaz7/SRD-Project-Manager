@@ -37,7 +37,7 @@ const SYSTEM = `You are the SRD Utility assistant on Telegram, for the head offi
 How to work:
 - Look things up with the tools. Never guess figures, names, statuses or dates. If a tool returns an error or nothing, say so plainly.
 - Islands are written with their atoll code, like "ADh. Fenfushi" or "K. Maafushi". Use find_island to turn a name into an id; if several islands match, ask which one.
-- Gensets are called "Genset 2", "G2" or "engine 2". Each powerhouse files a monthly condition report per genset (condition, running hours, faults); get_island and list_engines include the latest one.
+- Gensets are called "Genset 2", "G2" or "engine 2". Each powerhouse is updated once a month in the app (each genset's running hours, condition, faults, overhaul / alternator flags); get_island and list_engines include the latest. Older months came from condition report workbooks, no longer used.
 - Work orders (WO-0001, WO-0002…; the number is the work_id) are jobs on equipment: repairs, overhauls, services, genset moves. Use list_work / get_work for them.
 - Projects (PRJ-0001, PRJ-0002…; the number is the project_id) are separate from work orders: larger efforts such as installations, studies or the Powerhouse Takeover, with a progress % and often a task list (codes like TKO-001, priorities P1-P4). When someone asks about projects, use list_projects / get_project, never the work tools; when they ask about works, jobs or repairs, use list_work.
 - To record anything (a genset's status, an update on work, an interruption, new work), call the matching tool. The person is then shown exactly what will be written and taps ✅ or ❌, so don't ask "shall I?" first. Do ask first when it's unclear which island, genset or work order they mean.
@@ -116,19 +116,19 @@ function buildTools(db) {
       run: (user, _, asUser) => get(asUser, user, '/dashboard'),
     },
     get_island: {
-      description: "One island in full: its plants and their assets (each genset's status, latest condition report, faults, open work), ongoing work with the latest update, and recent condition reports.",
+      description: "One island in full: its plants and their assets (each genset's status, latest monthly update, faults, open work), ongoing work with the latest update, and recent condition reports.",
       schema: z.object({ island_id: id }),
       run: (user, { island_id }, asUser) => get(asUser, user, `/islands/${island_id}`),
     },
     list_engines: {
-      description: 'Gensets across the region (or one atoll or island) with capacity, status, latest condition report, running hours and what is due. Filter rather than reading the whole region: by status (e.g. all disconnected or down gensets), by condition (e.g. all faults) or by flag (e.g. overdue overhauls).',
+      description: 'Gensets across the region (or one atoll or island) with capacity, status, latest monthly update, running hours and what is due. Filter rather than reading the whole region: by status (e.g. all disconnected or down gensets), by condition (e.g. all faults) or by flag (e.g. overdue overhauls).',
       schema: z.object({
         island_id: id.optional(),
         atoll,
         status: z.enum(LISTED_STATUSES).optional()
           .describe("The genset's status as set on it; disconnected = installed but not connected to the network"),
         condition: z.enum(['ok', 'minor_fault', 'major_fault', 'not_running', 'no_report', 'faults', 'retired']).optional()
-          .describe('From the condition reports. faults = minor, major or not running'),
+          .describe('From the monthly updates. faults = minor, major or not running'),
         flag: z.enum(['overhaul', 'alternator', 'work', 'stale']).optional()
           .describe('overhaul / alternator = service due; work = has open work; stale = report out of date'),
         q: z.string().max(100).optional().describe('Text search: tag, model, serial, island or fault'),
@@ -381,7 +381,7 @@ export function createAgent({ db, config, log }) {
 
   function context(user) {
     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: config.timezone });
-    const access = user.technical ? 'technical staff' : 'non-technical staff: gensets, plants and condition reports are not available to them';
+    const access = user.technical ? 'technical staff' : 'non-technical staff: gensets, plants and monthly updates are not available to them';
     return `Today is ${today}. You are talking to ${user.full_name} (${user.role}, ${access}).`;
   }
 

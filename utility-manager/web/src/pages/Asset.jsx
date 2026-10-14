@@ -60,18 +60,18 @@ export default function Asset() {
               {why && <><dt>{fromStatus && a.status !== 'down' ? 'Note' : 'Fault'}</dt><dd>{why}</dd></>}
               {fromStatus && <>
                 <dt>Source</dt><dd>Status update · {dateTime(c.condition_at)}{a.status_by_name && ` · ${a.status_by_name}`}</dd>
-                {c.report_month && <><dt>Last report</dt><dd className="muted">{month(c.report_month)}: <Condition value={c.report_condition} text={c.status_text} />{c.fault && ` · ${c.fault}`}</dd></>}
+                {c.report_month && <><dt>Last update</dt><dd className="muted">{month(c.report_month)}: <Condition value={c.report_condition} text={c.status_text} />{c.fault && ` · ${c.fault}`}</dd></>}
               </>}
               {!fromStatus && c?.report_month && <>
-                <dt>Source</dt><dd>{month(c.report_month)} report{c.uploaded_by_name && ` · uploaded by ${c.uploaded_by_name}`}</dd>
-                {c.status_text && <><dt>Report says</dt><dd className="muted">{c.status_text}</dd></>}
+                <dt>Source</dt><dd>{c.source === 'update' ? `${month(c.report_month)} monthly update` : `${month(c.report_month)} report`}{c.uploaded_by_name && ` · ${c.uploaded_by_name}`}</dd>
+                {c.status_text && c.source !== 'update' && <><dt>Report says</dt><dd className="muted">{c.status_text}</dd></>}
               </>}
-              {!c && <><dt>Source</dt><dd className="muted">No condition report uploaded yet</dd></>}
+              {!c && <><dt>Source</dt><dd className="muted">No monthly update yet</dd></>}
             </dl>;
           })()}
           <p className={`small ${e.report_stale ? 'bad' : 'muted'}`}>
-            {e.report_stale ? '⚠ A newer monthly report is due. ' : c?.condition_source === 'status' ? 'The next monthly report will update this. ' : ''}
-            <Link to="/electricity/reports">Upload report</Link>
+            {e.report_stale ? '⚠ This month\'s update is due. ' : c?.condition_source === 'status' ? 'The next monthly update will update this. ' : ''}
+            <Link to={`/electricity/reports`}>Monthly updates</Link>
           </p>
         </Card>
 
@@ -146,7 +146,7 @@ export default function Asset() {
         </tr>)}</tbody></table>
       </Card>}
       {isEngine && <Card title="Maintenance history" actions={manage && <button className="btn small" onClick={() => setModal('event')}>Add record</button>}>
-        {a.maintenance.length === 0 ? <Empty>No maintenance recorded yet. Uploading condition reports fills this in automatically.</Empty> :
+        {a.maintenance.length === 0 ? <Empty>No maintenance recorded yet. Add overhauls and services here, or complete a work order for them.</Empty> :
           <table>
             <thead><tr><th>Date</th><th>What</th><th className="num hide-sm">At hours</th><th className="hide-sm">Source</th><th /></tr></thead>
             <tbody>{a.maintenance.map((m) => <tr key={m.id}>
@@ -193,9 +193,9 @@ export default function Asset() {
   }}</Async>;
 }
 
-// Every monthly report received for this engine, newest first. When Fleet
-// Manager and an uploaded sheet both gave a month, both rows show and the
-// figures that disagree are marked.
+// Every monthly record for this engine, newest first: monthly updates, and
+// the reports received before them. When two sources gave the same month,
+// both rows show and the figures that disagree are marked.
 const REPORT_COLS = [
   ['status_text', 'Report says'], ['total_hours', 'Hours', num], ['last_overhaul_on', 'Overhaul', date],
   ['last_alt_service_on', 'Alternator', date], ['last_valve_on', 'Valves', date], ['last_battery_on', 'Battery', date],
@@ -206,17 +206,17 @@ function ReportHistory({ assetId }) {
   if (!rows.length) return null;
   const byMonth = Object.groupBy ? Object.groupBy(rows, (r) => r.report_month) : rows.reduce((m, r) => ({ ...m, [r.report_month]: [...(m[r.report_month] || []), r] }), {});
   const differs = (r, k) => (byMonth[r.report_month] || []).some((o) => o !== r && String(o[k] ?? '') !== String(r[k] ?? ''));
-  return <Card title="Reports by month">
+  return <Card title="Monthly history">
     <div className="scroll-y"><table>
       <thead><tr><th>Month</th><th>Condition</th>{REPORT_COLS.map(([k, label]) => <th key={k} className={k === 'status_text' ? 'hide-sm' : 'num hide-sm'}>{label}</th>)}<th className="hide-sm">From</th></tr></thead>
       <tbody>{rows.map((r) => <tr key={`${r.report_month}${r.source}`}>
         <td className="nowrap">{month(r.report_month)}</td>
         <td className={differs(r, 'condition') ? 'differs' : ''}><Condition value={r.condition} />{r.fault && <div className="small wrap">{r.fault}</div>}</td>
         {REPORT_COLS.map(([k, , f]) => <td key={k} className={`${k === 'status_text' ? 'small wrap' : 'num nowrap'} hide-sm ${differs(r, k) ? 'differs' : ''}`}>{r[k] == null ? '—' : f ? f(r[k]) : r[k]}</td>)}
-        <td className="small muted hide-sm nowrap">{r.source === 'fleet_manager' ? 'Fleet Manager' : 'Upload'}</td>
+        <td className="small muted hide-sm nowrap">{{ fleet_manager: 'Fleet Manager', upload: 'Workbook', update: 'Monthly update' }[r.source] || r.source}</td>
       </tr>)}</tbody>
     </table></div>
-    {rows.some((r) => REPORT_COLS.some(([k]) => differs(r, k)) || differs(r, 'condition')) && <p className="muted small">Highlighted: Fleet Manager and the uploaded sheet disagree for that month.</p>}
+    {rows.some((r) => REPORT_COLS.some(([k]) => differs(r, k)) || differs(r, 'condition')) && <p className="muted small">Highlighted: two sources disagree for that month.</p>}
   </Card>;
 }
 

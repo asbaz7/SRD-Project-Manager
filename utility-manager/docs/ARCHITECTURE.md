@@ -179,7 +179,7 @@ to send genset condition reports; on 14 Oct it was disconnected
   reports (`POST /condition-reports`) are gone;
 - its token is revoked and its service account switched off;
 - the 146 genset reports it sent (Jul-Oct 2026) stay in the history, marked
-  `fleet_manager`. New reports come only from workbooks uploaded here.
+  `fleet_manager`. New records come only from monthly updates entered in the app.
 
 The system's own Telegram bot (@SRDmanagerbot) is part of it, not an outside
 system.
@@ -419,18 +419,6 @@ a different engine, that record is kept, marked removed. Serials corrected
 by hand (`serial_locked`, migration 011) win over the report. Serials are
 compared on letters and digits only, from 5 characters up.
 
-## Condition report parsing safeguards
-
-- **Missing "GENSET NO." label:** if the label was typed over, the genset
-  numbers are read from the row just above the first engine field. This
-  happened on Thulusdhoo's April to August 2026 sheets ("pr"), which used to
-  be skipped silently.
-- **Upload warnings in the preview:**
-  - sheets that look like reports but can't be read;
-  - sheets read without the label;
-  - a latest month that is the same as the one already stored;
-  - a latest month older than the month now expected.
-
 ## Telegram bot (added Oct 2026)
 
 `src/telegram.js`, `routes/telegram.js`, migration 006.
@@ -468,34 +456,28 @@ The system's main job is now **engine condition**: what state every genset
 is in, when it was last overhauled and its alternator last serviced, what
 maintenance has been done, and what work is going on.
 
-**Monthly condition reports.** Every powerhouse fills in the standard
-ENGINE CONDITION REPORT Excel template every month: one column per genset,
-one row per field, usually one sheet per month. Managers upload these files
-unchanged (`/reports`):
+**Monthly genset updates** (Oct 2026, migration 050; replaced the condition
+report workbooks). Once a month each powerhouse's gensets are updated in the
+app (Electricity → Updates, or Monthly update on the island page) by
+technical managers: per genset its **running hours**, **condition** (OK,
+minor fault, major fault, not running), the **fault**, and whether it
+**needs an overhaul** or an **alternator service**
+(`routes/gensetUpdates.js`, `applyGensetUpdate` in `gensetRecords.js`):
+- a lower hours reading is refused unless "meter replaced" is ticked;
+- hours since overhaul / valve clearance carry forward from the last record,
+  or restart from a service recorded since (with its hours); service dates,
+  capable and max load carry forward from the last record. Service dates
+  themselves come from maintenance records and completed work;
+- it is kept month by month (`engine_reports`, source `update`), becomes the
+  latest (`engine_conditions`, `powerhouse_reports`), logs the month's hours
+  (`hours_log`), and sets the running state (not running → down, which opens
+  repair work; a disconnected or retired genset keeps its status);
+- a powerhouse's update for a month is **due** once the 10th of the next
+  month has passed (`expectedMonth()`).
 
-1. `server/src/xlsx.js` reads the workbook (a small pure-JS reader that runs
-   on Node and Workers). `server/src/conditionReport.js` interprets the
-   template. It accepts the formats the islands actually use: dates such as
-   `21.02.2021`, `13/07/2019` and real dates; hours such as `13886:22`,
-   `4189 Hours.`, `35721 HRM` and `[h]:mm` cells; and status text such as
-   `RUNNING; MINOR FAULT`. It works out which month each sheet covers, and
-   corrects "hours since" figures that are really hours *at* the service.
-2. `server/src/reportImport.js` matches the file to its island, tolerating
-   spelling differences (`KUMBURUDHOO` → Kunburudhoo, `K. VILLINGILLI` →
-   Villingili). It shows a preview, then on import:
-   - keeps only the **latest** condition per genset (`engine_conditions`)
-     and per powerhouse (`powerhouse_reports`). Files are not stored, and an
-     older report never overwrites a newer one;
-   - adds every dated event found in **any** month of the file (overhaul,
-     alternator service, valve clearance, battery change) to
-     `maintenance_events`, which is kept for good and de-duplicated;
-   - records total running hours per month (`hours_log`) for trends;
-   - fills the genset register (make/model, serials, alternator, installed
-     date) and adds gensets the register lacks;
-   - sets the asset's running status from the report when the report is
-     newer than the last recorded status.
-3. A powerhouse's report is **missing** once the 10th of the following month
-   has passed (`expectedMonth()`).
+Reports received before (uploaded workbooks, `upload`; Fleet Manager,
+`fleet_manager`) stay as history and were the starting point. The workbook
+reader and the upload screens are gone.
 
 **Schedules.** Next overhaul (running hours and/or date) and next alternator
 service are fields on each genset (`next_overhaul_hours`, `next_overhaul_on`,
@@ -521,10 +503,10 @@ history.
 | Method | Path | Who | Purpose |
 |---|---|---|---|
 | GET | `/engines?condition&flag&atoll_id&q&sort` (CSV) | any | Fleet view with summary counts |
-| GET | `/condition-reports` | any | Every powerhouse's latest report, and whether it is missing |
+| GET | `/condition-reports` | any | Every powerhouse's latest monthly record, and whether an update is due |
 | GET | `/condition-reports/history?facility_id\|asset_id&from&to` | any | Report history month by month, per source |
-| POST | `/condition-reports/preview` | manager | Read an uploaded `.xlsx` (base64), match its island and show the changes. Saves nothing |
-| POST | `/condition-reports/import` | manager | Apply it for the confirmed island |
+| GET | `/facilities/:id/genset-update` | technical | The monthly update form: the powerhouse's gensets with their last figures |
+| POST | `/facilities/:id/genset-update` | technical manager | Save a monthly update (`items`: asset_id, total_hours, meter_replaced, condition, fault, needs_overhaul, alt_needs_service) |
 | GET / PUT | `/service-intervals` | read: any · write: technical manager | Overhaul (hours) and alternator service (months) intervals: the region's, and per model (matched on part of the make / model, e.g. `KTA38`) |
 | PATCH | `/assets/:id` with `next_overhaul_on`, `next_overhaul_hours`, `next_alt_service_on` | manager | Set the next service on one genset; wins over the interval until a later service is recorded |
 | POST | `/assets/:id/maintenance` | manager | Add a maintenance record by hand |
