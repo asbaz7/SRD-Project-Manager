@@ -31,6 +31,9 @@
   // Query caching is DISABLED on this config (`wrangler hyperdrive update <id>
   // --caching-disabled true`): with it on, lists showed old data for up to a
   // minute after a change (e.g. a new user not appearing until refresh).
+  // Uploaded files (project, document and survey files): R2 bucket
+  // "srd-utility-files", Asia-Pacific. See src/files.js.
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "srd-utility-files" }],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
