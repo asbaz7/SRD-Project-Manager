@@ -610,3 +610,17 @@ input.qty { width: 80px; text-align: right; }
 .tko-pill.pending { color: var(--warn); background: color-mix(in srgb, var(--warn-fill) 18%, transparent); }
 .tko-state.taken_over { color: var(--good); } .tko-state.pending { color: var(--warn); } .tko-state.not_set { color: var(--muted); }
 .tko-service-input { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Pinned priority project on the dashboard */
+.card.pinned { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--good-fill) 55%, transparent), var(--shadow); }
+.pin-label { display: inline-block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--good); margin-right: 8px; }
+.pinned-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.pinned-figure { display: flex; flex-direction: column; min-width: 120px; }
+.pinned-figure strong { font-size: 2.4rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.atoll-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.atoll-chip { display: inline-flex; flex-direction: column; align-items: center; min-width: 46px; padding: 4px 8px; border-radius: 10px; font-weight: 700; font-size: .8rem; color: var(--text); background: var(--track); border: 1px solid transparent; }
+.atoll-chip:hover { text-decoration: none; background: var(--glass-hover); }
+.atoll-chip small { font-weight: 500; font-size: .68rem; color: var(--muted); }
+.atoll-chip.taken { border-color: var(--good-fill); background: color-mix(in srgb, var(--good-fill) 16%, transparent); }
+.atoll-chip.pending { border-color: var(--warn-fill); background: color-mix(in srgb, var(--warn-fill) 14%, transparent); }
+.atoll-chip.part { border-color: var(--warn-fill); background: linear-gradient(90deg, color-mix(in srgb, var(--good-fill) 22%, transparent), color-mix(in srgb, var(--warn-fill) 14%, transparent)); }

@@ -50,6 +50,8 @@ export default function Dashboard() {
     <PageHead title={`${greeting()}, ${user.fullName.split(' ')[0]}`} subtitle={new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Indian/Maldives' })}
       actions={<Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
         options={(atolls.data || []).map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />} />
+    {/* Pinned: the department's top priority right now. */}
+    {takeover.data && <TakeoverTile t={takeover.data} />}
     <Async state={state}>{(d) => {
       const items = attentionItems(d);
       const el = d.services.electricity;
@@ -89,8 +91,6 @@ export default function Dashboard() {
               ]} />;
           })}
         </div>}
-
-        {takeover.data && <TakeoverTile t={takeover.data} />}
 
         <div className={d.technical ? 'grid-2' : ''}>
           {d.technical && <Card title="Engine condition" actions={<Link to="/electricity/engines" className="btn small ghost">All engines</Link>}>
@@ -147,12 +147,33 @@ function ServiceTile({ svc, s, hero, facts }) {
   );
 }
 
-// The national takeover at a glance (FENAKA → STELCO), linking to its page.
+// Pinned at the top: the national takeover (FENAKA → STELCO), the
+// department's top priority. Progress against the 187 inhabited islands,
+// each service, and every atoll (tap one to open it on the Takeover page).
 function TakeoverTile({ t }) {
-  const p = t.expected_islands ? Math.round((t.totals.taken_over / t.expected_islands) * 100) : 0;
-  return <Card title="National takeover" actions={<Link to="/takeover" className="btn small ghost">Open</Link>}>
-    <div className="tko-bar"><span style={{ width: `${p}%` }} /></div>
-    <p className="small"><strong>{t.totals.taken_over} of {t.expected_islands}</strong> inhabited islands taken over by STELCO ({p}%)
-      {t.totals.pending > 0 && <span className="muted"> · {t.totals.pending} pending</span>}</p>
+  const p = (n, d) => (d ? Math.round((n / d) * 100) : 0);
+  const total = t.expected_islands;
+  const done = t.totals.taken_over;
+  return <Card className="pinned" title={<><span className="pin-label">📌 Priority project</span> National takeover: FENAKA → STELCO</>}
+    actions={<Link to="/takeover" className="btn small primary">Open tracker</Link>}>
+    <div className="pinned-row">
+      <div className="pinned-figure"><strong>{p(done, total)}%</strong><span className="muted small">{done} of {total} inhabited islands</span></div>
+      <div className="grow">
+        <div className="tko-bar"><span style={{ width: `${p(done, total)}%` }} /></div>
+        <p className="small">
+          <span className="tko-state taken_over">{done} under STELCO</span> · <span className="tko-state pending">{t.totals.pending} pending</span>
+          {t.totals.not_set > 0 && <> · <span className="tko-state not_set">{t.totals.not_set} not set</span></>}</p>
+        <div className="tko-services">{[['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']].map(([k, label]) => {
+          const s = t.services[k];
+          return <div key={k}><small>{label}: {s.taken_over} of {s.taken_over + s.pending}</small>
+            <div className="tko-bar thin"><span style={{ width: `${p(s.taken_over, s.taken_over + s.pending)}%` }} /></div></div>;
+        })}</div>
+      </div>
+    </div>
+    <div className="atoll-chips">{t.atolls.map((a) => {
+      const tone = !a.islands ? 'none' : a.taken_over === a.islands ? 'taken' : a.taken_over ? 'part' : 'pending';
+      return <Link key={a.code} to={`/takeover?atoll=${a.code}`} className={`atoll-chip ${tone}`} title={`${a.name}: ${a.taken_over} of ${a.islands} taken over`}>
+        {a.code}<small>{a.taken_over}/{a.islands}</small></Link>;
+    })}</div>
   </Card>;
 }
