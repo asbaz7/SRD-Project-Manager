@@ -21,6 +21,7 @@ const MORE = [
   { to: '/interruptions', label: 'Interruptions', icon: 'incident' },
   { to: '/projects', label: 'Projects', icon: 'project' },
   { to: '/documents', label: 'Documents', icon: 'document' },
+  { to: '/surveys', label: 'Surveys', icon: 'survey' },
 ];
 const ADMIN = [
   { to: '/admin/users', label: 'Users', icon: 'users', role: 'admin' },
