@@ -161,7 +161,7 @@ function TakeoverTile({ t }) {
       <div className="grow">
         <div className="tko-bar"><span style={{ width: `${p(done, total)}%` }} /></div>
         <p className="small">
-          <span className="tko-state taken_over">{done} under STELCO</span> · <span className="tko-state pending">{t.totals.pending} pending</span>
+          <span className="tko-state taken_over">{done} under STELCO</span> · <span className="tko-state pending">{t.totals.pending} survey ongoing</span>
           {t.totals.not_set > 0 && <> · <span className="tko-state not_set">{t.totals.not_set} not set</span></>}</p>
         <div className="tko-services">{[['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']].map(([k, label]) => {
           const s = t.services[k];
