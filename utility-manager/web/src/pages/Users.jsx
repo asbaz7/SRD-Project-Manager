@@ -20,7 +20,7 @@ export default function Users() {
           <thead><tr><th>Name</th><th className="hide-sm">Unit</th><th>Role</th><th>Staff type</th><th className="hide-sm">Last sign-in</th><th /></tr></thead>
           <tbody>{users.map((u) => <tr key={u.id} className={u.active ? '' : 'inactive'}>
             <td><strong>{u.full_name}</strong>{!u.active && ' (disabled)'}{u.service_account && <span className="pill doc-type"> service account</span>}<br /><small className="muted">{u.email}{u.designation && ` · ${u.designation}`}</small></td>
-            <td className="hide-sm small">{u.unit_name || (u.service_account || isGeneralManager(u.designation) ? <span className="muted">—</span> : <span className="bad">Not set</span>)}</td>
+            <td className="hide-sm small">{u.unit_name || (u.service_account || u.role === 'viewer' || isGeneralManager(u.designation) ? <span className="muted">—</span> : <span className="bad">Not set</span>)}</td>
             <td>{ROLES[u.role]}{u.role === 'staff' && <><br /><small className="muted">{u.permissions?.length ? u.permissions.map((p) => PERMISSIONS[p]?.[0]).join(', ') : 'View only'}</small></>}</td>
             <td>{u.role === 'admin' ? <span className="muted">All</span> : u.technical ? 'Technical' : 'Non-technical'}</td>
             <td className="hide-sm small">{u.last_login_at ? date(u.last_login_at) : <span className="muted">never</span>}</td>
@@ -41,6 +41,8 @@ function UserForm({ user, onClose, onSaved }) {
   });
   const units = useApi('/units');
   const gm = isGeneralManager(f.designation);
+  // Viewers (read-only, often from outside the department) need no unit.
+  const noUnit = gm || f.role === 'viewer';
   const set = (k) => (v) => setF({ ...f, [k]: v?.target ? v.target.value : v });
 
   const { submit, busy, error } = useSubmit(async () => {
@@ -61,8 +63,8 @@ function UserForm({ user, onClose, onSaved }) {
         <Field label="Full name"><input required value={f.full_name} onChange={set('full_name')} /></Field>
         <Field label="Email"><input type="email" required disabled={!!user} value={f.email} onChange={set('email')} /></Field>
         <Field label="Designation"><input value={f.designation} onChange={set('designation')} /></Field>
-        <Field label="Unit" hint={gm ? 'The General Manager is not in a unit.' : ''}>
-          <Select required={!gm} value={f.unit_id} onChange={set('unit_id')} placeholder={gm ? '— none —' : 'Choose…'}
+        <Field label={noUnit ? 'Unit (optional)' : 'Unit'} hint={gm ? 'The General Manager is not in a unit.' : f.role === 'viewer' ? 'Viewers need no unit.' : ''}>
+          <Select required={!noUnit} value={f.unit_id} onChange={set('unit_id')} placeholder={noUnit ? '— none —' : 'Choose…'}
             options={(units.data || []).map((u) => [String(u.id), u.name])} /></Field>
         <Field label="Phone"><input value={f.phone} onChange={set('phone')} /></Field>
         <Field label="Role"><Select value={f.role} onChange={set('role')} options={ROLES} /></Field>
@@ -87,5 +89,5 @@ function UserForm({ user, onClose, onSaved }) {
   );
 }
 
-// Everyone belongs to a unit except the General Manager.
+// Everyone belongs to a unit except the General Manager (and viewers, optional).
 const isGeneralManager = (designation) => /^\s*general manager\s*$/i.test(designation || '');
