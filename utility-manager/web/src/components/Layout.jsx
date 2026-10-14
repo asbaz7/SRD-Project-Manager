@@ -18,6 +18,7 @@ const MAIN = [
   { to: '/sewerage', label: 'Sewerage', icon: 'sewerage', svc: 'sewerage' },
 ];
 const MORE = [
+  { to: '/takeover', label: 'Takeover', icon: 'takeover' },
   { to: '/work', label: 'Work', icon: 'work' },
   { to: '/interruptions', label: 'Interruptions', icon: 'incident' },
   { to: '/projects', label: 'Projects', icon: 'project' },

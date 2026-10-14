@@ -44,6 +44,7 @@ export default function Dashboard() {
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
   const state = useApi(`/dashboard${qs({ atoll_id: filters.atoll_id })}`);
+  const takeover = useApi('/takeover');
 
   return <>
     <PageHead title={`${greeting()}, ${user.fullName.split(' ')[0]}`} subtitle={new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Indian/Maldives' })}
@@ -88,6 +89,8 @@ export default function Dashboard() {
               ]} />;
           })}
         </div>}
+
+        {takeover.data && <TakeoverTile t={takeover.data} />}
 
         <div className={d.technical ? 'grid-2' : ''}>
           {d.technical && <Card title="Engine condition" actions={<Link to="/electricity/engines" className="btn small ghost">All engines</Link>}>
@@ -142,4 +145,14 @@ function ServiceTile({ svc, s, hero, facts }) {
       {s.open_incidents > 0 && <span className="flag bad">{s.open_incidents} open interruption{s.open_incidents === 1 ? '' : 's'}</span>}
     </Link>
   );
+}
+
+// The national takeover at a glance (FENAKA → STELCO), linking to its page.
+function TakeoverTile({ t }) {
+  const p = t.expected_islands ? Math.round((t.totals.taken_over / t.expected_islands) * 100) : 0;
+  return <Card title="National takeover" actions={<Link to="/takeover" className="btn small ghost">Open</Link>}>
+    <div className="tko-bar"><span style={{ width: `${p}%` }} /></div>
+    <p className="small"><strong>{t.totals.taken_over} of {t.expected_islands}</strong> inhabited islands taken over by STELCO ({p}%)
+      {t.totals.pending > 0 && <span className="muted"> · {t.totals.pending} pending</span>}</p>
+  </Card>;
 }

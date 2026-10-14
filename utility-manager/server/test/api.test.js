@@ -402,3 +402,46 @@ describe('powerhouse takeover tracker', () => {
     assert.equal(again.stationery_short, 1);
   });
 });
+
+describe('national takeover tracker', () => {
+  test('SRD islands start it; islands elsewhere are added; per service, an island is taken over once all are', async () => {
+    // The test register is filled after the migrations: run the seeding again.
+    const sql = readFileSync(new URL('../migrations/053_national_takeover.sql', import.meta.url), 'utf8');
+    await db.exec(sql.slice(sql.indexOf('insert into takeover_islands')));
+    let t = (await call('GET', '/takeover', { token: admin })).body;
+    assert.equal(t.expected_islands, 187);
+    assert.equal(t.atolls.length, 20);
+    const k = t.atolls.find((a) => a.code === 'K');
+    assert.ok(k.islands > 0 && k.taken_over === k.islands, 'Kaafu: electricity already with STELCO');
+    const maafushiRow = t.islands.find((i) => i.name === 'Maafushi');
+    assert.equal(maafushiRow.island_id, maafushi.id);
+    assert.equal(maafushiRow.state, 'taken_over');
+
+    // An island outside SRD, still with FENAKA.
+    const add = await call('POST', '/takeover/islands', { token: admin, body: {
+      atoll_code: 'HA', name: 'Dhidhdhoo', phase: 'Phase 3', electricity_status: 'pending', electricity_on: '2026-12-01', water_status: 'pending' } });
+    assert.equal(add.status, 201, JSON.stringify(add.body));
+    assert.equal(add.body.state, 'pending');
+    assert.equal((await call('POST', '/takeover/islands', { token: admin, body: { atoll_code: 'HA', name: 'dhidhdhoo' } })).status, 400, 'no duplicates');
+    assert.equal((await call('POST', '/takeover/islands', { token: admin, body: { atoll_code: 'XX', name: 'Nowhere' } })).status, 400);
+
+    // Electricity handed over, water not yet: still pending; then both.
+    let r = await call('PATCH', `/takeover/islands/${add.body.id}`, { token: admin, body: { electricity_status: 'taken_over', electricity_on: '2026-10-14' } });
+    assert.equal(r.body.state, 'pending');
+    r = await call('PATCH', `/takeover/islands/${add.body.id}`, { token: admin, body: { water_status: 'taken_over', sewerage_status: 'not_applicable' } });
+    assert.equal(r.body.state, 'taken_over');
+    assert.equal(r.body.phase, 'Phase 3', 'other fields kept');
+    t = (await call('GET', '/takeover', { token: admin })).body;
+    assert.equal(t.atolls.find((a) => a.code === 'HA').taken_over, 1);
+    assert.equal(t.services.water.taken_over >= 1, true);
+
+    // Everyone sees it; only managers change it; only admins remove.
+    await call('POST', '/users', { token: admin, body: { email: 'tko-viewer@srd.mv', full_name: 'Viewer', role: 'viewer', password: 'Temporary123' } });
+    await db.query("update users set must_change_password = false where email = 'tko-viewer@srd.mv'");
+    const { rows: [v] } = await db.query("select id from users where email = 'tko-viewer@srd.mv'");
+    const viewer = (await createSession(db, v.id, { ttlHours: 1, ip: null, userAgent: 'test' })).token;
+    assert.equal((await call('GET', '/takeover', { token: viewer })).status, 200);
+    assert.equal((await call('PATCH', `/takeover/islands/${add.body.id}`, { token: viewer, body: { phase: 'x' } })).status, 403);
+    assert.equal((await call('DELETE', `/takeover/islands/${add.body.id}`, { token: admin })).status, 200);
+  });
+});

@@ -580,3 +580,33 @@ input.qty { width: 80px; text-align: right; }
 .update-table td { vertical-align: top; }
 .update-table input:not([type=checkbox]) { min-width: 0; }
 .update-table td:nth-child(4) input { width: 100%; min-width: 160px; }
+
+/* National takeover */
+.tko-bar { height: 14px; border-radius: 999px; background: var(--track); overflow: hidden; margin: 6px 0; }
+.tko-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--good-fill); }
+.tko-bar.thin { height: 7px; }
+.tko-services { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 10px; }
+.tko-layout { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .tko-layout { grid-template-columns: 1fr; } }
+.tko-map { width: 100%; max-height: 80vh; display: block; }
+.tko-atoll { cursor: pointer; }
+.tko-atoll ellipse { stroke-width: 2; }
+.tko-atoll.taken ellipse { fill: color-mix(in srgb, var(--good-fill) 55%, transparent); stroke: var(--good-fill); }
+.tko-atoll.pending ellipse { fill: color-mix(in srgb, var(--warn-fill) 55%, transparent); stroke: var(--warn-fill); }
+.tko-atoll.none ellipse { fill: var(--track); stroke: var(--none-fill); stroke-dasharray: 3 3; }
+.tko-atoll ellipse.share { fill: none; stroke: var(--good-fill); stroke-width: 4; }
+.tko-atoll.selected ellipse:first-of-type { stroke: var(--text); stroke-width: 3; }
+.tko-atoll.dim { opacity: .35; }
+.tko-atoll:hover ellipse:first-of-type { stroke-width: 3; }
+.tko-atoll text { fill: var(--text-2); font-size: 11px; }
+.tko-atoll text.count { fill: var(--muted); font-size: 10px; }
+.tko-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.tko-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.tko-legend .dot.taken { background: var(--good-fill); }
+.tko-legend .dot.pending { background: var(--warn-fill); }
+.tko-legend .dot.none { background: var(--none-fill); }
+.tko-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; background: var(--track); color: var(--text-2); }
+.tko-pill.taken_over { color: var(--good); background: color-mix(in srgb, var(--good-fill) 14%, transparent); }
+.tko-pill.pending { color: var(--warn); background: color-mix(in srgb, var(--warn-fill) 18%, transparent); }
+.tko-state.taken_over { color: var(--good); } .tko-state.pending { color: var(--warn); } .tko-state.not_set { color: var(--muted); }
+.tko-service-input { display: flex; gap: 6px; flex-wrap: wrap; }

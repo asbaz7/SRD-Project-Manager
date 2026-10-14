@@ -12,6 +12,7 @@ import './styles.css';
 const Account = lazy(() => import('./pages/Account.jsx'));
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
 const Islands = lazy(() => import('./pages/Islands.jsx'));
+const Takeover = lazy(() => import('./pages/Takeover.jsx'));
 const Island = lazy(() => import('./pages/Island.jsx'));
 const Asset = lazy(() => import('./pages/Asset.jsx'));
 const Incidents = lazy(() => import('./pages/Incidents.jsx'));
@@ -65,6 +66,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="work/new" element={<WorkItem />} />
               <Route path="work/:id" element={<WorkItem />} />
               <Route path="islands" element={<Islands />} />
+              <Route path="takeover" element={<Takeover />} />
               <Route path="islands/:id" element={<Island />} />
               <Route path="assets/:id" element={<Asset />} />
               <Route path="interruptions" element={<Incidents />} />

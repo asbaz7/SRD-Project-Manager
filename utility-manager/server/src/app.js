@@ -30,6 +30,7 @@ import serviceRoutes from './routes/services.js';
 import telegramRoutes from './routes/telegram.js';
 import documentRoutes from './routes/documents.js';
 import surveyRoutes from './routes/surveys.js';
+import takeoverRoutes from './routes/takeover.js';
 
 const PREFIX = '/api/v1';
 const ON_BEHALF_OF = Symbol('on behalf of');
@@ -225,7 +226,7 @@ export async function buildApp({ db, config, logger = true }) {
     return { ok: true };
   });
   for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes, gensetUpdateRoutes,
-    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes, documentRoutes, surveyRoutes]) {
+    workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes, documentRoutes, surveyRoutes, takeoverRoutes]) {
     await routes(api);
   }
   // Unknown API paths: still require sign-in, then 404.
