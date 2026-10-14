@@ -11,6 +11,7 @@ import {
   Where, date, datetime, id, idParam, one, optNumber, optText, pageOf, paging, parse, service, text, updateSet,
 } from '../http.js';
 import { localToday } from '../time.js';
+import { clearFaults, noteFault } from '../faults.js';
 
 const STATUSES = ASSET_STATUSES;
 
@@ -278,21 +279,43 @@ export default async function assetRoutes(app) {
       [assetId, ...set.values, ...(lock ? [body.serial_no] : [])])).rows, 'Asset'));
   });
 
-  // A genset's faults now: none, minor or major, with what is wrong. Also
-  // set by the monthly update; cleared when it comes back into service.
+  // A genset's faults: several at once, each logged and cleared on its own
+  // (migration 060). Minor or major with what is wrong adds one (the same
+  // words as an open fault update that fault's level); none clears them all.
+  // Also from the monthly update; cleared when it comes back into service.
   app.post('/assets/:id/fault', manager, async (req) => {
     const { id: assetId } = parse(idParam, req.params);
     const b = parse(z.object({ level: z.enum(['none', 'minor', 'major']), note: optText(2000) }), req.body);
     if (b.level !== 'none' && !b.note) throw badRequest('Say what the fault is');
     await assertIslandWrite(db, req.user, { assetId });
-    const row = await db.tx(req.user.id, async (t) => one((await (async () => {
-      if (b.level === 'none') await t.query("select set_config('app.fault_cleared_by', 'Marked fixed', true)");
-      return t.query(
-      `update assets set fault_level = $2, fault_note = $3, fault_at = now(), fault_by = $4
-        where id = $1 and kind = 'genset' returning id, fault_level, fault_note, fault_at`,
-      [assetId, b.level, b.level === 'none' ? null : b.note, req.user.id]);
-    })()).rows, 'Genset'));
-    return row;
+    return db.tx(req.user.id, async (t) => {
+      one((await t.query("select id from assets where id = $1 and kind = 'genset'", [assetId])).rows, 'Genset');
+      const fault = b.level === 'none'
+        ? (await clearFaults(t, assetId, { reason: 'Marked fixed', userId: req.user.id }), null)
+        : await noteFault(t, assetId, { level: b.level, note: b.note, userId: req.user.id });
+      const { rows: [a] } = await t.query('select id, fault_level, fault_note, fault_at from assets where id = $1', [assetId]);
+      return { ...a, fault };
+    });
+  });
+
+  // One fault: change it (level, what is wrong), or clear it, saying why.
+  const faultParams = z.object({ id, faultId: z.coerce.number().int().positive() });
+  app.patch('/assets/:id/faults/:faultId', manager, async (req) => {
+    const { id: assetId, faultId } = parse(faultParams, req.params);
+    const b = parse(z.object({ level: z.enum(['minor', 'major']).optional(), note: text(2000).optional() }), req.body);
+    await assertIslandWrite(db, req.user, { assetId });
+    return db.tx(req.user.id, async (t) => one((await t.query(
+      `update fault_log set level = coalesce($3, level), note = coalesce($4, note)
+        where id = $2 and asset_id = $1 and cleared_at is null returning id, level, note`,
+      [assetId, faultId, b.level ?? null, b.note ?? null])).rows, 'Open fault'));
+  });
+  app.post('/assets/:id/faults/:faultId/clear', manager, async (req) => {
+    const { id: assetId, faultId } = parse(faultParams, req.params);
+    const b = parse(z.object({ reason: optText(300) }), req.body ?? {});
+    await assertIslandWrite(db, req.user, { assetId });
+    const n = await db.tx(req.user.id, (t) => clearFaults(t, assetId, { reason: b.reason || 'Marked fixed', userId: req.user.id, faultId }));
+    if (!n) throw badRequest('That fault is not open');
+    return { ok: true };
   });
 
   // Folds a duplicate record of this asset into it (e.g. a genset
@@ -330,11 +353,7 @@ export default async function assetRoutes(app) {
       // Back in service after being down: its faults were dealt with.
       const back = body.items.filter((i) => ['running', 'standby'].includes(i.status)
         && ['down', 'maintenance'].includes(before.find((b) => b.id === i.asset_id)?.status)).map((i) => i.asset_id);
-      if (back.length) {
-        await t.query("select set_config('app.fault_cleared_by', 'Back in service', true)");
-        await t.query(`update assets set fault_level = 'none', fault_note = null, fault_at = now(), fault_by = $2
-                        where id = any($1::uuid[]) and kind = 'genset'`, [back, req.user.id]);
-      }
+      for (const assetId of back) await clearFaults(t, assetId, { reason: 'Back in service', userId: req.user.id });
     });
     // A genset set down has open work (created or updated by a trigger,
     // migration 017): say which, in the reply and the alert.

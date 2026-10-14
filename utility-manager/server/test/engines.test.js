@@ -691,7 +691,7 @@ describe('reports Fleet Manager sent, and report history', () => {
     assert.equal(set.status, 200, JSON.stringify(set.body));
     assert.equal((await call('POST', `/assets/${g2.id}/fault`, { token: admin, body: { level: 'minor' } })).status, 400, 'a fault needs a description');
     const attention = async () => (await call('GET', `/services/electricity?atoll_id=${dhigurah.atoll_id}`, { token: admin })).body.attention;
-    assert.ok((await attention()).some((a) => a.id === g2.id && a.fault === 'Turbo noise'));
+    assert.ok((await attention()).some((a) => a.id === g2.id && /Turbo noise/.test(a.fault)), 'listed with its faults');
 
     const people = (await call('GET', '/users/directory', { token: admin })).body;
     const person = people.find((p) => p.technical);
@@ -829,24 +829,46 @@ describe('monthly genset updates', () => {
     await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'major', note: 'Exhaust manifold cracked' } });
     let l = await log();
     assert.equal(l.length, before + 2);
+    // Both open at once: a genset can have several faults (migration 060).
     assert.deepEqual([l[0].level, l[0].note, l[0].cleared_at], ['major', 'Exhaust manifold cracked', null]);
-    assert.equal(l[1].cleared_reason, 'Replaced by a newer fault');
+    assert.deepEqual([l[1].note, l[1].cleared_at], ['Exhaust leak', null]);
     assert.equal(l[0].logged_by_name, 'Admin');
+    let a = (await call('GET', `/assets/${g1.id}`, { token: admin })).body;
+    assert.deepEqual([a.fault_level, a.fault_note], ['major', 'Exhaust leak; Exhaust manifold cracked'], 'the worst level, all described');
+    // The same words again are that fault, not a second one.
+    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'major', note: 'exhaust leak' } });
+    l = await log();
+    assert.equal(l.length, before + 2);
+    assert.equal(l.find((x) => x.note === 'Exhaust leak').level, 'major');
+    // One cleared on its own; the other stays.
+    let r = await call('POST', `/assets/${g1.id}/faults/${l[0].id}/clear`, { token: admin, body: { reason: 'Manifold welded' } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    a = (await call('GET', `/assets/${g1.id}`, { token: admin })).body;
+    assert.deepEqual([a.fault_level, a.fault_note], ['major', 'Exhaust leak']);
+    assert.equal((await log())[0].cleared_reason, 'Manifold welded');
+    assert.equal((await call('POST', `/assets/${g1.id}/faults/${l[0].id}/clear`, { token: admin, body: {} })).status, 400, 'already cleared');
+    r = await call('PATCH', `/assets/${g1.id}/faults/${l[1].id}`, { token: admin, body: { level: 'minor' } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal((await call('GET', `/assets/${g1.id}`, { token: admin })).body.fault_level, 'minor');
     // Down, then back in service: cleared, saying why.
     await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g1.id, status: 'down', note: 'manifold' }] } });
     await call('POST', '/assets/status', { token: admin, body: { items: [{ asset_id: g1.id, status: 'running' }] } });
     l = await log();
-    assert.equal(l[0].cleared_reason, 'Back in service');
-    assert.equal(l[0].cleared_by_name, 'Admin');
+    const leak = l.find((x) => x.note === 'Exhaust leak');
+    assert.equal(leak.cleared_reason, 'Back in service');
+    assert.equal(leak.cleared_by_name, 'Admin');
     // Marked fixed by hand.
     await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'minor', note: 'Loose belt' } });
     await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'none' } });
     assert.equal((await log())[0].cleared_reason, 'Marked fixed');
-    // Completed work logged from the fault says which work.
-    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'major', note: 'Turbo whine' } });
-    const w = (await call('POST', '/work', { token: admin, body: { asset_id: g1.id, kind: 'repair', title: 'Turbo', fault_report_month: thisMonth() } })).body;
+    // Completed work logged for one fault clears that one, saying which work.
+    const turbo = (await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'major', note: 'Turbo whine' } })).body.fault;
+    await call('POST', `/assets/${g1.id}/fault`, { token: admin, body: { level: 'minor', note: 'Door hinge' } });
+    const w = (await call('POST', '/work', { token: admin, body: { asset_id: g1.id, kind: 'repair', title: 'Turbo', fault_id: turbo.id } })).body;
     await call('PATCH', `/work/${w.id}`, { token: admin, body: { status: 'completed' } });
-    assert.equal((await log())[0].cleared_reason, `Work ${w.ref} completed`);
+    l = await log();
+    assert.equal(l.find((x) => x.id === turbo.id).cleared_reason, `Work ${w.ref} completed`);
+    assert.equal(l.find((x) => x.note === 'Door hinge').cleared_at, null, 'the other fault stays');
   });
 
   test('not running sets the genset down (opening work); a disconnected genset stays disconnected', async () => {

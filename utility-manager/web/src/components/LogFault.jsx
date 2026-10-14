@@ -1,4 +1,5 @@
-// Log a fault on a genset: minor or major, with what is wrong. Optionally it
+// Log a fault on a genset: minor or major, with what is wrong (a genset can
+// have several; this adds one, migration 060). Optionally it
 // is set down (it has stopped), and repair work for it is logged straight
 // after (completing that work clears the fault). Every fault is kept in the
 // genset's fault log.
@@ -22,13 +23,13 @@ function LogFaultForm({ asset: a, onClose, onSaved }) {
   const [f, setF] = useState({ level: 'minor', note: '', down: false, work: false });
   const { submit, busy, error } = useSubmit(async () => {
     const note = f.note.trim();
-    await api(`/assets/${a.id}/fault`, { method: 'POST', body: { level: f.level, note } });
+    const { fault } = await api(`/assets/${a.id}/fault`, { method: 'POST', body: { level: f.level, note } });
     if (f.down && !['down', 'maintenance'].includes(a.status)) {
       await api('/assets/status', { method: 'POST', body: { items: [{ asset_id: a.id, status: 'down', note }] } });
     }
     if (f.work) {
       navigate(`/work/new${qs({ asset_id: a.id, kind: 'repair', title: `${assetLabel(a).replace(/^\S+\. \S+ /, '')}: ${note}`.slice(0, 200),
-        fault_report_month: `${new Date().toISOString().slice(0, 7)}-01` })}`);
+        fault_id: fault?.id })}`);
       return;
     }
     onSaved();
@@ -39,8 +40,8 @@ function LogFaultForm({ asset: a, onClose, onSaved }) {
       <Field label="Fault"><Select value={f.level} onChange={(v) => setF({ ...f, level: v })} options={[['minor', 'Minor fault: still running'], ['major', 'Major fault']]} /></Field>
       <Field label="What is wrong" wide><textarea required rows="3" maxLength="2000" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
       {!['down', 'maintenance'].includes(a.status) && <label className="check wide"><input type="checkbox" checked={f.down} onChange={(e) => setF({ ...f, down: e.target.checked })} /> It has stopped: set it down (opens repair work)</label>}
-      <label className="check wide"><input type="checkbox" checked={f.work} disabled={f.down} onChange={(e) => setF({ ...f, work: e.target.checked })} /> Log repair work for it next (completing the work clears the fault)</label>
-      {a.fault_level && a.fault_level !== 'none' && <p className="muted small wide">It already has a {a.fault_level} fault ({a.fault_note}); this replaces it, and both stay in the fault log.</p>}
+      <label className="check wide"><input type="checkbox" checked={f.work} disabled={f.down} onChange={(e) => setF({ ...f, work: e.target.checked })} /> Log repair work for it next (completing the work clears this fault)</label>
+      {a.fault_level && a.fault_level !== 'none' && <p className="muted small wide">Already open: {a.fault_note || `a ${a.fault_level} fault`}. This adds another; each is fixed on its own.</p>}
       <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
         <button className="btn primary" disabled={busy}>Log fault</button></div>
     </form>

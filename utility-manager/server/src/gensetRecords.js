@@ -4,6 +4,7 @@
 // views read (engine_current). Records come from the in-app monthly update
 // (source 'update'); earlier ones came from workbooks ('upload') and from
 // Fleet Manager ('fleet_manager') and stay as history.
+import { clearFaults, noteFault } from './faults.js';
 
 const STATUS_FOR = { not_running: 'down', major_fault: 'running', minor_fault: 'running', ok: 'running' };
 
@@ -133,9 +134,12 @@ export const conditionOf = (status, level) => (['down', 'maintenance'].includes(
   : { major: 'major_fault', minor: 'minor_fault', none: 'ok' }[level] ?? null);
 
 /**
- * What an update item changes on a genset: status and faults (its level and
- * description). Left out, they stay as they are. Coming back into service
- * clears the faults unless new ones are given (as a status change does).
+ * What an update item changes on a genset: its status, and its faults. A
+ * genset can have several faults (migration 060): none clears them all; a
+ * level with what is wrong adds that fault (the same words as an open one
+ * are that one). Left out, they stay as they are. Coming back into service
+ * clears the faults first (as a status change does). level / note: the
+ * level and description given, to check a fault is described.
  */
 export function resolveItem(it, cur) {
   let status = it.status;
@@ -152,11 +156,14 @@ export function resolveItem(it, cur) {
   if (status !== undefined && it.status === undefined && ['disconnected', 'decommissioned'].includes(cur.status)) status = undefined;
   const newStatus = status ?? cur.status;
   const backInService = ['down', 'maintenance'].includes(cur.status) && ['running', 'standby'].includes(newStatus);
-  const newLevel = level ?? (backInService ? 'none' : cur.fault_level ?? null);
-  const note = newLevel === 'none' ? null
-    : it.fault ?? (newLevel === cur.fault_level ? cur.fault_note ?? null : null);
-  return { status: newStatus, statusChanged: newStatus !== cur.status, level: newLevel, note,
-    faultChanged: newLevel !== (cur.fault_level ?? null) || note !== (cur.fault_note ?? null) };
+  const open = ['minor', 'major'].includes(cur.fault_level);
+  const clear = level === 'none' || (backInService && open);
+  // A level with no words, the same as now (e.g. "minor fault" again on
+  // Telegram): the faults it has. Otherwise a fault needs its description.
+  const keep = level !== undefined && level !== 'none' && !it.fault && !clear && level === cur.fault_level;
+  const add = level && level !== 'none' && !keep ? { level, note: it.fault ?? null } : null;
+  return { status: newStatus, statusChanged: newStatus !== cur.status, clear: clear && open, add,
+    level: level ?? (backInService ? 'none' : cur.fault_level ?? null), note: add ? add.note : clear ? null : cur.fault_note ?? null };
 }
 
 // Hours since a service, carried forward: the last figure plus the hours run
@@ -186,16 +193,21 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
     const { rows: [cur] } = await t.query('select id, status, status_at, fault_level, fault_note from assets where id = $1', [it.asset.id]);
     const { rows: [prev] } = await t.query('select * from engine_conditions where asset_id = $1', [it.asset.id]);
     const x = resolveItem(it, cur);
-    const condition = conditionOf(x.status, x.level) ?? prev?.condition ?? null;
+    if (x.clear) {
+      await clearFaults(t, it.asset.id, { reason: x.statusChanged && !x.add ? 'Back in service (monthly update)' : 'Monthly update', userId });
+    }
+    if (x.add) await noteFault(t, it.asset.id, { ...x.add, userId });
+    // No faults, said of a genset with none recorded yet: it has none.
+    if (x.level === 'none' && !x.clear) {
+      await t.query("update assets set fault_level = 'none', fault_note = null, fault_at = now(), fault_by = $2 where id = $1 and fault_level is null", [it.asset.id, userId]);
+    }
+    // The genset's faults now, all of them, for the month's record.
+    const { rows: [now] } = await t.query('select fault_level, fault_note from assets where id = $1', [it.asset.id]);
+    const condition = conditionOf(x.status, now.fault_level) ?? prev?.condition ?? null;
     if (x.statusChanged) {
       await t.query(`insert into asset_status_log (asset_id, status, note, reported_at, reported_by) values ($1, $2, $3, $4, $5)`,
         [it.asset.id, x.status, ['running', 'standby'].includes(x.status) ? null
           : `Monthly update ${month.slice(0, 7)}: ${[CONDITION_TEXT[condition] || x.status, x.note].filter(Boolean).join(' — ')}`, at, userId]);
-    }
-    if (x.faultChanged) {
-      await t.query("select set_config('app.fault_cleared_by', $1, true)", [x.statusChanged && x.level === 'none' ? 'Back in service (monthly update)' : 'Monthly update']);
-      await t.query('update assets set fault_level = $2, fault_note = $3, fault_at = now(), fault_by = $4 where id = $1',
-        [it.asset.id, x.level, x.note, userId]);
     }
     const after = prev?.reported_on || (prev ? addMonths(prev.report_month, 1) : null);
     const { rows: done } = await t.query(`
@@ -208,7 +220,7 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
     const r = {
       status_text: CONDITION_TEXT[condition] ?? null,
       condition,
-      fault: x.note,
+      fault: now.fault_level === 'none' ? null : now.fault_note,
       total_hours: it.total_hours,
       hours_since_overhaul: since({ since: prev?.hours_since_overhaul, total: prev?.total_hours }, it.total_hours, metered, overhaul),
       last_overhaul_on: prev?.last_overhaul_on ?? null,

@@ -731,3 +731,5 @@ tr.picked > td { background: color-mix(in srgb, var(--accent) 14%, transparent);
 .tko-popup-survey { margin: 4px 0 8px; padding: 8px 10px; border-radius: 12px; background: var(--track); }
 .tko-popup-survey p { margin: 2px 0; }
 .tko-none { display: block; margin-top: 3px; }
+
+.row-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }

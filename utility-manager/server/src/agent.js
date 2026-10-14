@@ -38,7 +38,7 @@ How to work:
 - Look things up with the tools. Never guess figures, names, statuses or dates. If a tool returns an error or nothing, say so plainly.
 - Islands are written with their atoll code, like "ADh. Fenfushi" or "K. Maafushi". Use find_island to turn a name into an id; if several islands match, ask which one.
 - Gensets are called "Genset 2", "G2" or "engine 2". Each powerhouse is updated once a month in the app (each genset's running hours, condition, faults, overhaul / alternator flags); get_island and list_engines include the latest. In the data, report_month is the month of that last monthly update. Call it "the last monthly update (October 2026)", never a "report": condition reports are no longer used. If it is older than this month, say this month's update is due rather than guessing.
-- A genset's state is its status (running, standby, down, maintenance, disconnected: is it available?) and its faults (none, minor or major, with what is wrong). The data's "condition" sums them up (down or maintenance = not running, otherwise the fault level). Change status with set_asset_status and faults with set_fault; bringing a genset back to running clears its faults.
+- A genset's state is its status (running, standby, down, maintenance, disconnected: is it available?) and its faults: it can have several at once, each minor or major with what is wrong (fault_note lists the open ones; fault_level is the worst). The data's "condition" sums them up (down or maintenance = not running, otherwise the fault level). Change status with set_asset_status and faults with set_fault; bringing a genset back to running clears its faults.
 - When someone gives a genset's running hours ("Maafushi G1 is at 41200 hours"), record them with record_hours; add the condition and fault only if they say it.
 - Work orders (WO-0001, WO-0002…; the number is the work_id) are jobs on equipment: repairs, overhauls, services, genset moves. Use list_work / get_work for them.
 - Projects (PRJ-0001, PRJ-0002…; the number is the project_id) are separate from work orders: larger efforts such as installations, studies or the Powerhouse Takeover, with a progress % and often a task list (codes like TKO-001, priorities P1-P4). When someone asks about projects, use list_projects / get_project, never the work tools; when they ask about works, jobs or repairs, use list_work.
@@ -274,7 +274,7 @@ function buildTools(db) {
     },
     set_fault: {
       write: true,
-      description: "Record a genset's faults: none, minor or major, with what is wrong (e.g. an oil leak while still running). The person confirms before it's saved. For a genset that has stopped, use set_asset_status (down) instead.",
+      description: "Record a genset fault: minor or major with what is wrong (e.g. an oil leak while still running) adds it to the genset's open faults (it can have several); none clears them all (all fixed). The person confirms before it's saved. For a genset that has stopped, use set_asset_status (down) instead.",
       schema: z.object({
         asset_id: id,
         level: z.enum(['none', 'minor', 'major']),
@@ -284,12 +284,12 @@ function buildTools(db) {
         if (level !== 'none' && !note) throw new ToolError('Ask what is wrong first: a fault needs a description');
         const a = await get(asUser, user, `/assets/${asset_id}`);
         if (a.kind !== 'genset') throw new ToolError('Faults are recorded for gensets');
-        const label = { none: 'no faults', minor: 'minor fault', major: 'major fault' }[level];
-        return `Set <b>${esc(assetLabel(a))}</b> to <b>${label}</b>${level !== 'none' && note ? `: ${esc(note)}` : ''}`;
+        if (level === 'none') return `Mark <b>all faults</b> on <b>${esc(assetLabel(a))}</b> as fixed`;
+        return `Add a <b>${level} fault</b> on <b>${esc(assetLabel(a))}</b>: ${esc(note)}`;
       },
       run: async (user, { asset_id, level, note }, asUser) => {
         check(await asUser(user.id, 'POST', `/assets/${asset_id}/fault`, { level, note: level === 'none' ? null : note }));
-        return { text: `Faults saved: <b>${{ none: 'none', minor: 'minor', major: 'major' }[level]}</b>`, result: { saved: true, level } };
+        return { text: level === 'none' ? 'Faults cleared' : `${level === 'major' ? 'Major' : 'Minor'} fault added`, result: { saved: true, level } };
       },
     },
     set_asset_status: {

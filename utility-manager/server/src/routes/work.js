@@ -61,6 +61,7 @@ const body = z.object({
   assigned_user_id: id.nullish(),           // or one of SRD's users
   unit_id: unitId.nullish(),                // and / or one of the department's units
   fault_report_month: date.nullish(),       // logged from this report's fault
+  fault_id: z.coerce.number().int().positive().nullish(), // logged for this fault (migration 060)
   started_on: date.nullish(),
   target_on: date.nullish(),
   completed_on: date.nullish(),
@@ -307,14 +308,15 @@ export default async function workRoutes(app) {
       const res = await t.query(`
         insert into work_orders (island_id, facility_id, asset_id, kind, title, description, status, assigned_to,
                                  started_on, target_on, completed_on, created_by, service, dest_facility_id, dest_tag,
-                                 assigned_user_id, fault_report_month, unit_id)
+                                 assigned_user_id, fault_report_month, unit_id, fault_id)
         values ($1, $2, $3, $4, $5, $6, $7, $8,
                 coalesce($9, case when $7 in ('in_progress', 'awaiting_parts', 'dismantling', 'in_transit', 'installing') then current_date end),
-                $10, case when $7 = 'completed' then coalesce($11, current_date) end, $12, $13, $14, $15, $16, $17, $18)
+                $10, case when $7 = 'completed' then coalesce($11, current_date) end, $12, $13, $14, $15, $16, $17, $18,
+                (select id from fault_log where id = $19 and asset_id = $3))
         returning id`,
       [where.island_id, where.facility_id, where.asset_id, b.kind, b.title, b.description, b.status, b.assigned_to,
         b.started_on ?? null, b.target_on ?? null, b.completed_on ?? null, req.user.id, where.service,
-        plan ? plan.dest.id : null, plan ? plan.tag : null, b.assigned_user_id ?? null, b.fault_report_month ?? null, b.unit_id ?? null]);
+        plan ? plan.dest.id : null, plan ? plan.tag : null, b.assigned_user_id ?? null, b.fault_report_month ?? null, b.unit_id ?? null, b.fault_id ?? null]);
       if (plan) move = await applyMoveProgress(t, res.rows[0].id, null, req.user.id);
       return res.rows;
     });

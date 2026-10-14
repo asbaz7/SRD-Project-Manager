@@ -48,9 +48,15 @@ export async function seedHistory(db, { islandId, months, gensets = maafushiGens
         }
         await keepEngineReport(t, a.id, month, reportedOn, g.r, { source, userId });
         const latest = await setLatest(t, a, month, reportedOn, g.r, { source, userId });
-        // Its faults, as migration 051 took them from the latest record.
+        // Its faults, as migration 051 took them from the latest record, in
+        // the fault log (migration 060) and on the genset.
         if (latest) {
           const level = { ok: 'none', minor_fault: 'minor', major_fault: 'major', not_running: g.r.fault ? 'major' : null }[g.r.condition];
+          await t.query("update fault_log set cleared_at = now(), cleared_reason = 'Monthly record' where asset_id = $1 and cleared_at is null", [a.id]);
+          if (level === 'minor' || level === 'major') {
+            await t.query('insert into fault_log (asset_id, level, note, logged_at) values ($1, $2, $3, $4)',
+              [a.id, level, g.r.fault ?? null, `${reportedOn}T08:00:00+05:00`]);
+          }
           await t.query('update assets set fault_level = $2, fault_note = $3, fault_at = $4 where id = $1',
             [a.id, level, level === 'none' ? null : g.r.fault ?? null, `${reportedOn}T08:00:00+05:00`]);
         }

@@ -3,7 +3,7 @@
 // maintenance history.
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { AssetForm } from '../components/forms.jsx';
 import { LogFaultButton } from '../components/LogFault.jsx';
@@ -64,7 +64,7 @@ export default function Asset() {
             <dt>Monthly update</dt><dd className={e.report_stale ? 'bad' : ''}>{c?.report_month ? `${month(c.report_month)}${c.source && c.source !== 'update' ? ` (${c.source === 'fleet_manager' ? 'Fleet Manager' : 'workbook'})` : ''}` : 'None yet'}
               {e.report_stale && ' · this month\'s is due'}</dd>
           </dl>
-          {manage && a.fault_level && a.fault_level !== 'none' && <MarkFixed asset={a} reload={state.reload} />}
+          {manage && a.fault_level && a.fault_level !== 'none' && <MarkFixed asset={a} reload={state.reload} all={(a.fault_log || []).filter((l) => !l.cleared_at).length > 1} />}
           <p className="small muted"><Link to="/electricity/reports">Monthly updates</Link></p>
         </Card>
 
@@ -303,14 +303,17 @@ function DeleteEvent({ id, onDone }) {
   return <button className="btn ghost small" disabled={busy} onClick={submit} aria-label="Remove record">✕</button>;
 }
 
-// Clear a genset's fault once it is fixed (it stays in the fault log).
-function MarkFixed({ asset: a, reload }) {
+// Clear a genset's faults once fixed: one (fault), or all of them. They stay
+// in the fault log.
+function MarkFixed({ asset: a, reload, fault, all = false }) {
   const { submit, busy, error } = useSubmit(async () => {
-    if (!window.confirm(`Mark the ${a.fault_level} fault on ${assetLabel(a)} as fixed?`)) return;
-    await api(`/assets/${a.id}/fault`, { method: 'POST', body: { level: 'none' } });
+    const what = fault ? `"${fault.note || `${fault.level} fault`}"` : all ? 'all the faults' : `the ${a.fault_level} fault`;
+    if (!window.confirm(`Mark ${what} on ${assetLabel(a)} as fixed?`)) return;
+    if (fault) await api(`/assets/${a.id}/faults/${fault.id}/clear`, { method: 'POST', body: {} });
+    else await api(`/assets/${a.id}/fault`, { method: 'POST', body: { level: 'none' } });
     reload();
   });
-  return <><ErrorBox error={error} /><button className="btn small ghost" disabled={busy} onClick={submit}>Mark fixed</button></>;
+  return <><ErrorBox error={error} /><button className="btn small ghost" disabled={busy} onClick={submit}>{all ? 'Mark all fixed' : 'Mark fixed'}</button></>;
 }
 
 // Every fault logged on this genset, newest first, and how each was cleared;
@@ -320,12 +323,13 @@ function FaultLog({ log, asset, manage, reload }) {
   return <Card title={`Fault log (${log?.length || 0})`} actions={manage && <LogFaultButton asset={asset} onSaved={reload} small />}>
     {!log?.length ? <p className="muted small">No faults logged.</p> :
     <div className="scroll-y"><table>
-      <thead><tr><th>Logged</th><th>Fault</th><th className="hide-sm">Cleared</th></tr></thead>
+      <thead><tr><th>Logged</th><th>Fault</th><th>Cleared</th></tr></thead>
       <tbody>{log.map((l) => <tr key={l.id}>
         <td className="small nowrap">{dateTime(l.logged_at)}{l.logged_by_name && <><br /><span className="muted">{l.logged_by_name}</span></>}</td>
         <td className="wrap"><Fault level={l.level} /><br />{l.note}</td>
-        <td className="small hide-sm">{l.cleared_at ? <>{dateTime(l.cleared_at)}<br /><span className="muted">{[l.cleared_reason, l.cleared_by_name].filter(Boolean).join(' · ')}</span></> : <><strong className="bad">Open</strong>
-          {manage && ['minor', 'major'].includes(asset.fault_level) && <div><MarkFixed asset={asset} reload={reload} /></div>}</>}</td>
+        <td className="small">{l.cleared_at ? <>{dateTime(l.cleared_at)}<br /><span className="muted">{[l.cleared_reason, l.cleared_by_name].filter(Boolean).join(' · ')}</span></> : <><strong className="bad">Open</strong>
+          {manage && <div className="row-actions"><MarkFixed asset={asset} fault={l} reload={reload} />
+            <Link className="btn small ghost" to={`/work/new${qs({ asset_id: asset.id, kind: 'repair', title: `${assetLabel(asset).replace(/^\S+\. \S+ /, '')}: ${l.note || 'fault'}`.slice(0, 200), fault_id: l.id })}`}>Log work</Link></div>}</>}</td>
       </tr>)}</tbody>
     </table></div>}
   </Card>;

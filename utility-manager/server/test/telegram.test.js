@@ -324,14 +324,14 @@ test('/fault logs a genset fault, and clears it', async () => {
   assert.match(repliesTo(ADMIN_TG), /Genset 4: <b>minor fault<\/b> logged: oil leak at the front seal/);
   assert.deepEqual(await fault(), { fault_level: 'minor', fault_note: 'oil leak at the front seal' });
   await say(ADMIN_TG, '/fault Maafushi G4 major crankshaft knock');
-  assert.deepEqual(await fault(), { fault_level: 'major', fault_note: 'crankshaft knock' });
+  assert.deepEqual(await fault(), { fault_level: 'major', fault_note: 'oil leak at the front seal; crankshaft knock' }, 'both faults');
   await say(ADMIN_TG, '/fault Maafushi G4');
   assert.match(repliesTo(ADMIN_TG), /e\.g\./);
   await say(ADMIN_TG, '/fault Maafushi G4 fixed');
-  assert.match(repliesTo(ADMIN_TG), /fault cleared/);
+  assert.match(repliesTo(ADMIN_TG), /faults cleared/);
   assert.deepEqual(await fault(), { fault_level: 'none', fault_note: null });
   const log = (await db.query('select level, cleared_reason from fault_log where asset_id = $1 order by logged_at', [g4])).rows;
-  assert.deepEqual(log.slice(-2).map((l) => [l.level, l.cleared_reason]), [['minor', 'Replaced by a newer fault'], ['major', 'Marked fixed']]);
+  assert.deepEqual(log.slice(-2).map((l) => [l.level, l.cleared_reason]), [['minor', 'Marked fixed'], ['major', 'Marked fixed']]);
   await say(4004, '/fault Maafushi G4 leak');
   assert.match(repliesTo(4004), /needs technical access/);
 });

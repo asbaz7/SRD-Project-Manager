@@ -63,14 +63,18 @@ export function GensetUpdateForm({ facilityId, onClose, onSaved }) {
 function UpdateRows({ data: d, onClose, onSaved }) {
   const [rows, setRows] = useState(() => d.gensets.map((g) => ({
     id: g.id, tag: g.tag, model: g.make_model, status: g.status, last: g.total_hours == null ? null : Number(g.total_hours), lastMonth: g.report_month,
-    total_hours: '', meter_replaced: false, status: g.status === 'unknown' ? 'running' : g.status, faultLevel: g.fault_level || 'none', fault: g.fault_note || '',
+    total_hours: '', meter_replaced: false, status: g.status === 'unknown' ? 'running' : g.status,
+    // Faults: kept as they are unless all are fixed or one is added (a genset
+    // can have several). One with none recorded yet starts at "no faults".
+    open: ['minor', 'major'].includes(g.fault_level) ? g.fault_note || `${g.fault_level} fault` : null,
+    faultLevel: g.fault_level ? '' : 'none', fault: '',
     needs_overhaul: !!g.needs_overhaul, alt_needs_service: !!g.alt_needs_service, skip: g.status === 'disconnected',
   })));
   const set = (i, change) => setRows((all) => all.map((r, j) => (j === i ? { ...r, ...change } : r)));
   const save = useSubmit(async () => {
     const items = rows.filter((r) => !r.skip).map((r) => ({
       asset_id: r.id, total_hours: Number(r.total_hours), meter_replaced: r.meter_replaced || undefined, status: r.status,
-      fault_level: r.faultLevel, fault: r.faultLevel === 'none' ? null : r.fault.trim() || null,
+      ...(r.faultLevel ? { fault_level: r.faultLevel, fault: r.faultLevel === 'none' ? null : r.fault.trim() || null } : {}),
       needs_overhaul: r.needs_overhaul, alt_needs_service: r.alt_needs_service,
     }));
     if (!items.length) throw new Error('Include at least one genset');
@@ -96,15 +100,18 @@ function UpdateRows({ data: d, onClose, onSaved }) {
             <input type="checkbox" checked={r.meter_replaced} onChange={(e) => set(i, { meter_replaced: e.target.checked })} /> meter replaced</label></>}</td>
         <td><Select value={r.status} disabled={r.skip} onChange={(v) => set(i, ['down', 'maintenance'].includes(r.status) && ['running', 'standby'].includes(v) ? { status: v, faultLevel: 'none', fault: '' } : { status: v })}
           options={STATUSES.map((k) => [k, ASSET_STATUS[k].label])} aria-label={`G${r.tag} status`} /></td>
-        <td><Select value={r.faultLevel} disabled={r.skip} onChange={(v) => set(i, { faultLevel: v })}
-          options={Object.entries(FAULTS).map(([k, f]) => [k, f.label])} aria-label={`G${r.tag} faults`} />
-          {r.faultLevel !== 'none' && <input value={r.fault} disabled={r.skip} required={!r.skip} maxLength="2000"
+        <td>{r.open && <small className="warn-text">Open: {r.open}<br /></small>}
+          <Select value={r.faultLevel} disabled={r.skip} onChange={(v) => set(i, { faultLevel: v })}
+            options={[['', r.open ? 'Keep as they are' : 'No change'], ['none', r.open ? 'All fixed' : FAULTS.none.label],
+              ['minor', `Add a ${FAULTS.minor.label.toLowerCase()}`], ['major', `Add a ${FAULTS.major.label.toLowerCase()}`]]} aria-label={`G${r.tag} faults`} />
+          {['minor', 'major'].includes(r.faultLevel) && <input value={r.fault} disabled={r.skip} required={!r.skip} maxLength="2000"
             onChange={(e) => set(i, { fault: e.target.value })} placeholder="What is wrong" aria-label={`G${r.tag} fault`} />}</td>
         <td className="small"><label className="check"><input type="checkbox" disabled={r.skip} checked={r.needs_overhaul} onChange={(e) => set(i, { needs_overhaul: e.target.checked })} /> Overhaul</label>
           <label className="check"><input type="checkbox" disabled={r.skip} checked={r.alt_needs_service} onChange={(e) => set(i, { alt_needs_service: e.target.checked })} /> Alternator service</label></td>
       </tr>)}</tbody>
     </table></div>
-    <p className="muted small wide">Setting a genset down opens repair work; bringing one back to running clears its faults unless you give new ones.
+    <p className="muted small wide">A genset can have several faults: adding one keeps the others; fix them one by one on the genset's page.
+      Setting a genset down opens repair work; bringing one back to running clears its faults unless you add a new one.
       Record overhauls and other services on the genset (or by completing the work order) so due dates stay right.</p>
     <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={save.busy}>Save update</button></div>

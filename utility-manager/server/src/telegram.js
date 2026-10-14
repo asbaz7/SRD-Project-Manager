@@ -53,7 +53,7 @@ Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator b
 /down Maafushi G3 radiator leak
 /up Maafushi G3
 /standby, /maintenance or /disconnected work the same way
-/fault Maafushi G3 oil leak  <i>(a minor fault; add</i> major <i>first for a major one,</i> fixed <i>to clear it)</i>
+/fault Maafushi G3 oil leak  <i>(adds a minor fault; add</i> major <i>first for a major one,</i> fixed <i>to clear them all)</i>
 /hours Maafushi G1 12345 G2 23456  <i>(monthly running hours; condition stays as it was)</i>
 /hours Maafushi G3 12345 minor oil leak  <i>(with its condition: ok, minor, major or down, and the fault)</i>
   <i>(add</i> newmeter <i>after the hours if the meter was replaced)</i>
@@ -393,7 +393,7 @@ export function createTelegram({ db, config, log }) {
     const res = await asUser(user.id, 'POST', `/assets/${a.asset.id}/fault`, { level, note: level === 'none' ? null : note });
     if (res.status !== 200) return apiError(res);
     const where = `${esc(r.island.atoll_code)}. ${esc(r.island.name)} ${esc(assetName(a.asset))}`;
-    return level === 'none' ? `✅ ${where}: fault cleared\n${link(`/assets/${a.asset.id}`, 'Open')}`
+    return level === 'none' ? `✅ ${where}: faults cleared\n${link(`/assets/${a.asset.id}`, 'Open')}`
       : `${level === 'major' ? '■' : '▲'} ${where}: <b>${level} fault</b> logged: ${esc(note)}\n${link(`/assets/${a.asset.id}`, 'Open')}`
         + (a.asset.status === 'running' && level === 'major' ? '\nIf it has stopped, also send /down.' : '');
   }
