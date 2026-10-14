@@ -1,29 +1,33 @@
-import { StrictMode } from 'react';
+import { StrictMode, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth.jsx';
 import { CrashGuard } from './components/Crash.jsx';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
-import Account from './pages/Account.jsx';
-import Dashboard from './pages/Dashboard.jsx';
-import Islands from './pages/Islands.jsx';
-import Island from './pages/Island.jsx';
-import Asset from './pages/Asset.jsx';
-import Incidents from './pages/Incidents.jsx';
-import Incident from './pages/Incident.jsx';
-import Projects from './pages/Projects.jsx';
-import Documents from './pages/Documents.jsx';
-import Document from './pages/Document.jsx';
-import Surveys, { NewSurvey } from './pages/Surveys.jsx';
-import Survey from './pages/Survey.jsx';
-import Project from './pages/Project.jsx';
-import Users from './pages/Users.jsx';
-import Audit from './pages/Audit.jsx';
-import Service from './pages/Service.jsx';
-import Work from './pages/Work.jsx';
-import WorkItem from './pages/WorkItem.jsx';
 import './styles.css';
+
+// Pages load when first opened, so the first screen doesn't wait for all of
+// them. (A page file gone after a deploy is handled by CrashGuard: reload.)
+const Account = lazy(() => import('./pages/Account.jsx'));
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
+const Islands = lazy(() => import('./pages/Islands.jsx'));
+const Island = lazy(() => import('./pages/Island.jsx'));
+const Asset = lazy(() => import('./pages/Asset.jsx'));
+const Incidents = lazy(() => import('./pages/Incidents.jsx'));
+const Incident = lazy(() => import('./pages/Incident.jsx'));
+const Projects = lazy(() => import('./pages/Projects.jsx'));
+const Documents = lazy(() => import('./pages/Documents.jsx'));
+const Document = lazy(() => import('./pages/Document.jsx'));
+const Surveys = lazy(() => import('./pages/Surveys.jsx'));
+const NewSurvey = lazy(() => import('./pages/Surveys.jsx').then((m) => ({ default: m.NewSurvey })));
+const Survey = lazy(() => import('./pages/Survey.jsx'));
+const Project = lazy(() => import('./pages/Project.jsx'));
+const Users = lazy(() => import('./pages/Users.jsx'));
+const Audit = lazy(() => import('./pages/Audit.jsx'));
+const Service = lazy(() => import('./pages/Service.jsx'));
+const Work = lazy(() => import('./pages/Work.jsx'));
+const WorkItem = lazy(() => import('./pages/WorkItem.jsx'));
 
 // Incidents were renamed interruptions: old links keep working.
 function Renamed({ from, to }) {
