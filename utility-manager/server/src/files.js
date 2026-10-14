@@ -10,7 +10,7 @@
 //   const files = createFiles(db, bucket)
 //   files.save(t, table, owner, { name, type, bytes, userId })  -> row (inside a transaction)
 //   files.read(table, owner, fileId)                           -> { file_name, content_type, body } | 404
-//   files.readAll(table, owner)                                -> [{ file_name, bytes }]
+//   files.readAll(table, owner, { currentOnly })              -> [{ file_name, bytes }]
 //   files.removed(rows)                                         -> deletes the objects of deleted rows
 //
 // `table` is one of FILE_TABLES; `owner` is { column, id }, e.g.
@@ -53,15 +53,18 @@ export function createFiles(db, bucket, log) {
 
     // Store the bytes, then the row (in the caller's transaction `t`). If the
     // row can't be written the object is removed again.
-    async save(t, table, owner, { name, type, bytes, userId }) {
+    // `extra`: more columns for the row, e.g. { group_id, version } (fixed
+    // names from the caller, never user input).
+    async save(t, table, owner, { name, type, bytes, userId }, extra = {}) {
       check(table);
       const key = bucket ? `${table.replace('_files', '')}/${owner.id}/${randomUUID()}` : null;
       if (bucket) await bucket.put(key, bytes, { httpMetadata: { contentType: type } });
       try {
+        const cols = Object.keys(extra);
         const { rows } = await t.query(
-          `insert into ${table} (${owner.column}, file_name, content_type, size_bytes, data, storage_key, uploaded_by)
-           values ($1, $2, $3, $4, $5, $6, $7) returning id, file_name, size_bytes`,
-          [owner.id, name, type, bytes.length, bucket ? null : bytes, key, userId]);
+          `insert into ${table} (${owner.column}, file_name, content_type, size_bytes, data, storage_key, uploaded_by${cols.map((c) => `, ${c}`).join('')})
+           values ($1, $2, $3, $4, $5, $6, $7${cols.map((_, i) => `, $${i + 8}`).join('')}) returning id, file_name, size_bytes`,
+          [owner.id, name, type, bytes.length, bucket ? null : bytes, key, userId, ...Object.values(extra)]);
         return rows[0];
       } catch (err) {
         if (bucket) await bucket.delete(key).catch(() => {});
@@ -83,10 +86,11 @@ export function createFiles(db, bucket, log) {
     },
 
     // Every file of one owner, as bytes (for a ZIP).
-    async readAll(table, owner) {
+    // currentOnly: project files, leaving out older versions.
+    async readAll(table, owner, { currentOnly = false } = {}) {
       check(table);
       const { rows } = await db.query(
-        `select file_name, data, storage_key from ${table} where ${owner.column} = $1 order by uploaded_at`, [owner.id]);
+        `select file_name, data, storage_key from ${table} where ${owner.column} = $1${currentOnly ? ' and current' : ''} order by uploaded_at`, [owner.id]);
       return Promise.all(rows.map(async (f) => {
         if (!f.storage_key) return { file_name: f.file_name, bytes: asBytes(f.data) };
         const object = bucket && await bucket.get(f.storage_key);

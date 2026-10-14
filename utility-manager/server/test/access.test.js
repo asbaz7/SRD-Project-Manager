@@ -406,6 +406,54 @@ test('outside systems cannot connect: no access tokens, no report intake', async
   }
 });
 
+test('project files: new versions keep their history; Microsoft 365 links', async () => {
+  const p = (await call('POST', '/projects', T.tech, { service: 'electricity', island_id: maafushi.id, title: 'New connections 2027',
+    visibility: 'members', members: [{ user_id: U.clerk, access: 'view' }] })).body;
+  const b64 = (text) => Buffer.from(text).toString('base64');
+  const first = (await call('POST', `/projects/${p.id}/files`, T.tech, { file_name: 'Connections.xlsx', data: b64('v1') })).body;
+
+  // An edited copy becomes version 2; the first stays in its history.
+  const v2 = await call('POST', `/projects/${p.id}/files/${first.id}/versions`, T.tech, { file_name: 'Connections.xlsx', data: b64('v2') });
+  assert.equal(v2.status, 201, JSON.stringify(v2.body));
+  const v3 = (await call('POST', `/projects/${p.id}/files/${v2.body.id}/versions`, T.tech, { file_name: 'Connections (final).xlsx', data: b64('v3') })).body;
+  assert.equal((await call('POST', `/projects/${p.id}/files/${first.id}/versions`, T.tech, { file_name: 'x.xlsx', data: b64('x') })).status, 404, 'only the current version takes a new one');
+  assert.equal((await call('POST', `/projects/${p.id}/files/${v3.id}/versions`, T.clerk, { file_name: 'x.xlsx', data: b64('x') })).status, 403);
+  let d = (await call('GET', `/projects/${p.id}`, T.clerk)).body;
+  assert.equal(d.files.length, 1);
+  assert.equal(d.files[0].file_name, 'Connections (final).xlsx');
+  assert.equal(d.files[0].version, 3);
+  assert.deepEqual(d.files[0].versions.map((v) => v.version), [2, 1]);
+  assert.equal(d.files_total_bytes, 6, 'older versions count in the space used');
+  // An older version still downloads; the ZIP has current versions only.
+  const old = await app.inject({ method: 'GET', url: `/api/v1/projects/${p.id}/files/${first.id}`, headers: { authorization: `Bearer ${T.clerk}` } });
+  assert.equal(old.body, 'v1');
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const zip = await app.inject({ method: 'GET', url: `/api/v1/projects/${p.id}/zip`, headers: { authorization: `Bearer ${T.tech}` } });
+  const entries = unzipSync(new Uint8Array(Buffer.from(zip.body, 'binary')));
+  assert.deepEqual(Object.keys(entries), ['Connections (final).xlsx']);
+  assert.equal(strFromU8(entries['Connections (final).xlsx']), 'v3');
+
+  // Removing it removes every version, stored objects included.
+  const keys = (await db.query('select storage_key from project_files where project_id = $1', [p.id])).rows.map((r) => r.storage_key);
+  assert.equal(keys.length, 3);
+  assert.equal((await call('DELETE', `/projects/${p.id}/files/${v3.id}`, T.tech)).body.deleted, 3);
+  assert.ok(keys.every((k) => !bucket.objects.has(k)));
+
+  // Links to files in Microsoft 365, opened and edited there.
+  const url = 'https://stelco.sharepoint.com/:x:/r/sites/SRD/Shared%20Documents/Power_House_New_Connections_2027.xlsx?d=w1&web=1';
+  const link = await call('POST', `/projects/${p.id}/links`, T.tech, { url });
+  assert.equal(link.status, 201, JSON.stringify(link.body));
+  assert.equal(link.body.title, 'Power_House_New_Connections_2027.xlsx', 'titled from the file name in the address');
+  assert.equal((await call('POST', `/projects/${p.id}/links`, T.tech, { url: 'https://1drv.ms/x/s!abc', title: 'Load list' })).body.title, 'Load list');
+  assert.equal((await call('POST', `/projects/${p.id}/links`, T.tech, { url: 'http://example.com/x.xlsx' })).status, 400, 'https only');
+  assert.equal((await call('POST', `/projects/${p.id}/links`, T.tech, { url: 'javascript:alert(1)' })).status, 400);
+  assert.equal((await call('POST', `/projects/${p.id}/links`, T.clerk, { url })).status, 403);
+  d = (await call('GET', `/projects/${p.id}`, T.clerk)).body;
+  assert.deepEqual(d.links.map((l) => l.title), ['Power_House_New_Connections_2027.xlsx', 'Load list']);
+  assert.equal((await call('DELETE', `/projects/${p.id}/links/${link.body.id}`, T.tech)).status, 200);
+  assert.equal((await call('GET', `/projects/${p.id}`, T.tech)).body.links.length, 1);
+});
+
 test('units: people belong to one; work and projects are assigned to one, and its members can view the project', async () => {
   const { rows: [mate] } = await db.query(`insert into users (email, full_name, role, technical, password_hash, must_change_password)
     values ('mate@srd.mv', 'mate', 'viewer', false, $1, false) returning id`, [await hashPassword(PASSWORD)]);

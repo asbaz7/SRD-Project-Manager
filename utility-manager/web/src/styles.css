@@ -567,3 +567,11 @@ details > summary { cursor: pointer; }
 .site-tile { text-align: left; border: 0; font: inherit; cursor: pointer; width: 100%; }
 .site-name { margin: 0 0 0 8px; font-size: 1.1rem; }
 input.qty { width: 80px; text-align: right; }
+
+/* Project files: versions */
+.file-row { align-items: flex-start; }
+.file-row .grow { flex: 1; min-width: 0; }
+.file-row .actions { flex-wrap: nowrap; }
+.small-pill { margin-left: 6px; font-size: .7rem; padding: 1px 7px; }
+.versions { margin: 6px 0 0; padding-left: 18px; font-size: .85rem; }
+.versions li { margin: 2px 0; }

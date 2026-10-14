@@ -143,6 +143,15 @@ export async function purgeProjectFiles(db, files) {
   return rows.length;
 }
 
+// A link's title when none is given: the file name in the address if there
+// is one (SharePoint and OneDrive links often carry it), else the site.
+export function linkTitle(url) {
+  const u = new URL(url);
+  const named = [...u.pathname.split('/'), u.searchParams.get('file') || ''].map((x) => { try { return decodeURIComponent(x); } catch { return x; } })
+    .reverse().find((x) => /\.[a-z0-9]{2,5}$/i.test(x));
+  return (named || u.hostname).slice(0, 200);
+}
+
 export default async function projectRoutes(app) {
   await trackerRoutes(app);
   const { db, telegram, config, files } = app;
@@ -196,12 +205,22 @@ export default async function projectRoutes(app) {
     project.can_edit = access === 'edit' || access === 'manage';
     project.can_manage = access === 'manage';
     // Everything else about it at once.
-    const [tasks, sites, files, members, updates] = await Promise.all([
+    const [tasks, sites, fileRows, links, stored, members, updates] = await Promise.all([
       loadTasks(db, projectId),
       loadSites(db, projectId),
+      // Current files, each with its older versions (newest first).
       db.query(`
-        select f.id, f.file_name, f.content_type, f.size_bytes, f.uploaded_at, u.full_name as uploaded_by_name
-          from project_files f left join users u on u.id = f.uploaded_by where f.project_id = $1 order by f.uploaded_at`, [projectId]),
+        select f.id, f.file_name, f.content_type, f.size_bytes, f.uploaded_at, f.version, u.full_name as uploaded_by_name,
+               coalesce((select json_agg(json_build_object('id', o.id, 'version', o.version, 'file_name', o.file_name, 'size_bytes', o.size_bytes,
+                                                           'uploaded_at', o.uploaded_at, 'uploaded_by_name', ou.full_name) order by o.version desc)
+                           from project_files o left join users ou on ou.id = o.uploaded_by
+                          where o.project_id = f.project_id and coalesce(o.group_id, o.id) = coalesce(f.group_id, f.id) and not o.current), '[]') as versions
+          from project_files f left join users u on u.id = f.uploaded_by
+         where f.project_id = $1 and f.current order by f.uploaded_at`, [projectId]),
+      db.query(`
+        select l.id, l.title, l.url, l.added_at, u.full_name as added_by_name
+          from project_links l left join users u on u.id = l.added_by where l.project_id = $1 order by l.added_at`, [projectId]),
+      db.query('select coalesce(sum(size_bytes), 0)::bigint as bytes from project_files where project_id = $1', [projectId]),
       db.query(`
         select m.user_id, m.access, u.full_name, u.designation from project_members m join users u on u.id = m.user_id
          where m.project_id = $1 order by m.access desc, u.full_name`, [projectId]),
@@ -214,10 +233,12 @@ export default async function projectRoutes(app) {
     // A tracker: tasks with codes, statuses and so on, edited one at a time.
     project.tracker = tasks.some((t) => t.code || t.status);
     project.sites = sites;
-    project.files = files.rows;
+    project.files = fileRows.rows.map((f) => ({ ...f, versions: typeof f.versions === 'string' ? JSON.parse(f.versions) : f.versions }));
+    project.links = links.rows;
     project.members = members.rows;
     project.updates = updates.rows;
-    project.files_total_bytes = project.files.reduce((n, f) => n + Number(f.size_bytes), 0);
+    // Everything stored for it, older versions included.
+    project.files_total_bytes = Number(stored.rows[0].bytes);
     return project;
   });
 
@@ -321,7 +342,7 @@ export default async function projectRoutes(app) {
   app.get('/projects/:id/zip', async (req, reply) => {
     const { id: projectId } = parse(serialParam, req.params);
     await assertAccess(db, req.user, projectId, 'view');
-    const all = await files.readAll('project_files', { column: 'project_id', id: projectId });
+    const all = await files.readAll('project_files', { column: 'project_id', id: projectId }, { currentOnly: true });
     if (!all.length) throw notFound('Files');
     const entries = {};
     for (const r of all) {
@@ -338,7 +359,59 @@ export default async function projectRoutes(app) {
   app.delete('/projects/:id/files/:fileId', async (req) => {
     const { id: projectId, fileId } = parse(fileParams, req.params);
     await assertAccess(db, req.user, projectId, 'edit');
-    await files.removed((await db.query('delete from project_files where id = $1 and project_id = $2 returning storage_key', [fileId, projectId])).rows);
+    // The file goes with all its versions.
+    const { rows } = await db.query(`
+      delete from project_files where project_id = $2
+         and coalesce(group_id, id) = (select coalesce(group_id, id) from project_files where id = $1 and project_id = $2)
+      returning storage_key`, [fileId, projectId]);
+    if (!rows.length) throw notFound('File');
+    await files.removed(rows);
+    return { ok: true, deleted: rows.length };
+  });
+
+  // An edited copy of a file: becomes its new version, the old one stays in
+  // its history.
+  app.post('/projects/:id/files/:fileId/versions', async (req, reply) => {
+    const { id: projectId, fileId } = parse(fileParams, req.params);
+    const upload = decodeUpload(parse(uploadBody, req.body));
+    await assertAccess(db, req.user, projectId, 'edit');
+    const { rows: [p] } = await db.query('select status from projects where id = $1', [projectId]);
+    if (CLOSED.includes(p.status)) throw badRequest('This project is closed: files can no longer be added');
+    const row = await db.tx(req.user.id, async (t) => {
+      const { rows: [old] } = await t.query(
+        'select id, group_id, version from project_files where id = $1 and project_id = $2 and current for update', [fileId, projectId]);
+      if (!old) throw notFound('File');
+      await t.query('update project_files set current = false where id = $1', [old.id]);
+      return files.save(t, 'project_files', { column: 'project_id', id: projectId }, { ...upload, userId: req.user.id },
+        { group_id: old.group_id ?? old.id, version: old.version + 1 });
+    });
+    reply.code(201);
+    return row;
+  });
+
+  // Links to files kept in Microsoft 365 (OneDrive, SharePoint), opened and
+  // edited there.
+  const linkBody = z.object({
+    url: z.string().trim().max(2000).url().refine((u) => u.startsWith('https://'), 'must start with https://'),
+    title: optText(200),
+  });
+  app.post('/projects/:id/links', async (req, reply) => {
+    const { id: projectId } = parse(serialParam, req.params);
+    const b = parse(linkBody, req.body);
+    await assertAccess(db, req.user, projectId, 'edit');
+    const title = b.title || linkTitle(b.url);
+    const { rows } = await db.tx(req.user.id, (t) => t.query(
+      'insert into project_links (project_id, title, url, added_by) values ($1, $2, $3, $4) returning id, title, url, added_at',
+      [projectId, title, b.url, req.user.id]));
+    reply.code(201);
+    return rows[0];
+  });
+
+  app.delete('/projects/:id/links/:linkId', async (req) => {
+    const { id: projectId, linkId } = parse(z.object({ id: z.coerce.number().int().positive(), linkId: z.coerce.number().int().positive() }), req.params);
+    await assertAccess(db, req.user, projectId, 'edit');
+    const { rowCount } = await db.tx(req.user.id, (t) => t.query('delete from project_links where id = $1 and project_id = $2', [linkId, projectId]));
+    if (!rowCount) throw notFound('Link');
     return { ok: true };
   });
 

@@ -104,46 +104,107 @@ function ProjectView({ project: p, reload }) {
 
 const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
+const readFile = (file) => new Promise((resolve, reject) => {
+  if (file.size > 10 * 1024 * 1024) { reject(new Error('Files can be up to 10 MB')); return; }
+  const r = new FileReader();
+  r.onload = () => resolve({ file_name: file.name, content_type: file.type || undefined, data: String(r.result).split(',')[1] });
+  r.onerror = () => reject(new Error('Could not read the file'));
+  r.readAsDataURL(file);
+});
+const pick = (onFile) => (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onFile(f); };
+
 // Files are kept only while the project is open: once it is completed or
 // cancelled they can be downloaded (or deleted at once) until the date shown,
-// then the system deletes them.
+// then the system deletes them. A file can take an edited copy as its new
+// version (older ones stay in its history). Files edited in Microsoft 365
+// are linked instead of uploaded.
 function ProjectFiles({ project: p, reload }) {
   const closed = ['completed', 'cancelled'].includes(p.status);
+  const [history, setHistory] = useState(null);
   const upload = useSubmit(async (file) => {
-    if (file.size > 10 * 1024 * 1024) throw new Error('Files can be up to 10 MB');
-    const data = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(',')[1]);
-      r.onerror = () => reject(new Error('Could not read the file'));
-      r.readAsDataURL(file);
-    });
-    await api(`/projects/${p.id}/files`, { method: 'POST', body: { file_name: file.name, content_type: file.type || undefined, data } });
+    await api(`/projects/${p.id}/files`, { method: 'POST', body: await readFile(file) });
     reload();
   });
-  const remove = useSubmit(async (fileId) => { await api(`/projects/${p.id}/files/${fileId}`, { method: 'DELETE' }); reload(); });
+  const version = useSubmit(async (fileId, file) => {
+    await api(`/projects/${p.id}/files/${fileId}/versions`, { method: 'POST', body: await readFile(file) });
+    setHistory(null);
+    reload();
+  });
+  const remove = useSubmit(async (f) => {
+    if (f.versions.length && !window.confirm(`Remove ${f.file_name} and its ${f.versions.length} older version${f.versions.length === 1 ? '' : 's'}?`)) return;
+    await api(`/projects/${p.id}/files/${f.id}`, { method: 'DELETE' });
+    reload();
+  });
   const removeAll = useSubmit(async () => {
     if (!window.confirm(`Delete all ${p.files.length} files of ${p.ref} now? Download them first if you need them. This can't be undone.`)) return;
     await api(`/projects/${p.id}/files`, { method: 'DELETE' });
     reload();
   });
-  if (closed && p.files.length === 0) return null;
+  if (closed && p.files.length === 0 && !p.links.length) return null;
   const deleteOn = p.files_delete_after && new Date(`${String(p.files_delete_after).slice(0, 10)}T00:00:00Z`)
     .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-  return <Card title={`Files${p.files.length ? ` (${p.files.length} · ${size(p.files_total_bytes)})` : ''}`}
-    actions={p.files.length > 1 && <a className="btn small" href={`/api/v1/projects/${p.id}/zip`}>Download all (ZIP)</a>}>
-    <ErrorBox error={upload.error || remove.error || removeAll.error} />
-    {closed
-      ? <div className="notice">This project is {p.status}. Its files will be <strong>deleted on {deleteOn}</strong>. Download them before then
-          {p.can_edit && <>, or <button className="link" onClick={removeAll.submit} disabled={removeAll.busy}>delete them now</button></>}.</div>
-      : <p className="muted small">Files are kept while the project is open. When it is completed they can be downloaded for 30 days, then they are deleted.</p>}
-    {p.files.length === 0 ? <Empty>No files yet.</Empty> :
-      <ul className="people">{p.files.map((f) => <li key={f.id}>
-        <span><a href={`/api/v1/projects/${p.id}/files/${f.id}`}><strong>{f.file_name}</strong></a><br />
-          <small className="muted">{size(f.size_bytes)} · {dateTime(f.uploaded_at)}{f.uploaded_by_name && ` · ${f.uploaded_by_name}`}</small></span>
-        {p.can_edit && <button className="btn ghost small" disabled={remove.busy} onClick={() => remove.submit(f.id)}>Remove</button>}
-      </li>)}</ul>}
-    {!closed && p.can_edit && <label className="btn small file-pick">{upload.busy ? 'Uploading…' : 'Attach a file'}
-      <input type="file" hidden disabled={upload.busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload.submit(f); }} /></label>}
+  const busy = upload.busy || version.busy;
+  return <>
+    <Card title={`Files${p.files.length ? ` (${p.files.length} · ${size(p.files_total_bytes)})` : ''}`}
+      actions={p.files.length > 1 && <a className="btn small" href={`/api/v1/projects/${p.id}/zip`}>Download all (ZIP)</a>}>
+      <ErrorBox error={upload.error || version.error || remove.error || removeAll.error} />
+      {closed
+        ? <div className="notice">This project is {p.status}. Its files will be <strong>deleted on {deleteOn}</strong>. Download them before then
+            {p.can_edit && <>, or <button className="link" onClick={removeAll.submit} disabled={removeAll.busy}>delete them now</button></>}.</div>
+        : <p className="muted small">Files are kept while the project is open. When it is completed they can be downloaded for 30 days, then they are deleted.
+            {p.can_edit && ' To update a file, download it, edit it, then use New version: the old copy stays in its history.'}</p>}
+      {p.files.length === 0 ? <Empty>No files yet.</Empty> :
+        <ul className="people">{p.files.map((f) => <li key={f.id} className="file-row">
+          <span className="grow"><a href={`/api/v1/projects/${p.id}/files/${f.id}`}><strong>{f.file_name}</strong></a>
+            {f.version > 1 && <span className="pill small-pill">v{f.version}</span>}<br />
+            <small className="muted">{size(f.size_bytes)} · {dateTime(f.uploaded_at)}{f.uploaded_by_name && ` · ${f.uploaded_by_name}`}</small>
+            {f.versions.length > 0 && <> · <button className="link small" onClick={() => setHistory(history === f.id ? null : f.id)}>
+              {history === f.id ? 'Hide' : 'Show'} {f.versions.length} older version{f.versions.length === 1 ? '' : 's'}</button></>}
+            {history === f.id && <ol className="versions">{f.versions.map((v) => <li key={v.id}>
+              <a href={`/api/v1/projects/${p.id}/files/${v.id}`}>v{v.version} · {v.file_name}</a>
+              <small className="muted"> · {size(v.size_bytes)} · {dateTime(v.uploaded_at)}{v.uploaded_by_name && ` · ${v.uploaded_by_name}`}</small></li>)}</ol>}
+          </span>
+          {p.can_edit && <span className="actions">
+            {!closed && <label className="btn ghost small file-pick">New version
+              <input type="file" hidden disabled={busy} onChange={pick((file) => version.submit(f.id, file))} /></label>}
+            <button className="btn ghost small" disabled={remove.busy} onClick={() => remove.submit(f)}>Remove</button></span>}
+        </li>)}</ul>}
+      {!closed && p.can_edit && <label className="btn small file-pick">{busy ? 'Uploading…' : 'Attach a file'}
+        <input type="file" hidden disabled={busy} onChange={pick(upload.submit)} /></label>}
+    </Card>
+    <ProjectLinks project={p} reload={reload} />
+  </>;
+}
+
+// Files kept in Microsoft 365 (OneDrive, SharePoint): edited there, in the
+// browser, by everyone who has access to them in Microsoft 365.
+function ProjectLinks({ project: p, reload }) {
+  const [f, setF] = useState({ url: '', title: '' });
+  const add = useSubmit(async () => {
+    await api(`/projects/${p.id}/links`, { method: 'POST', body: { url: f.url.trim(), title: f.title.trim() || null } });
+    setF({ url: '', title: '' });
+    reload();
+  });
+  const remove = useSubmit(async (l) => {
+    if (!window.confirm(`Remove the link to ${l.title}? The file itself stays in Microsoft 365.`)) return;
+    await api(`/projects/${p.id}/links/${l.id}`, { method: 'DELETE' });
+    reload();
+  });
+  if (!p.links.length && !p.can_edit) return null;
+  return <Card title={`Microsoft 365 files${p.links.length ? ` (${p.links.length})` : ''}`}>
+    <ErrorBox error={add.error || remove.error} />
+    <p className="muted small">Files kept in OneDrive or SharePoint open in Excel, Word or PowerPoint online, where they are edited directly
+      (by several people at once). Who can open them is set by sharing in Microsoft 365.</p>
+    {p.links.length > 0 && <ul className="people">{p.links.map((l) => <li key={l.id}>
+      <span><a href={l.url} target="_blank" rel="noopener noreferrer"><strong>{l.title}</strong> ↗</a><br />
+        <small className="muted">{new URL(l.url).hostname} · {dateTime(l.added_at)}{l.added_by_name && ` · ${l.added_by_name}`}</small></span>
+      {p.can_edit && <button className="btn ghost small" disabled={remove.busy} onClick={() => remove.submit(l)}>Remove</button>}
+    </li>)}</ul>}
+    {p.can_edit && <form className="inline-add" onSubmit={(e) => { e.preventDefault(); add.submit(); }}>
+      <input type="url" required pattern="https://.*" placeholder="Paste the file's link (Share → Copy link)" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} aria-label="Link" />
+      <input placeholder="Name (optional)" maxLength="200" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} aria-label="Name" />
+      <button className="btn small" disabled={add.busy}>Add link</button>
+    </form>}
   </Card>;
 }
 
