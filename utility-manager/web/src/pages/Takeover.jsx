@@ -12,8 +12,10 @@ import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 const SERVICES = [['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']];
 // 'pending' is kept as the stored value; on screen it is "Survey ongoing".
-const STATUS = { taken_over: 'Taken over', pending: 'Survey ongoing', not_applicable: 'Not applicable' };
-const STATE = { taken_over: 'Under STELCO', pending: 'Under FENAKA', not_set: 'Not set' };
+const STATUS = { taken_over: 'Taken over', pending: 'Survey ongoing', fenaka: 'Under FENAKA', other_operator: 'Other operator', not_applicable: 'Not applicable' };
+// No date for these: only taken over (when) and survey ongoing (since when).
+const dated = (st) => st === 'taken_over' || st === 'pending';
+const STATE = { taken_over: 'Under STELCO', pending: 'Under FENAKA', other: 'Other operator', not_set: 'Not set' };
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 
@@ -58,16 +60,16 @@ function TakeoverView({ t, reload }) {
       <div className="tko-headline"><strong>{pct(done, total)}%</strong><span className="small">{num(done)} of {num(total)} inhabited islands under STELCO</span></div>
       <div className="tko-bar"><span style={{ width: `${pct(done, total)}%` }} /></div>
       {summary && <>
-        <p className="small muted">{num(t.totals.pending)} survey ongoing · {num(t.totals.not_set)} not set · {num(t.totals.islands)} on the list</p>
+        <p className="small muted">{num(t.totals.pending)} under FENAKA ({num(t.totals.survey)} survey ongoing){t.totals.other ? ` · ${num(t.totals.other)} other operator` : ''} · {num(t.totals.not_set)} not set</p>
         {SERVICES.map(([k, label]) => {
           const s = t.services[k];
-          const of = s.taken_over + s.pending;
+          const of = s.taken_over + s.pending + s.fenaka;
           return <div key={k} className="tko-svc"><span className="small">{label}</span>
             <div className="tko-bar thin"><span style={{ width: `${pct(s.taken_over, of)}%` }} /></div>
             <small className="muted">{num(s.taken_over)} / {num(of)}</small></div>;
         })}
         <div className="chips">
-          {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['not_set', 'Not set']].map(([k, l]) =>
+          {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['other', 'Other operator'], ['not_set', 'Not set']].map(([k, l]) =>
             <button key={k} className={`chip ${(filters.show || '') === k ? 'on' : ''}`} onClick={() => setFilter('show', k)}>{l}</button>)}
         </div>
       </>}
@@ -75,7 +77,7 @@ function TakeoverView({ t, reload }) {
 
     {/* Legend and the way back, bottom left. */}
     <div className="glass tko-float tko-legend-float small">
-      <span><i className="dot taken" /> Under STELCO</span><span><i className="dot pending" /> Under FENAKA</span><span><i className="dot none" /> Not set</span>
+      <span><i className="dot taken" /> Under STELCO</span><span><i className="dot pending" /> Under FENAKA</span><span><i className="dot other" /> Other operator</span><span><i className="dot none" /> Not set</span>
       {filters.atoll && <button className="btn small" onClick={() => pickAtoll('')}>← Whole country</button>}
     </div>
 
@@ -270,7 +272,7 @@ function AtollMap({ atolls, islands, match, selected, onPick, picked, onIsland }
   const click = (fn) => (e) => { e.stopPropagation(); if (!drag.current.moved) fn(); };
 
   const showNames = px < 0.09;
-  const tone = (a) => (!a.islands ? 'none' : a.taken_over === a.islands ? 'taken' : 'pending');
+  const tone = (a) => (!a.islands ? 'none' : a.not_set === a.islands ? 'none' : a.taken_over + a.other === a.islands ? 'taken' : 'pending');
 
   // Atoll labels beside their atoll, west atolls to the left, the rest to
   // the right; on each side pushed apart so none overlap.
@@ -337,14 +339,14 @@ function AtollList({ atolls, onPick }) {
 function Service({ status, on }) {
   if (!status) return <span className="muted">—</span>;
   return <span className={`tko-pill ${status}`} title={on ? `${status === 'taken_over' ? 'Taken over' : 'Survey started'} ${date(on)}` : undefined}>
-    {STATUS[status]}{on && status !== 'not_applicable' ? ` · ${date(on)}` : ''}</span>;
+    {STATUS[status]}{on && dated(status) ? ` · ${date(on)}` : ''}</span>;
 }
 
 function IslandList({ islands, showAtoll, picked, onPick }) {
   return <ul className="tko-list">{islands.map((i) => <li key={i.id} className={picked === i.id ? 'picked' : ''}>
     <button onClick={() => onPick(i)}>
       <span className="grow"><strong>{showAtoll && `${i.atoll_code}. `}{i.name}</strong>
-        <span className="tko-mini">{SERVICES.map(([k, label]) => i[`${k}_status`] && i[`${k}_status`] !== 'not_applicable'
+        <span className="tko-mini">{SERVICES.map(([k, label]) => i[`${k}_status`] && i[`${k}_status`] !== 'not_applicable' && i[`${k}_status`] !== 'other_operator'
           ? <span key={k} className={`tko-pill ${i[`${k}_status`]}`} title={`${label}: ${STATUS[i[`${k}_status`]]}`}>{label[0]}</span> : null)}</span></span>
       <small className={`tko-state ${i.state}`}>{STATE[i.state]}</small>
     </button></li>)}</ul>;
@@ -360,7 +362,7 @@ function IslandForm({ row, atolls, onClose, onSaved }) {
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }));
   const save = useSubmit(async () => {
     const body = { atoll_code: f.atoll_code, name: f.name.trim(), island_id: f.island_id || null, phase: f.phase || null, notes: f.notes || null,
-      ...Object.fromEntries(SERVICES.flatMap(([k]) => [[`${k}_status`, f[`${k}_status`] || null], [`${k}_on`, f[`${k}_status`] && f[`${k}_status`] !== 'not_applicable' ? f[`${k}_on`] || null : null]])) };
+      ...Object.fromEntries(SERVICES.flatMap(([k]) => [[`${k}_status`, f[`${k}_status`] || null], [`${k}_on`, dated(f[`${k}_status`]) ? f[`${k}_on`] || null : null]])) };
     if (row.id) await api(`/takeover/islands/${row.id}`, { method: 'PATCH', body });
     else await api('/takeover/islands', { method: 'POST', body });
     onSaved();
@@ -382,11 +384,11 @@ function IslandForm({ row, atolls, onClose, onSaved }) {
       {SERVICES.map(([k, label]) => <Field key={k} label={label}>
         <div className="tko-service-input">
           <Select value={f[`${k}_status`]} onChange={set(`${k}_status`)} placeholder="Not set" options={Object.entries(STATUS)} />
-          {f[`${k}_status`] && f[`${k}_status`] !== 'not_applicable' && <input type="date" value={f[`${k}_on`]} onChange={set(`${k}_on`)}
+          {dated(f[`${k}_status`]) && <input type="date" value={f[`${k}_on`]} onChange={set(`${k}_on`)}
             aria-label={`${label}: ${f[`${k}_status`] === 'taken_over' ? 'taken over on' : 'survey started on'}`} title={f[`${k}_status`] === 'taken_over' ? 'Taken over on' : 'Survey started on'} />}
         </div></Field>)}
       <Field label="Notes" wide><textarea rows="2" maxLength="2000" value={f.notes} onChange={set('notes')} /></Field>
-      <p className="muted small wide">Date: when it was taken over, or when the survey started.</p>
+      <p className="muted small wide">Date: when it was taken over, or when the survey started. Other operator: say who in the notes (e.g. MWSC).</p>
       <div className="form-actions">
         {row.id && can('admin') && <button type="button" className="btn danger" disabled={remove.busy} onClick={remove.submit} style={{ marginRight: 'auto' }}>Remove</button>}
         <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
@@ -408,7 +410,7 @@ function AtollForm({ atoll, onClose, onSaved }) {
       <ErrorBox error={error} />
       <Field label="Service"><Select value={f.service} onChange={(v) => setF({ ...f, service: v })} options={SERVICES} /></Field>
       <Field label="Status"><Select value={f.status} onChange={(v) => setF({ ...f, status: v })} options={Object.entries(STATUS)} /></Field>
-      {f.status !== 'not_applicable' && <Field label={f.status === 'taken_over' ? 'Taken over on (optional)' : 'Survey started on (optional)'}>
+      {dated(f.status) && <Field label={f.status === 'taken_over' ? 'Taken over on (optional)' : 'Survey started on (optional)'}>
         <input type="date" value={f.on} onChange={(e) => setF({ ...f, on: e.target.value })} /></Field>}
       <label className="check wide"><input type="checkbox" checked={f.all} onChange={(e) => setF({ ...f, all: e.target.checked })} /> Also change islands already set (otherwise only those not set yet)</label>
       <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button>

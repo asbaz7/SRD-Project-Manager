@@ -437,6 +437,13 @@ describe('national takeover tracker', () => {
     t = (await call('GET', '/takeover', { token: admin })).body;
     assert.equal(t.atolls.find((a) => a.code === 'HA').taken_over, 1);
     assert.equal(t.totals.islands, t.islands.filter((i) => i.counted).length);
+    // Under FENAKA without a survey, and run by another operator.
+    const { islandState } = await import('../src/routes/takeover.js');
+    assert.equal(islandState({ electricity_status: 'fenaka' }), 'pending');
+    assert.equal(islandState({ electricity_status: 'taken_over', water_status: 'other_operator' }), 'taken_over');
+    assert.equal(islandState({ electricity_status: 'other_operator', water_status: 'other_operator' }), 'other');
+    assert.equal(t.islands.find((i) => i.atoll_code === 'R' && i.name === 'Dhuvaafaru').state, 'other');
+    assert.equal(t.atolls.find((a) => a.code === 'R').pending, 14);
     // Vilimalé and Gulhifalhu: on the list and the map, not in the 187.
     assert.deepEqual(t.islands.filter((i) => !i.counted).map((i) => i.name).sort(), ['Gulhifalhu', 'Kudagiri', 'Thilafushi', 'Vilimalé']);
     assert.equal(t.services.water.taken_over >= 1, true);

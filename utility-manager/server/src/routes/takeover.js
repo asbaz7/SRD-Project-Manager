@@ -8,7 +8,12 @@ import { date, id, one, optText, parse, parsePatch, serialParam, text, updateSet
 import { INHABITED_ISLANDS, NATIONAL_ATOLLS } from '../nationalAtolls.js';
 
 export const TAKEOVER_SERVICES = ['electricity', 'water', 'sewerage'];
-const status = z.enum(['taken_over', 'pending', 'not_applicable']).nullish();
+// pending: survey ongoing; fenaka: still FENAKA's, survey not started;
+// other_operator: run by someone else (MWSC, a private party).
+export const TAKEOVER_STATUSES = ['taken_over', 'pending', 'fenaka', 'other_operator', 'not_applicable'];
+const OUTSIDE = ['not_applicable', 'other_operator'];
+const NO_DATE = ['fenaka', ...OUTSIDE];
+const status = z.enum(TAKEOVER_STATUSES).nullish();
 const islandBody = z.object({
   atoll_code: z.enum(NATIONAL_ATOLLS.map((a) => a.code)),
   name: text(100),
@@ -22,11 +27,13 @@ const islandBody = z.object({
 const COLS = ['atoll_code', 'name', 'island_id', 'phase', 'electricity_status', 'electricity_on', 'water_status', 'water_on',
   'sewerage_status', 'sewerage_on', 'notes'];
 
-// An island's overall state: taken over once every service that applies is;
-// pending while any is; not set when none is recorded.
+// An island's overall state: taken over once every service that is part of
+// the takeover is; pending (under FENAKA) while any is still FENAKA's; other
+// when another operator runs it all; not set when nothing is recorded.
 export function islandState(i) {
-  const s = TAKEOVER_SERVICES.map((k) => i[`${k}_status`]).filter((x) => x && x !== 'not_applicable');
-  if (!s.length) return 'not_set';
+  const all = TAKEOVER_SERVICES.map((k) => i[`${k}_status`]);
+  const s = all.filter((x) => x && !OUTSIDE.includes(x));
+  if (!s.length) return all.includes('other_operator') ? 'other' : 'not_set';
   return s.every((x) => x === 'taken_over') ? 'taken_over' : 'pending';
 }
 
@@ -47,15 +54,20 @@ export default async function takeoverRoutes(app) {
     const count = (list, state) => list.filter((i) => i.state === state).length;
     const atolls = NATIONAL_ATOLLS.map((a) => {
       const list = counted.filter((i) => i.atoll_code === a.code);
-      return { ...a, islands: list.length, taken_over: count(list, 'taken_over'), pending: count(list, 'pending'), not_set: count(list, 'not_set') };
+      return { ...a, islands: list.length, taken_over: count(list, 'taken_over'), pending: count(list, 'pending'), other: count(list, 'other'), not_set: count(list, 'not_set') };
     });
     const services = Object.fromEntries(TAKEOVER_SERVICES.map((k) => [k, {
       taken_over: counted.filter((i) => i[`${k}_status`] === 'taken_over').length,
       pending: counted.filter((i) => i[`${k}_status`] === 'pending').length,
+      fenaka: counted.filter((i) => i[`${k}_status`] === 'fenaka').length,
     }]));
     return {
       expected_islands: INHABITED_ISLANDS,
-      totals: { islands: counted.length, taken_over: count(counted, 'taken_over'), pending: count(counted, 'pending'), not_set: count(counted, 'not_set') },
+      totals: {
+        islands: counted.length, taken_over: count(counted, 'taken_over'), pending: count(counted, 'pending'),
+        other: count(counted, 'other'), not_set: count(counted, 'not_set'),
+        survey: counted.filter((i) => TAKEOVER_SERVICES.some((k) => i[`${k}_status`] === 'pending')).length,
+      },
       services, atolls, islands,
     };
   });
@@ -87,13 +99,13 @@ export default async function takeoverRoutes(app) {
   app.post('/takeover/atolls/:code', manager, async (req) => {
     const { code } = parse(z.object({ code: z.enum(NATIONAL_ATOLLS.map((a) => a.code)) }), req.params);
     const b = parse(z.object({
-      service: z.enum(TAKEOVER_SERVICES), status: z.enum(['taken_over', 'pending', 'not_applicable']),
+      service: z.enum(TAKEOVER_SERVICES), status: z.enum(TAKEOVER_STATUSES),
       on: date.nullish(), all: z.boolean().default(false),
     }), req.body);
     const { rowCount } = await db.tx(req.user.id, (t) => t.query(
       `update takeover_islands set ${b.service}_status = $2, ${b.service}_on = $3, updated_by = $4
         where atoll_code = $1 ${b.all ? '' : `and ${b.service}_status is null`}`,
-      [code, b.status, b.status === 'not_applicable' ? null : b.on ?? null, req.user.id]));
+      [code, b.status, NO_DATE.includes(b.status) ? null : b.on ?? null, req.user.id]));
     return { ok: true, updated: rowCount };
   });
 

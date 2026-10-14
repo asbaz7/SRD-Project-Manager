@@ -161,17 +161,17 @@ function TakeoverTile({ t }) {
       <div className="grow">
         <div className="tko-bar"><span style={{ width: `${p(done, total)}%` }} /></div>
         <p className="small">
-          <span className="tko-state taken_over">{done} under STELCO</span> · <span className="tko-state pending">{t.totals.pending} survey ongoing</span>
+          <span className="tko-state taken_over">{done} under STELCO</span> · <span className="tko-state pending">{t.totals.pending} under FENAKA</span>
           {t.totals.not_set > 0 && <> · <span className="tko-state not_set">{t.totals.not_set} not set</span></>}</p>
         <div className="tko-services">{[['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']].map(([k, label]) => {
           const s = t.services[k];
-          return <div key={k}><small>{label}: {s.taken_over} of {s.taken_over + s.pending}</small>
-            <div className="tko-bar thin"><span style={{ width: `${p(s.taken_over, s.taken_over + s.pending)}%` }} /></div></div>;
+          return <div key={k}><small>{label}: {s.taken_over} of {s.taken_over + s.pending + s.fenaka}</small>
+            <div className="tko-bar thin"><span style={{ width: `${p(s.taken_over, s.taken_over + s.pending + s.fenaka)}%` }} /></div></div>;
         })}</div>
       </div>
     </div>
     <div className="atoll-chips">{t.atolls.map((a) => {
-      const tone = !a.islands ? 'none' : a.taken_over === a.islands ? 'taken' : a.taken_over ? 'part' : 'pending';
+      const tone = !a.islands || a.not_set === a.islands ? 'none' : a.taken_over + a.other === a.islands ? 'taken' : a.taken_over ? 'part' : 'pending';
       return <Link key={a.code} to={`/takeover?atoll=${a.code}`} className={`atoll-chip ${tone}`} title={`${a.name}: ${a.taken_over} of ${a.islands} taken over`}>
         {a.code}<small>{a.taken_over}/{a.islands}</small></Link>;
     })}</div>
