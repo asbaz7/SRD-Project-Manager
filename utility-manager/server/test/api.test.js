@@ -418,6 +418,7 @@ describe('national takeover tracker', () => {
     const maafushiRow = t.islands.find((i) => i.name === 'Maafushi');
     assert.equal(maafushiRow.island_id, maafushi.id);
     assert.equal(maafushiRow.state, 'taken_over');
+    assert.ok(t.islands.filter((i) => i.atoll_code === 'HA').every((i) => i.lat != null && i.lon != null), 'islands have their place on the map');
 
     // An island outside SRD, still with FENAKA.
     const add = await call('POST', '/takeover/islands', { token: admin, body: {

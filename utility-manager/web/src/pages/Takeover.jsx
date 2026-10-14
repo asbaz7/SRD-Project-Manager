@@ -2,7 +2,7 @@
 // from FENAKA to STELCO. The figures and progress, a map of the 20 atolls
 // coloured by how far each is, and an atoll's islands with each service's
 // status and date. Managers keep it up to date.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -13,16 +13,6 @@ import { useApi, useFilters, useSubmit } from '../hooks.js';
 const SERVICES = [['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']];
 const STATUS = { taken_over: 'Taken over', pending: 'Pending', not_applicable: 'Not applicable' };
 const STATE = { taken_over: 'Under STELCO', pending: 'Under FENAKA', not_set: 'Not set' };
-
-// The atolls drawn north to south, roughly as they lie (x, y, width, height
-// in a 300 × 920 box), like the takeover map.
-const SHAPES = {
-  HA: [150, 40, 26, 46], HDh: [150, 100, 24, 44], Sh: [132, 156, 20, 40], N: [160, 205, 20, 38],
-  R: [96, 218, 18, 40], B: [100, 268, 22, 34], Lh: [165, 268, 20, 38], K: [168, 340, 20, 62],
-  AA: [100, 322, 18, 30], ADh: [100, 380, 22, 40], V: [168, 418, 16, 26], M: [168, 470, 18, 36],
-  F: [102, 452, 16, 28], Dh: [104, 506, 20, 34], Th: [118, 572, 24, 38], L: [160, 640, 26, 40],
-  GA: [116, 712, 18, 32], GDh: [122, 770, 24, 40], Gn: [168, 818, 9, 9], S: [146, 872, 22, 30],
-};
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 
@@ -39,6 +29,7 @@ function TakeoverView({ t, reload }) {
   const [filters, setFilter] = useFilters();
   const [editing, setEditing] = useState(null);
   const [bulk, setBulk] = useState(false);
+  const [picked, setPicked] = useState(null);
   const done = t.totals.taken_over;
   const total = t.expected_islands;
   const match = (i) => !filters.show || i.state === filters.show;
@@ -65,9 +56,13 @@ function TakeoverView({ t, reload }) {
     </Card>
 
     <div className="tko-layout">
-      <Card title="Atolls" className="tko-map-card">
-        <AtollMap atolls={t.atolls} islands={t.islands} match={match} selected={filters.atoll} onPick={(code) => setFilter('atoll', filters.atoll === code ? '' : code)} />
-        <div className="tko-legend small"><span><i className="dot taken" /> Taken over by STELCO</span><span><i className="dot pending" /> Pending / still under FENAKA</span><span><i className="dot none" /> Not on the list yet</span></div>
+      <Card title={atoll ? `Map · ${atoll.name}` : 'Map'} className="tko-map-card">
+        <AtollMap atolls={t.atolls} islands={t.islands} match={match} selected={filters.atoll} picked={picked}
+          onPick={(code) => { setPicked(null); setFilter('atoll', filters.atoll === code ? '' : code); }}
+          onIsland={(i) => { setPicked(i.id); if (can('manager')) setEditing(i); }} />
+        <div className="tko-legend small"><span><i className="dot taken" /> Taken over by STELCO</span><span><i className="dot pending" /> Pending / under FENAKA</span><span><i className="dot none" /> Not set</span>
+          {filters.atoll && <button className="link" onClick={() => { setPicked(null); setFilter('atoll', ''); }}>← Whole country</button>}</div>
+        {t.islands.some((i) => i.lat == null) && <p className="muted small">Not on the map (no position yet): {t.islands.filter((i) => i.lat == null).map((i) => `${i.atoll_code}. ${i.name}`).join(', ')}</p>}
       </Card>
       <div>
         <div className="chips">
@@ -80,7 +75,7 @@ function TakeoverView({ t, reload }) {
             {can('manager') && <button className="btn small primary" onClick={() => setEditing({ atoll_code: atoll?.code || '' })}>Add island</button>}</>}>
           {!atoll && !filters.show ? <AtollTable atolls={t.atolls} onPick={(code) => setFilter('atoll', code)} />
             : list.length === 0 ? <Empty>No islands here{filters.show ? ' with this status' : ' on the list yet'}.{can('manager') && ' Add them with Add island.'}</Empty>
-              : <IslandTable islands={list} showAtoll={!atoll} onEdit={can('manager') ? setEditing : null} />}
+              : <IslandTable islands={list} showAtoll={!atoll} picked={picked} onEdit={can('manager') ? setEditing : null} />}
         </Card>
       </div>
     </div>
@@ -89,25 +84,97 @@ function TakeoverView({ t, reload }) {
   </>;
 }
 
-// The map: each atoll a shape, green when every island on the list is taken
-// over, orange while any is pending, grey with none on the list; a partly
-// taken-over atoll shows its share.
-function AtollMap({ atolls, islands, match, selected, onPick }) {
-  return <svg className="tko-map" viewBox="0 0 300 920" role="img" aria-label="Atolls by takeover status">
+// The map: every island at its place (OpenStreetMap positions, migration
+// 055), coloured by its state; each atoll's outline shaded and clickable.
+// Picking an atoll zooms to it and names its islands; picking an island
+// shows it in the list. Lon/lat drawn straight (the Maldives is near the
+// equator, so the stretch is negligible), 100 units to the degree.
+const BOUNDS = { west: 72.5, east: 73.9, north: 7.25, south: -0.8 };
+const toXY = (i) => [(i.lon - BOUNDS.west) * 100, (BOUNDS.north - i.lat) * 100];
+const FULL = [0, 0, (BOUNDS.east - BOUNDS.west) * 100, (BOUNDS.north - BOUNDS.south) * 100];
+
+// The outline round an atoll's islands (convex hull, padded).
+function hull(points, pad) {
+  if (points.length === 1) {
+    const [x, y] = points[0];
+    return Array.from({ length: 12 }, (_, k) => [x + pad * Math.cos(k * Math.PI / 6), y + pad * Math.sin(k * Math.PI / 6)]);
+  }
+  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => list.reduce((h, p) => { while (h.length >= 2 && cross(h.at(-2), h.at(-1), p) <= 0) h.pop(); h.push(p); return h; }, []);
+  const lower = half(pts);
+  const upper = half([...pts].reverse());
+  const ring = [...lower.slice(0, -1), ...upper.slice(0, -1)];
+  const cx = ring.reduce((n, p) => n + p[0], 0) / ring.length;
+  const cy = ring.reduce((n, p) => n + p[1], 0) / ring.length;
+  // Push each corner out from the middle, and round the shape a little.
+  return ring.flatMap((p) => {
+    const dx = p[0] - cx; const dy = p[1] - cy; const d = Math.hypot(dx, dy) || 1;
+    return [[p[0] + (dx / d) * pad, p[1] + (dy / d) * pad]];
+  });
+}
+
+// The viewBox eases from one view to the next.
+function useEased(target) {
+  const [view, setView] = useState(target);
+  const key = target.join(',');
+  useEffect(() => {
+    const from = view;
+    const start = performance.now();
+    let frame;
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / 350);
+      const e = 1 - (1 - k) ** 3;
+      setView(from.map((v, n) => v + (target[n] - v) * e));
+      if (k < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return view;
+}
+
+function AtollMap({ atolls, islands, match, selected, onPick, picked, onIsland }) {
+  const placed = islands.filter((i) => i.lat != null && i.lon != null);
+  const byAtoll = Object.fromEntries(atolls.map((a) => [a.code, placed.filter((i) => i.atoll_code === a.code)]));
+  const target = (() => {
+    const list = selected && byAtoll[selected];
+    if (!list?.length) return FULL;
+    const xy = list.map(toXY);
+    const xs = xy.map((p) => p[0]); const ys = xy.map((p) => p[1]);
+    const pad = 8;
+    let [x0, x1, y0, y1] = [Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad];
+    // Wide enough for the island names.
+    const w = Math.max(x1 - x0, (y1 - y0) * 0.75, 30); const h = Math.max(y1 - y0, 30);
+    const cx = (x0 + x1) / 2; const cy = (y0 + y1) / 2;
+    return [cx - w / 2, cy - h / 2, w, h];
+  })();
+  const view = useEased(target);
+  const zoomed = view[2] < FULL[2] * 0.6;
+  const unit = view[2] / 100; // sizes follow the zoom
+  const tone = (a) => (!a.islands ? 'none' : a.taken_over === a.islands ? 'taken' : 'pending');
+  return <svg className="tko-map" viewBox={view.join(' ')} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Islands by takeover status">
     {atolls.map((a) => {
-      const [x, y, w, h] = SHAPES[a.code];
-      const listed = islands.filter((i) => i.atoll_code === a.code);
-      const shown = listed.filter(match).length;
-      const tone = !a.islands ? 'none' : a.pending || a.not_set ? 'pending' : 'taken';
-      const left = x < 140;
-      return <g key={a.code} className={`tko-atoll ${tone}${selected === a.code ? ' selected' : ''}${listed.length && !shown ? ' dim' : ''}`}
+      const xy = byAtoll[a.code].map(toXY);
+      if (!xy.length) return null;
+      const ring = hull(xy, 4);
+      const [lx, ly] = [Math.max(...xy.map((p) => p[0])) + 5, xy.reduce((n, p) => n + p[1], 0) / xy.length];
+      return <g key={a.code} className={`tko-atoll ${tone(a)}${selected === a.code ? ' selected' : ''}`}
         onClick={() => onPick(a.code)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onPick(a.code)}>
         <title>{`${a.name}: ${a.taken_over} of ${a.islands} taken over`}</title>
-        <ellipse cx={x} cy={y} rx={w / 2} ry={h / 2} />
-        {a.islands > 0 && a.taken_over > 0 && a.taken_over < a.islands &&
-          <ellipse className="share" cx={x} cy={y} rx={w / 2} ry={h / 2} pathLength="100" strokeDasharray={`${pct(a.taken_over, a.islands)} 100`} />}
-        <text x={left ? x - w / 2 - 8 : x + w / 2 + 8} y={y - 2} textAnchor={left ? 'end' : 'start'} className="name">{a.name}</text>
-        <text x={left ? x - w / 2 - 8 : x + w / 2 + 8} y={y + 12} textAnchor={left ? 'end' : 'start'} className="count">{a.islands ? `${a.taken_over}/${a.islands}` : '—'}</text>
+        <polygon points={ring.map((p) => p.join(',')).join(' ')} strokeWidth={unit * 0.35} strokeLinejoin="round" />
+        {!zoomed && <text x={lx} y={ly} fontSize={unit * 2.6} className="atoll-name">{a.code}<tspan className="count" dx={unit}>{a.taken_over}/{a.islands}</tspan></text>}
+      </g>;
+    })}
+    {placed.map((i) => {
+      const [x, y] = toXY(i);
+      const on = match(i);
+      return <g key={i.id} className={`tko-island ${i.state}${picked === i.id ? ' picked' : ''}${on ? '' : ' dim'}`}
+        onClick={(e) => { e.stopPropagation(); if (!zoomed) onPick(i.atoll_code); else onIsland(i); }}>
+        <title>{`${i.atoll_code}. ${i.name}: ${STATE[i.state]}`}</title>
+        <circle cx={x} cy={y} r={unit * (zoomed ? 1.1 : 0.75)} strokeWidth={unit * 0.25} />
+        {zoomed && selected === i.atoll_code && <text x={x + unit * 1.8} y={y + unit * 0.9} fontSize={unit * 2.4}>{i.name}</text>}
       </g>;
     })}
   </svg>;
@@ -132,10 +199,10 @@ function Service({ status, on }) {
     {STATUS[status]}{on && status !== 'not_applicable' ? ` · ${date(on)}` : ''}</span>;
 }
 
-function IslandTable({ islands, showAtoll, onEdit }) {
+function IslandTable({ islands, showAtoll, picked, onEdit }) {
   return <div className="table-scroll"><table>
     <thead><tr><th>Island</th>{SERVICES.map(([k, l]) => <th key={k}>{l}</th>)}<th className="hide-sm">Phase</th>{onEdit && <th />}</tr></thead>
-    <tbody>{islands.map((i) => <tr key={i.id}>
+    <tbody>{islands.map((i) => <tr key={i.id} className={picked === i.id ? 'picked' : ''}>
       <td className="wrap"><strong>{showAtoll && `${i.atoll_code}. `}{i.island_id ? <Link to={`/islands/${i.island_id}`}>{i.name}</Link> : i.name}</strong>
         <br /><small className={`tko-state ${i.state}`}>{STATE[i.state]}</small>{i.notes && <><br /><small className="muted">{i.notes}</small></>}</td>
       {SERVICES.map(([k]) => <td key={k} className="small"><Service status={i[`${k}_status`]} on={i[`${k}_on`]} /></td>)}
