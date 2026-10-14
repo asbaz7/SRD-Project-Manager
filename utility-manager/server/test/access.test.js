@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { buildApp } from '../src/app.js';
+import { memoryBucket } from '../src/files.js';
 import { hashPassword } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
@@ -10,7 +11,7 @@ import { migrate } from '../src/migrate.js';
 import { seedRegister } from '../scripts/seed.js';
 
 const PASSWORD = 'correct horse 42';
-let app, db, maafushi;
+let app, db, bucket, maafushi;
 const T = {};      // tokens by name
 const U = {};      // user ids by name
 
@@ -29,7 +30,9 @@ before(async () => {
   db = await createDb({ pgliteDir: ':memory:' });
   await migrate(db, {});
   await seedRegister(db);
-  app = await buildApp({ db, config: loadConfig({ timezone: 'Indian/Maldives', webDist: '' }), logger: false });
+  // Files go to a bucket here, as on Cloudflare (documents.test keeps them in the database).
+  bucket = memoryBucket();
+  app = await buildApp({ db, config: loadConfig({ timezone: 'Indian/Maldives', webDist: '' }), logger: false, bucket });
   const hash = await hashPassword(PASSWORD);
   const people = [
     ['admin', 'admin', true], ['tech', 'manager', true], ['tech2', 'manager', true],
@@ -252,6 +255,9 @@ test('project files: kept while open, downloadable after, deleted 30 days after 
   assert.equal(d.files_delete_after, null);
   const one = await app.inject({ method: 'GET', url: `/api/v1/projects/${p.id}/files/${d.files[0].id}`, headers: { authorization: `Bearer ${T.clerk}` } });
   assert.equal(one.body, 'boq');
+  // Stored in the bucket; the row keeps only the key.
+  const stored = (await db.query('select data, storage_key from project_files where project_id = $1', [p.id])).rows;
+  assert.ok(stored.every((r) => r.data === null && bucket.objects.has(r.storage_key)));
 
   // Completed: no new files; the countdown starts; everything downloads as a ZIP.
   await call('POST', `/projects/${p.id}/updates`, T.tech, { body: 'Handed over', status: 'completed' });
@@ -272,6 +278,7 @@ test('project files: kept while open, downloadable after, deleted 30 days after 
   // The daily job deletes them once the date has passed; the project stays.
   await db.query(`update projects set files_delete_after = current_date - 1 where id = $1`, [p.id]);
   await app.daily();
+  assert.ok(stored.every((r) => !bucket.objects.has(r.storage_key)), 'the objects go too');
   d = (await call('GET', `/projects/${p.id}`, T.tech)).body;
   assert.equal(d.files.length, 0);
   assert.equal(d.title, 'RO plant upgrade');

@@ -8,8 +8,8 @@ import { sendCsv } from '../csv.js';
 import { badRequest, forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam } from '../http.js';
 import { TEMPLATES, answerRows, cleanAnswers, templateByKey } from '../surveyTemplates.js';
+import { decodeUpload, sendFile, uploadBody } from '../files.js';
 
-const MAX_FILE = 10 * 1024 * 1024;
 const visibleTemplates = (user) => TEMPLATES.filter((t) => !t.technical || user.technical).map((t) => t.key);
 
 const SELECT = `
@@ -33,7 +33,7 @@ const createBody = z.object({
 });
 
 export default async function surveyRoutes(app) {
-  const { db } = app;
+  const { db, files } = app;
   const surveyor = { preHandler: requireAllowed('surveys', 'You are not allowed to carry out surveys. Ask an administrator.') };
 
   async function load(user, surveyId) {
@@ -125,7 +125,10 @@ export default async function surveyRoutes(app) {
     if (!(req.user.role === 'admin' || (s.created_by === req.user.id && s.status === 'draft'))) {
       throw forbidden('Only an administrator, or whoever started a draft, can delete a survey');
     }
+    // Its files go with it: the rows by cascade, the stored objects here.
+    const { rows: stored } = await db.query('select storage_key from survey_files where survey_id = $1', [surveyId]);
     await db.tx(req.user.id, (tx) => tx.query('delete from surveys where id = $1', [surveyId]));
+    await files.removed(stored);
     return { ok: true };
   });
 
@@ -144,34 +147,28 @@ export default async function surveyRoutes(app) {
   // Photos and files.
   app.post('/surveys/:id/files', async (req, reply) => {
     const { id: surveyId } = parse(serialParam, req.params);
-    const b = parse(z.object({ file_name: z.string().trim().min(1).max(200), content_type: z.string().max(100).optional(), data: z.string().min(1) }), req.body);
+    const upload = decodeUpload(parse(uploadBody, req.body));
     const { s } = await load(req.user, surveyId);
     if (!s.can_edit) throw forbidden('Only whoever started this survey, a manager or an administrator can add files');
-    const bytes = Buffer.from(b.data, 'base64');
-    if (!bytes.length) throw badRequest('The file is empty');
-    if (bytes.length > MAX_FILE) throw badRequest('Files can be up to 10 MB');
-    const { rows } = await db.query(`insert into survey_files (survey_id, file_name, content_type, size_bytes, data, uploaded_by)
-      values ($1, $2, $3, $4, $5, $6) returning id, file_name, size_bytes`,
-    [surveyId, b.file_name, b.content_type || 'application/octet-stream', bytes.length, bytes, req.user.id]);
+    const row = await db.tx(req.user.id, (t) => files.save(t, 'survey_files', { column: 'survey_id', id: surveyId }, { ...upload, userId: req.user.id }));
     reply.code(201);
-    return rows[0];
+    return row;
   });
 
   const fileParams = z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() });
   app.get('/surveys/:id/files/:fileId', async (req, reply) => {
     const { id: surveyId, fileId } = parse(fileParams, req.params);
     await load(req.user, surveyId);
-    const f = one((await db.query('select file_name, content_type, data from survey_files where id = $1 and survey_id = $2', [fileId, surveyId])).rows, 'File');
-    reply.header('content-type', f.content_type);
-    reply.header('content-disposition', `${/^image\//.test(f.content_type) ? 'inline' : 'attachment'}; filename="${f.file_name.replace(/["\\\r\n]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.file_name)}`);
-    return reply.send(f.data instanceof Uint8Array ? f.data : new Uint8Array(f.data));
+    const f = await files.read('survey_files', { column: 'survey_id', id: surveyId }, fileId);
+    // Photos open in place; other files download.
+    return sendFile(reply, f, { inline: /^image\//.test(f.content_type) });
   });
 
   app.delete('/surveys/:id/files/:fileId', async (req) => {
     const { id: surveyId, fileId } = parse(fileParams, req.params);
     const { s } = await load(req.user, surveyId);
     if (!s.can_edit) throw forbidden();
-    await db.query('delete from survey_files where id = $1 and survey_id = $2', [fileId, surveyId]);
+    await files.removed((await db.query('delete from survey_files where id = $1 and survey_id = $2 returning storage_key', [fileId, surveyId])).rows);
     return { ok: true };
   });
 }

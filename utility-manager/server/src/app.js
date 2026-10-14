@@ -10,6 +10,7 @@
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { SESSION_COOKIE, loadSession, loadUser } from './auth.js';
+import { createFiles } from './files.js';
 import { createTelegram } from './telegram.js';
 import { parseCookies, serializeCookie } from './cookies.js';
 import { HttpError, badRequest, errorHandler, forbidden, notFound, unauthorized } from './errors.js';
@@ -71,7 +72,7 @@ class Reply {
   toResponse(result) {
     const body = this.sent || result === this ? this.body : result;
     if (body === undefined) return new Response(null, { status: this.statusCode, headers: this.headers });
-    if (body instanceof Uint8Array) return new Response(body, { status: this.statusCode, headers: this.headers });
+    if (body instanceof Uint8Array || body instanceof ReadableStream) return new Response(body, { status: this.statusCode, headers: this.headers });
     if (typeof body === 'string') {
       if (!this.headers.has('content-type')) this.headers.set('content-type', 'text/plain; charset=utf-8');
       return new Response(body, { status: this.statusCode, headers: this.headers });
@@ -106,7 +107,7 @@ function clientIp(c, config) {
     || 'unknown';
 }
 
-export async function buildApp({ db, config, logger = true }) {
+export async function buildApp({ db, config, logger = true, bucket = null }) {
   const log = logger === false ? silentLogger : typeof logger === 'object' ? logger : createLogger(config.logLevel);
   const hono = new Hono();
   const rateLimit = createRateLimiter();
@@ -210,7 +211,9 @@ export async function buildApp({ db, config, logger = true }) {
   const telegram = createTelegram({ db, config, log });
 
   // The object route modules register on.
-  const api = { db, config, log, telegram, asUser };
+  // Uploaded files: in the R2 bucket when there is one, else in the database.
+  const files = createFiles(db, bucket, log);
+  const api = { db, config, log, telegram, asUser, files };
   for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
     api[method] = (path, options, handler) => {
       if (typeof options === 'function') [handler, options] = [options, {}];
@@ -236,7 +239,7 @@ export async function buildApp({ db, config, logger = true }) {
     // Daily jobs (Cloudflare cron trigger, see worker.js): delete files of
     // projects closed over 30 days ago, then the Telegram summary.
     daily: async () => {
-      const purged = await purgeProjectFiles(db);
+      const purged = await purgeProjectFiles(db, files);
       if (purged) log.info({ purged }, 'project files deleted');
       await telegram.daily(asUser);
     },

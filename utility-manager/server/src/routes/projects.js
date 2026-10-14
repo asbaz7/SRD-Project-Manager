@@ -7,6 +7,7 @@ import { esc, projectRef, refSql } from '../format.js';
 import { editUpdate } from './work.js';
 import { date, id, one, optText, pageOf, paging, parse, parsePatch, serialParam, service, text, unitId, updateSet, Where } from '../http.js';
 import trackerRoutes, { loadSites, loadTasks } from './projectTracker.js';
+import { decodeUpload, sendFile, uploadBody } from '../files.js';
 
 const STATES = ['planned', 'ongoing', 'on_hold', 'completed', 'cancelled'];
 
@@ -130,20 +131,21 @@ async function writeMembers(t, projectId, members, addedBy) {
   }
 }
 
-const MAX_FILE = 10 * 1024 * 1024;
 const CLOSED = ['completed', 'cancelled'];
 
 // Daily: delete files of projects closed more than 30 days ago.
-export async function purgeProjectFiles(db) {
-  const { rowCount } = await db.query(`
+export async function purgeProjectFiles(db, files) {
+  const { rows } = await db.query(`
     delete from project_files f using projects p
-     where p.id = f.project_id and p.files_delete_after is not null and p.files_delete_after <= current_date`);
-  return rowCount;
+     where p.id = f.project_id and p.files_delete_after is not null and p.files_delete_after <= current_date
+     returning f.storage_key`);
+  await files.removed(rows);
+  return rows.length;
 }
 
 export default async function projectRoutes(app) {
   await trackerRoutes(app);
-  const { db, telegram, config } = app;
+  const { db, telegram, config, files } = app;
 
   // When a project with files closes, tell its creator and owner when the
   // files will be deleted.
@@ -300,40 +302,32 @@ export default async function projectRoutes(app) {
 
   app.post('/projects/:id/files', async (req, reply) => {
     const { id: projectId } = parse(serialParam, req.params);
-    const b = parse(z.object({ file_name: z.string().trim().min(1).max(200), content_type: z.string().max(100).optional(), data: z.string().min(1) }), req.body);
+    const upload = decodeUpload(parse(uploadBody, req.body));
     await assertAccess(db, req.user, projectId, 'edit');
     const { rows: [p] } = await db.query('select status from projects where id = $1', [projectId]);
     if (CLOSED.includes(p.status)) throw badRequest('This project is closed: files can no longer be added');
-    const bytes = Buffer.from(b.data, 'base64');
-    if (!bytes.length) throw badRequest('The file is empty');
-    if (bytes.length > MAX_FILE) throw badRequest('Files can be up to 10 MB');
-    const { rows } = await db.query(`insert into project_files (project_id, file_name, content_type, size_bytes, data, uploaded_by)
-      values ($1, $2, $3, $4, $5, $6) returning id, file_name, size_bytes`,
-    [projectId, b.file_name, b.content_type || 'application/octet-stream', bytes.length, bytes, req.user.id]);
+    const row = await db.tx(req.user.id, (t) => files.save(t, 'project_files', { column: 'project_id', id: projectId }, { ...upload, userId: req.user.id }));
     reply.code(201);
-    return rows[0];
+    return row;
   });
 
   app.get('/projects/:id/files/:fileId', async (req, reply) => {
     const { id: projectId, fileId } = parse(fileParams, req.params);
     await assertAccess(db, req.user, projectId, 'view');
-    const f = one((await db.query('select file_name, content_type, data from project_files where id = $1 and project_id = $2', [fileId, projectId])).rows, 'File');
-    reply.header('content-type', f.content_type);
-    reply.header('content-disposition', `attachment; filename="${f.file_name.replace(/["\\\r\n]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.file_name)}`);
-    return reply.send(f.data instanceof Uint8Array ? f.data : new Uint8Array(f.data));
+    return sendFile(reply, await files.read('project_files', { column: 'project_id', id: projectId }, fileId));
   });
 
   // Every file in one ZIP (stored, not recompressed: they're mostly PDFs).
   app.get('/projects/:id/zip', async (req, reply) => {
     const { id: projectId } = parse(serialParam, req.params);
     await assertAccess(db, req.user, projectId, 'view');
-    const { rows } = await db.query('select file_name, data from project_files where project_id = $1 order by uploaded_at', [projectId]);
-    if (!rows.length) throw notFound('Files');
+    const all = await files.readAll('project_files', { column: 'project_id', id: projectId });
+    if (!all.length) throw notFound('Files');
     const entries = {};
-    for (const r of rows) {
+    for (const r of all) {
       let name = r.file_name.replace(/[\\/:*?"<>|]/g, '_');
       for (let n = 2; entries[name]; n++) name = r.file_name.replace(/(\.[^.]*)?$/, (ext) => ` (${n})${ext || ''}`);
-      entries[name] = [r.data instanceof Uint8Array ? r.data : new Uint8Array(r.data), { level: 0 }];
+      entries[name] = [r.bytes, { level: 0 }];
     }
     const zip = zipSync(entries);
     reply.header('content-type', 'application/zip');
@@ -344,14 +338,15 @@ export default async function projectRoutes(app) {
   app.delete('/projects/:id/files/:fileId', async (req) => {
     const { id: projectId, fileId } = parse(fileParams, req.params);
     await assertAccess(db, req.user, projectId, 'edit');
-    await db.query('delete from project_files where id = $1 and project_id = $2', [fileId, projectId]);
+    await files.removed((await db.query('delete from project_files where id = $1 and project_id = $2 returning storage_key', [fileId, projectId])).rows);
     return { ok: true };
   });
 
   app.delete('/projects/:id/files', async (req) => {
     const { id: projectId } = parse(serialParam, req.params);
     await assertAccess(db, req.user, projectId, 'edit');
-    const { rowCount } = await db.query('delete from project_files where project_id = $1', [projectId]);
-    return { ok: true, deleted: rowCount };
+    const { rows } = await db.query('delete from project_files where project_id = $1 returning storage_key', [projectId]);
+    await files.removed(rows);
+    return { ok: true, deleted: rows.length };
   });
 }

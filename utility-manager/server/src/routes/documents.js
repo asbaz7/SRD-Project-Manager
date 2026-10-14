@@ -9,9 +9,9 @@ import { sendCsv } from '../csv.js';
 import { badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, text } from '../http.js';
 import { esc } from '../format.js';
+import { decodeUpload, sendFile, uploadBody } from '../files.js';
 
 export const DEFAULT_TYPES = ['Accommodation form', 'Allowance form', 'Job description', 'Letter', 'Meal form', 'Tender'];
-const MAX_FILE = 10 * 1024 * 1024;
 
 const signer = z.object({ user_id: id.nullish(), name: z.string().trim().max(200).nullish() })
   .refine((s) => s.user_id || s.name, 'Each recipient needs a name');
@@ -63,7 +63,7 @@ const fixJson = (row) => {
 };
 
 export default async function documentRoutes(app) {
-  const { db, telegram } = app;
+  const { db, telegram, files } = app;
   const sender = { preHandler: requireAllowed('documents', 'You are not allowed to send documents. Ask an administrator.') };
 
   // Editing (details, recipients, signing on someone's behalf, cancelling):
@@ -278,36 +278,29 @@ export default async function documentRoutes(app) {
 
   app.post('/documents/:id/files', async (req, reply) => {
     const { id: docId } = parse(serialParam, req.params);
-    const b = parse(z.object({ file_name: z.string().trim().min(1).max(200), content_type: z.string().max(100).optional(), data: z.string().min(1) }), req.body);
+    const upload = decodeUpload(parse(uploadBody, req.body));
     const a = await access(req.user, docId);
     if (!a.edit && !a.my_signer) throw forbidden('Only the sender and the recipients can add files');
-    const bytes = Buffer.from(b.data, 'base64');
-    if (!bytes.length) throw badRequest('The file is empty');
-    if (bytes.length > MAX_FILE) throw badRequest('Files can be up to 10 MB');
-    const { rows } = await db.tx(req.user.id, async (t) => {
+    const row = await db.tx(req.user.id, async (t) => {
       await t.query('update documents set updated_at = now() where id = $1', [docId]);
-      return t.query(`insert into document_files (document_id, file_name, content_type, size_bytes, data, uploaded_by)
-                      values ($1, $2, $3, $4, $5, $6) returning id, file_name, size_bytes`,
-      [docId, b.file_name, b.content_type || 'application/octet-stream', bytes.length, bytes, req.user.id]);
+      return files.save(t, 'document_files', { column: 'document_id', id: docId }, { ...upload, userId: req.user.id });
     });
     reply.code(201);
-    return rows[0];
+    return row;
   });
 
   app.get('/documents/:id/files/:fileId', async (req, reply) => {
     const { id: docId, fileId } = parse(z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() }), req.params);
     await access(req.user, docId);
-    const f = one((await db.query('select file_name, content_type, data from document_files where id = $1 and document_id = $2', [fileId, docId])).rows, 'File');
-    reply.header('content-type', f.content_type);
-    reply.header('content-disposition', `attachment; filename="${f.file_name.replace(/["\\\r\n]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.file_name)}`);
-    return reply.send(f.data instanceof Uint8Array ? f.data : new Uint8Array(f.data));
+    return sendFile(reply, await files.read('document_files', { column: 'document_id', id: docId }, fileId));
   });
 
   app.delete('/documents/:id/files/:fileId', async (req) => {
     const { id: docId, fileId } = parse(z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() }), req.params);
     const a = await access(req.user, docId);
     if (!a.edit) throw forbidden('Only the sender or an administrator can remove files');
-    await db.tx(req.user.id, (t) => t.query('delete from document_files where id = $1 and document_id = $2', [fileId, docId]));
+    const { rows } = await db.tx(req.user.id, (t) => t.query('delete from document_files where id = $1 and document_id = $2 returning storage_key', [fileId, docId]));
+    await files.removed(rows);
     return { ok: true };
   });
 }
