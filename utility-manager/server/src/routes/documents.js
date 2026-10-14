@@ -9,7 +9,7 @@ import { sendCsv } from '../csv.js';
 import { badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam, text } from '../http.js';
 import { esc } from '../format.js';
-import { decodeUpload, sendFile, uploadBody } from '../files.js';
+import { linkRoutes, loadLinks } from '../links.js';
 
 export const DEFAULT_TYPES = ['Accommodation form', 'Allowance form', 'Job description', 'Letter', 'Meal form', 'Tender'];
 
@@ -63,7 +63,7 @@ const fixJson = (row) => {
 };
 
 export default async function documentRoutes(app) {
-  const { db, telegram, files } = app;
+  const { db, telegram } = app;
   const sender = { preHandler: requireAllowed('documents', 'You are not allowed to send documents. Ask an administrator.') };
 
   // Editing (details, recipients, signing on someone's behalf, cancelling):
@@ -176,9 +176,7 @@ export default async function documentRoutes(app) {
     d.signers = (await db.query(`
       select s.*, r.full_name as recorded_by_name from document_signers s left join users r on r.id = s.recorded_by
        where s.document_id = $1 order by s.position`, [docId])).rows;
-    d.files = (await db.query(`
-      select f.id, f.file_name, f.content_type, f.size_bytes, f.uploaded_at, u.full_name as uploaded_by_name
-        from document_files f left join users u on u.id = f.uploaded_by where f.document_id = $1 order by f.uploaded_at`, [docId])).rows;
+    d.links = await loadLinks(db, 'document', docId);
     d.updates = (await db.query(`
       select x.*, u.full_name as created_by_name from document_updates x left join users u on u.id = x.created_by
        where x.document_id = $1 order by x.created_at desc`, [docId])).rows;
@@ -276,31 +274,12 @@ export default async function documentRoutes(app) {
     return rows[0];
   });
 
-  app.post('/documents/:id/files', async (req, reply) => {
-    const { id: docId } = parse(serialParam, req.params);
-    const upload = decodeUpload(parse(uploadBody, req.body));
+  // Files: links to Microsoft 365. The sender and the recipients add them;
+  // the sender (or an administrator) removes them.
+  linkRoutes(app, 'document', '/documents/:id', async (req, docId) => {
     const a = await access(req.user, docId);
-    if (!a.edit && !a.my_signer) throw forbidden('Only the sender and the recipients can add files');
-    const row = await db.tx(req.user.id, async (t) => {
-      await t.query('update documents set updated_at = now() where id = $1', [docId]);
-      return files.save(t, 'document_files', { column: 'document_id', id: docId }, { ...upload, userId: req.user.id });
-    });
-    reply.code(201);
-    return row;
-  });
-
-  app.get('/documents/:id/files/:fileId', async (req, reply) => {
-    const { id: docId, fileId } = parse(z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() }), req.params);
-    await access(req.user, docId);
-    return sendFile(reply, await files.read('document_files', { column: 'document_id', id: docId }, fileId));
-  });
-
-  app.delete('/documents/:id/files/:fileId', async (req) => {
-    const { id: docId, fileId } = parse(z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() }), req.params);
-    const a = await access(req.user, docId);
-    if (!a.edit) throw forbidden('Only the sender or an administrator can remove files');
-    const { rows } = await db.tx(req.user.id, (t) => t.query('delete from document_files where id = $1 and document_id = $2 returning storage_key', [fileId, docId]));
-    await files.removed(rows);
-    return { ok: true };
+    if (req.method === 'DELETE' ? !a.edit : !a.edit && !a.my_signer) {
+      throw forbidden(req.method === 'DELETE' ? 'Only the sender or an administrator can remove files' : 'Only the sender and the recipients can add files');
+    }
   });
 }

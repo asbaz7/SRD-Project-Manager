@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { buildApp } from '../src/app.js';
-import { memoryBucket } from '../src/files.js';
 import { hashPassword } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
@@ -11,7 +10,7 @@ import { migrate } from '../src/migrate.js';
 import { seedRegister } from '../scripts/seed.js';
 
 const PASSWORD = 'correct horse 42';
-let app, db, bucket, maafushi;
+let app, db, maafushi;
 const T = {};      // tokens by name
 const U = {};      // user ids by name
 
@@ -30,9 +29,7 @@ before(async () => {
   db = await createDb({ pgliteDir: ':memory:' });
   await migrate(db, {});
   await seedRegister(db);
-  // Files go to a bucket here, as on Cloudflare (documents.test keeps them in the database).
-  bucket = memoryBucket();
-  app = await buildApp({ db, config: loadConfig({ timezone: 'Indian/Maldives', webDist: '' }), logger: false, bucket });
+  app = await buildApp({ db, config: loadConfig({ timezone: 'Indian/Maldives', webDist: '' }), logger: false });
   const hash = await hashPassword(PASSWORD);
   const people = [
     ['admin', 'admin', true], ['tech', 'manager', true], ['tech2', 'manager', true],
@@ -240,68 +237,6 @@ test('staff: permissions chosen per user', async () => {
   assert.equal((await call('PATCH', `/users/${plain.id}`, T.admin, { permissions: ['bogus'] })).status, 400);
 });
 
-test('project files: kept while open, downloadable after, deleted 30 days after closing', async () => {
-  const { unzipSync, strFromU8 } = await import('fflate');
-  const p = (await call('POST', '/projects', T.tech, { service: 'water', island_id: maafushi.id, title: 'RO plant upgrade',
-    visibility: 'members', members: [{ user_id: U.clerk, access: 'view' }] })).body;
-  const add = (token, name, text) => call('POST', `/projects/${p.id}/files`, token, { file_name: name, content_type: 'application/pdf', data: Buffer.from(text).toString('base64') });
-  assert.equal((await add(T.tech, 'BOQ.pdf', 'boq')).status, 201);
-  assert.equal((await add(T.tech, 'BOQ.pdf', 'boq v2')).status, 201);
-  assert.equal((await add(T.clerk, 'x.pdf', 'x')).status, 403, 'viewers of the project cannot add');
-  assert.equal((await add(T.tech2, 'x.pdf', 'x')).status, 404, 'not shared with tech2');
-
-  let d = (await call('GET', `/projects/${p.id}`, T.clerk)).body;
-  assert.equal(d.files.length, 2);
-  assert.equal(d.files_delete_after, null);
-  const one = await app.inject({ method: 'GET', url: `/api/v1/projects/${p.id}/files/${d.files[0].id}`, headers: { authorization: `Bearer ${T.clerk}` } });
-  assert.equal(one.body, 'boq');
-  // Stored in the bucket; the row keeps only the key.
-  const stored = (await db.query('select data, storage_key from project_files where project_id = $1', [p.id])).rows;
-  assert.ok(stored.every((r) => r.data === null && bucket.objects.has(r.storage_key)));
-
-  // Completed: no new files; the countdown starts; everything downloads as a ZIP.
-  await call('POST', `/projects/${p.id}/updates`, T.tech, { body: 'Handed over', status: 'completed' });
-  d = (await call('GET', `/projects/${p.id}`, T.tech)).body;
-  const in30 = new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Indian/Maldives' });
-  assert.ok([in30, new Date(Date.now() + 29 * 86400000).toISOString().slice(0, 10), new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)].includes(String(d.files_delete_after).slice(0, 10)), String(d.files_delete_after));
-  assert.equal((await add(T.tech, 'late.pdf', 'late')).status, 400);
-  const zipRes = await fetchZip(p.id);
-  const files = unzipSync(zipRes);
-  assert.deepEqual(Object.keys(files).sort(), ['BOQ (2).pdf', 'BOQ.pdf']);
-  assert.equal(strFromU8(files['BOQ (2).pdf']), 'boq v2');
-
-  // Reopening cancels the countdown; closing again restarts it.
-  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'ongoing' });
-  assert.equal((await call('GET', `/projects/${p.id}`, T.tech)).body.files_delete_after, null);
-  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'completed' });
-
-  // The daily job deletes them once the date has passed; the project stays.
-  await db.query(`update projects set files_delete_after = current_date - 1 where id = $1`, [p.id]);
-  await app.daily();
-  assert.ok(stored.every((r) => !bucket.objects.has(r.storage_key)), 'the objects go too');
-  d = (await call('GET', `/projects/${p.id}`, T.tech)).body;
-  assert.equal(d.files.length, 0);
-  assert.equal(d.title, 'RO plant upgrade');
-  assert.ok(d.updates.length > 0);
-
-  async function fetchZip(id) {
-    const r = await app.inject({ method: 'GET', url: `/api/v1/projects/${id}/zip`, headers: { authorization: `Bearer ${T.clerk}` } });
-    assert.equal(r.statusCode, 200);
-    assert.equal(r.headers['content-type'], 'application/zip');
-    const res = await app.fetch(new Request(`http://x/api/v1/projects/${id}/zip`, { headers: { authorization: `Bearer ${T.clerk}` } }));
-    return new Uint8Array(await res.arrayBuffer());
-  }
-});
-
-test('deleting a closed project\'s files at once', async () => {
-  const p = (await call('POST', '/projects', T.tech, { service: 'water', island_id: maafushi.id, title: 'Short job' })).body;
-  await call('POST', `/projects/${p.id}/files`, T.tech, { file_name: 'a.pdf', data: Buffer.from('a').toString('base64') });
-  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'completed' });
-  assert.equal((await call('DELETE', `/projects/${p.id}/files`, T.tech2)).status, 404);
-  const res = await call('DELETE', `/projects/${p.id}/files`, T.tech);
-  assert.equal(res.body.deleted, 1);
-});
-
 test('projects: type, task breakdown and progress calculated from the tasks', async () => {
   const p = await call('POST', '/projects', T.tech, {
     title: 'ADh. Dhidhdhoo PH Upgrade', island_id: maafushi.id, project_type: 'infrastructure', status: 'ongoing',
@@ -381,12 +316,14 @@ test('surveys: templates, answers kept to the template, technical types hidden f
   assert.equal(done.body.answers.summary.findings, 'Gen 1 needs overhaul');
   assert.equal((await call('GET', `/surveys/${s.id}`, T.tech2)).body.can_edit, true, 'managers can edit');
 
-  // CSV of the answers, and a photo.
+  // CSV of the answers, and a photo (linked from OneDrive).
   const csv = await app.inject({ method: 'GET', url: `/api/v1/surveys/${s.id}/csv`, headers: { authorization: `Bearer ${T.tech}` } });
   assert.match(csv.body, /Genset details,Gen 2,Engine serial number,76669969/);
-  const up = await call('POST', `/surveys/${s.id}/files`, T.tech, { file_name: 'engine room.jpg', content_type: 'image/jpeg', data: Buffer.from('jpg').toString('base64') });
+  const up = await call('POST', `/surveys/${s.id}/links`, T.tech, { url: 'https://stelco-my.sharepoint.com/personal/x/Documents/engine%20room.jpg' });
   assert.equal(up.status, 201);
-  assert.equal((await call('GET', `/surveys/${s.id}`, T.tech)).body.files.length, 1);
+  assert.equal(up.body.title, 'engine room.jpg');
+  assert.equal((await call('GET', `/surveys/${s.id}`, T.tech)).body.links.length, 1);
+  assert.equal((await call('GET', '/surveys', T.tech)).body.items.find((x) => x.id === s.id).file_count, 1);
 
   // Only admins (or the starter, while a draft) can delete.
   assert.equal((await call('DELETE', `/surveys/${s.id}`, T.tech)).status, 403, 'completed: starter cannot delete');
@@ -406,40 +343,13 @@ test('outside systems cannot connect: no access tokens, no report intake', async
   }
 });
 
-test('project files: new versions keep their history; Microsoft 365 links', async () => {
+test('project files are Microsoft 365 links: nothing is stored', async () => {
   const p = (await call('POST', '/projects', T.tech, { service: 'electricity', island_id: maafushi.id, title: 'New connections 2027',
     visibility: 'members', members: [{ user_id: U.clerk, access: 'view' }] })).body;
-  const b64 = (text) => Buffer.from(text).toString('base64');
-  const first = (await call('POST', `/projects/${p.id}/files`, T.tech, { file_name: 'Connections.xlsx', data: b64('v1') })).body;
-
-  // An edited copy becomes version 2; the first stays in its history.
-  const v2 = await call('POST', `/projects/${p.id}/files/${first.id}/versions`, T.tech, { file_name: 'Connections.xlsx', data: b64('v2') });
-  assert.equal(v2.status, 201, JSON.stringify(v2.body));
-  const v3 = (await call('POST', `/projects/${p.id}/files/${v2.body.id}/versions`, T.tech, { file_name: 'Connections (final).xlsx', data: b64('v3') })).body;
-  assert.equal((await call('POST', `/projects/${p.id}/files/${first.id}/versions`, T.tech, { file_name: 'x.xlsx', data: b64('x') })).status, 404, 'only the current version takes a new one');
-  assert.equal((await call('POST', `/projects/${p.id}/files/${v3.id}/versions`, T.clerk, { file_name: 'x.xlsx', data: b64('x') })).status, 403);
-  let d = (await call('GET', `/projects/${p.id}`, T.clerk)).body;
-  assert.equal(d.files.length, 1);
-  assert.equal(d.files[0].file_name, 'Connections (final).xlsx');
-  assert.equal(d.files[0].version, 3);
-  assert.deepEqual(d.files[0].versions.map((v) => v.version), [2, 1]);
-  assert.equal(d.files_total_bytes, 6, 'older versions count in the space used');
-  // An older version still downloads; the ZIP has current versions only.
-  const old = await app.inject({ method: 'GET', url: `/api/v1/projects/${p.id}/files/${first.id}`, headers: { authorization: `Bearer ${T.clerk}` } });
-  assert.equal(old.body, 'v1');
-  const { unzipSync, strFromU8 } = await import('fflate');
-  const zip = await app.inject({ method: 'GET', url: `/api/v1/projects/${p.id}/zip`, headers: { authorization: `Bearer ${T.tech}` } });
-  const entries = unzipSync(new Uint8Array(Buffer.from(zip.body, 'binary')));
-  assert.deepEqual(Object.keys(entries), ['Connections (final).xlsx']);
-  assert.equal(strFromU8(entries['Connections (final).xlsx']), 'v3');
-
-  // Removing it removes every version, stored objects included.
-  const keys = (await db.query('select storage_key from project_files where project_id = $1', [p.id])).rows.map((r) => r.storage_key);
-  assert.equal(keys.length, 3);
-  assert.equal((await call('DELETE', `/projects/${p.id}/files/${v3.id}`, T.tech)).body.deleted, 3);
-  assert.ok(keys.every((k) => !bucket.objects.has(k)));
-
-  // Links to files in Microsoft 365, opened and edited there.
+  // Uploading is gone.
+  for (const url of [`/projects/${p.id}/files`, `/projects/${p.id}/files/1/versions`]) {
+    assert.equal((await call('POST', url, T.tech, { file_name: 'x.xlsx', data: Buffer.from('x').toString('base64') })).status, 404, url);
+  }
   const url = 'https://stelco.sharepoint.com/:x:/r/sites/SRD/Shared%20Documents/Power_House_New_Connections_2027.xlsx?d=w1&web=1';
   const link = await call('POST', `/projects/${p.id}/links`, T.tech, { url });
   assert.equal(link.status, 201, JSON.stringify(link.body));
@@ -447,10 +357,16 @@ test('project files: new versions keep their history; Microsoft 365 links', asyn
   assert.equal((await call('POST', `/projects/${p.id}/links`, T.tech, { url: 'https://1drv.ms/x/s!abc', title: 'Load list' })).body.title, 'Load list');
   assert.equal((await call('POST', `/projects/${p.id}/links`, T.tech, { url: 'http://example.com/x.xlsx' })).status, 400, 'https only');
   assert.equal((await call('POST', `/projects/${p.id}/links`, T.tech, { url: 'javascript:alert(1)' })).status, 400);
-  assert.equal((await call('POST', `/projects/${p.id}/links`, T.clerk, { url })).status, 403);
-  d = (await call('GET', `/projects/${p.id}`, T.clerk)).body;
+  assert.equal((await call('POST', `/projects/${p.id}/links`, T.clerk, { url })).status, 403, 'viewers cannot add');
+  assert.equal((await call('POST', `/projects/${p.id}/links`, T.tech2, { url })).status, 404, 'not shared with them');
+  const d = (await call('GET', `/projects/${p.id}`, T.clerk)).body;
   assert.deepEqual(d.links.map((l) => l.title), ['Power_House_New_Connections_2027.xlsx', 'Load list']);
+  assert.equal(d.files, undefined);
+  assert.equal((await call('DELETE', `/projects/${p.id}/links/${link.body.id}`, T.clerk)).status, 403);
   assert.equal((await call('DELETE', `/projects/${p.id}/links/${link.body.id}`, T.tech)).status, 200);
+  assert.equal((await call('GET', `/projects/${p.id}`, T.tech)).body.links.length, 1);
+  // Closing a project leaves its links alone.
+  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'completed' });
   assert.equal((await call('GET', `/projects/${p.id}`, T.tech)).body.links.length, 1);
 });
 

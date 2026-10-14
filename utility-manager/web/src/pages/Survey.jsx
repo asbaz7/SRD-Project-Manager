@@ -5,6 +5,7 @@ import { Fragment, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Async, Card, Empty, ErrorBox, PageHead } from '../components/ui.jsx';
+import { LinksCard } from '../components/Links.jsx';
 import { date, dateTime } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 import { SurveyStatus } from './Surveys.jsx';
@@ -89,18 +90,6 @@ function SurveyView({ survey: s, template: t, reload }) {
     setAnswers((a) => ({ ...a, powerhouse: { ...r.powerhouse, ...(a.powerhouse || {}) }, gensets: r.gensets, ...(r.fuel ? { fuel: { ...r.fuel, ...(a.fuel || {}) } } : {}) }));
     setDirty(true);
   };
-  const upload = useSubmit(async (file) => {
-    if (file.size > 10 * 1024 * 1024) throw new Error('Files can be up to 10 MB');
-    const data = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(',')[1]);
-      r.onerror = () => reject(new Error('Could not read the file'));
-      r.readAsDataURL(file);
-    });
-    await api(`/surveys/${s.id}/files`, { method: 'POST', body: { file_name: file.name, content_type: file.type || undefined, data } });
-    reload();
-  });
-  const removeFile = useSubmit(async (fileId) => { await api(`/surveys/${s.id}/files/${fileId}`, { method: 'DELETE' }); reload(); });
   const hasGensets = t.sections.some((x) => x.key === 'gensets');
   const place = s.island_name ? `${s.atoll_code}. ${s.island_name}` : s.location_name;
 
@@ -152,16 +141,6 @@ function SurveyView({ survey: s, template: t, reload }) {
     })}
     {!editing && Object.keys(answers).length === 0 && <Card><Empty>Nothing recorded yet.{s.can_edit && ' Click Edit to fill in the survey.'}</Empty></Card>}
 
-    <Card title="Photos and files">
-      <ErrorBox error={upload.error || removeFile.error} />
-      {s.files.length === 0 ? <p className="muted small">None attached.</p> :
-        <ul className="people">{s.files.map((f) => <li key={f.id}>
-          <span><a href={`/api/v1/surveys/${s.id}/files/${f.id}`} target={/^image\//.test(f.content_type) ? '_blank' : undefined} rel="noreferrer"><strong>{f.file_name}</strong></a><br />
-            <small className="muted">{Math.max(1, Math.round(f.size_bytes / 1024))} KB · {dateTime(f.uploaded_at)}{f.uploaded_by_name && ` · ${f.uploaded_by_name}`}</small></span>
-          {s.can_edit && <button className="btn ghost small" onClick={() => removeFile.submit(f.id)}>Remove</button>}
-        </li>)}</ul>}
-      {s.can_edit && <label className="btn small file-pick">{upload.busy ? 'Uploading…' : 'Attach a photo or file'}
-        <input type="file" hidden disabled={upload.busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload.submit(f); }} /></label>}
-    </Card>
+    <LinksCard title="Photos and files" links={s.links} base={`/surveys/${s.id}`} canAdd={s.can_edit} canRemove={s.can_edit} reload={reload} empty="None linked." />
   </>;
 }

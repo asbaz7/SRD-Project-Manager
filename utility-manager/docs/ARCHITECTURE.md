@@ -249,18 +249,15 @@ Electricity, Water and Sewerage sections.
   weighting, kept up to date by the `project_tasks_progress` trigger. While a
   project has tasks, hand-entered progress is ignored or refused.
 
-**Project files** (migration 016) are kept only while the project is open:
-- Added by people who can edit the project, up to 10 MB each, while the
-  project is planned, ongoing or on hold.
-- When it is completed or cancelled, a trigger sets `files_delete_after` to
-  30 days later. Files can still be downloaded, one by one or all as a ZIP
-  (`GET /projects/:id/zip`), or deleted at once. The creator and owner get a
-  Telegram message with the date. Reopening clears the date.
-- The daily cron job (`purgeProjectFiles`) deletes the files once the date has
-  passed. The project and its history stay.
-
-Files (project and document) are stored in Postgres; the whole database was
-14 MB in Oct 2026.
+**Files: links to Microsoft 365, nothing stored** (migration 049, Oct 2026).
+Projects, documents and surveys link to files kept in OneDrive / SharePoint
+(`project_links`, `document_links`, `survey_links`; https only; titled from
+the file name in the address unless one is given; src/links.js). They open
+in Excel / Word / PowerPoint online and are edited there; who can open them
+is set by sharing in Microsoft 365. Earlier the files themselves were stored
+(in Postgres from migration 016, briefly in R2 with versions, 047-048); that,
+the 30-day deletion of closed projects' files and the ZIP download are gone.
+Who may add or remove links is the same as for files before.
 
 **Incidents:** unchanged; visible to everyone.
 
@@ -282,7 +279,7 @@ Each document has:
   **sent date**;
 - **recipients in signing order** (`document_signers`): each is a user or a
   typed name;
-- **files** (`document_files`, bytea, up to 10 MB each);
+- **files**: links to Microsoft 365 (`document_links`): the sender and recipients add them, the sender removes them;
 - **notes** (`document_updates`).
 
 How it works:
@@ -352,7 +349,7 @@ Fleet Manager, and brought back in migration 046 after it was disconnected
   list are dropped.
 - **Place:** a survey is for an island in the register, or a typed place name
   (e.g. islands not yet in the system).
-- **Status:** draft or completed. Photos and files go in `survey_files`, and
+- **Status:** draft or completed. Photos and files are links to Microsoft 365 (`survey_links`), and
   answers export as CSV.
 - **Fill from register** fills the powerhouse and genset columns from an
   island's register.

@@ -8,14 +8,14 @@ import { sendCsv } from '../csv.js';
 import { badRequest, forbidden, notFound } from '../errors.js';
 import { Where, date, id, one, optText, pageOf, paging, parse, serialParam } from '../http.js';
 import { TEMPLATES, answerRows, cleanAnswers, templateByKey } from '../surveyTemplates.js';
-import { decodeUpload, sendFile, uploadBody } from '../files.js';
+import { linkRoutes, loadLinks } from '../links.js';
 
 const visibleTemplates = (user) => TEMPLATES.filter((t) => !t.technical || user.technical).map((t) => t.key);
 
 const SELECT = `
   select v.*, 'SRV-' || lpad(v.id::text, 4, '0') as ref, i.name as island_name, a.code as atoll_code,
          cu.full_name as created_by_name, uu.full_name as updated_by_name,
-         (select count(*)::int from survey_files f where f.survey_id = v.id) as file_count,
+         (select count(*)::int from survey_links l where l.survey_id = v.id) as file_count,
          count(*) over () as total_count
     from surveys v
     left join islands i on i.id = v.island_id
@@ -33,7 +33,7 @@ const createBody = z.object({
 });
 
 export default async function surveyRoutes(app) {
-  const { db, files } = app;
+  const { db } = app;
   const surveyor = { preHandler: requireAllowed('surveys', 'You are not allowed to carry out surveys. Ask an administrator.') };
 
   async function load(user, surveyId) {
@@ -67,9 +67,7 @@ export default async function surveyRoutes(app) {
   app.get('/surveys/:id', async (req) => {
     const { id: surveyId } = parse(serialParam, req.params);
     const { s } = await load(req.user, surveyId);
-    s.files = (await db.query(`
-      select f.id, f.file_name, f.content_type, f.size_bytes, f.uploaded_at, u.full_name as uploaded_by_name
-        from survey_files f left join users u on u.id = f.uploaded_by where f.survey_id = $1 order by f.uploaded_at`, [surveyId])).rows;
+    s.links = await loadLinks(db, 'survey', surveyId);
     return s;
   });
 
@@ -125,10 +123,7 @@ export default async function surveyRoutes(app) {
     if (!(req.user.role === 'admin' || (s.created_by === req.user.id && s.status === 'draft'))) {
       throw forbidden('Only an administrator, or whoever started a draft, can delete a survey');
     }
-    // Its files go with it: the rows by cascade, the stored objects here.
-    const { rows: stored } = await db.query('select storage_key from survey_files where survey_id = $1', [surveyId]);
     await db.tx(req.user.id, (tx) => tx.query('delete from surveys where id = $1', [surveyId]));
-    await files.removed(stored);
     return { ok: true };
   });
 
@@ -144,31 +139,9 @@ export default async function surveyRoutes(app) {
       [['Section', 'section'], ['Item', 'item'], ['Field', 'field'], ['Value', 'value'], ['Unit', 'unit']]);
   });
 
-  // Photos and files.
-  app.post('/surveys/:id/files', async (req, reply) => {
-    const { id: surveyId } = parse(serialParam, req.params);
-    const upload = decodeUpload(parse(uploadBody, req.body));
+  // Photos and files: links to Microsoft 365 (OneDrive / SharePoint).
+  linkRoutes(app, 'survey', '/surveys/:id', async (req, surveyId) => {
     const { s } = await load(req.user, surveyId);
-    if (!s.can_edit) throw forbidden('Only whoever started this survey, a manager or an administrator can add files');
-    const row = await db.tx(req.user.id, (t) => files.save(t, 'survey_files', { column: 'survey_id', id: surveyId }, { ...upload, userId: req.user.id }));
-    reply.code(201);
-    return row;
-  });
-
-  const fileParams = z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() });
-  app.get('/surveys/:id/files/:fileId', async (req, reply) => {
-    const { id: surveyId, fileId } = parse(fileParams, req.params);
-    await load(req.user, surveyId);
-    const f = await files.read('survey_files', { column: 'survey_id', id: surveyId }, fileId);
-    // Photos open in place; other files download.
-    return sendFile(reply, f, { inline: /^image\//.test(f.content_type) });
-  });
-
-  app.delete('/surveys/:id/files/:fileId', async (req) => {
-    const { id: surveyId, fileId } = parse(fileParams, req.params);
-    const { s } = await load(req.user, surveyId);
-    if (!s.can_edit) throw forbidden();
-    await files.removed((await db.query('delete from survey_files where id = $1 and survey_id = $2 returning storage_key', [fileId, surveyId])).rows);
-    return { ok: true };
+    if (!s.can_edit) throw forbidden('Only whoever started this survey, a manager or an administrator can add or remove files');
   });
 }

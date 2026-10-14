@@ -1,13 +1,12 @@
 import { z } from 'zod';
 import { assertIslandWrite, requireAllowed } from '../auth.js';
 import { sendCsv } from '../csv.js';
-import { zipSync } from 'fflate';
 import { badRequest, forbidden, notFound } from '../errors.js';
-import { esc, projectRef, refSql } from '../format.js';
+import { refSql } from '../format.js';
 import { editUpdate } from './work.js';
 import { date, id, one, optText, pageOf, paging, parse, parsePatch, serialParam, service, text, unitId, updateSet, Where } from '../http.js';
 import trackerRoutes, { loadSites, loadTasks } from './projectTracker.js';
-import { decodeUpload, sendFile, uploadBody } from '../files.js';
+import { linkRoutes, loadLinks } from '../links.js';
 
 const STATES = ['planned', 'ongoing', 'on_hold', 'completed', 'cancelled'];
 
@@ -131,44 +130,9 @@ async function writeMembers(t, projectId, members, addedBy) {
   }
 }
 
-const CLOSED = ['completed', 'cancelled'];
-
-// Daily: delete files of projects closed more than 30 days ago.
-export async function purgeProjectFiles(db, files) {
-  const { rows } = await db.query(`
-    delete from project_files f using projects p
-     where p.id = f.project_id and p.files_delete_after is not null and p.files_delete_after <= current_date
-     returning f.storage_key`);
-  await files.removed(rows);
-  return rows.length;
-}
-
-// A link's title when none is given: the file name in the address if there
-// is one (SharePoint and OneDrive links often carry it), else the site.
-export function linkTitle(url) {
-  const u = new URL(url);
-  const named = [...u.pathname.split('/'), u.searchParams.get('file') || ''].map((x) => { try { return decodeURIComponent(x); } catch { return x; } })
-    .reverse().find((x) => /\.[a-z0-9]{2,5}$/i.test(x));
-  return (named || u.hostname).slice(0, 200);
-}
-
 export default async function projectRoutes(app) {
   await trackerRoutes(app);
-  const { db, telegram, config, files } = app;
-
-  // When a project with files closes, tell its creator and owner when the
-  // files will be deleted.
-  async function announceFileDeletion(projectId, before) {
-    if (CLOSED.includes(before)) return;
-    const { rows: [p] } = await db.query(`
-      select p.id, ${refSql('PRJ', 'p.id')} as ref, p.title, p.status, p.files_delete_after, p.created_by, p.owner_id,
-             (select count(*)::int from project_files f where f.project_id = p.id) as files
-        from projects p where p.id = $1`, [projectId]);
-    if (!p || !CLOSED.includes(p.status) || !p.files) return;
-    const when = new Date(`${String(p.files_delete_after).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-    const text = `📁 <b>${esc(p.ref)} ${esc(p.title)}</b> is ${p.status}. Its ${p.files} file${p.files === 1 ? '' : 's'} will be deleted on ${when}: download them before then.\n${telegram.link(`/projects/${p.id}`, 'Open')}`;
-    for (const userId of new Set([p.created_by, p.owner_id].filter(Boolean))) await telegram.notifyUser(userId, text);
-  }
+  const { db } = app;
 
   app.get('/projects', async (req, reply) => {
     const q = parse(listQuery, req.query);
@@ -205,22 +169,10 @@ export default async function projectRoutes(app) {
     project.can_edit = access === 'edit' || access === 'manage';
     project.can_manage = access === 'manage';
     // Everything else about it at once.
-    const [tasks, sites, fileRows, links, stored, members, updates] = await Promise.all([
+    const [tasks, sites, links, members, updates] = await Promise.all([
       loadTasks(db, projectId),
       loadSites(db, projectId),
-      // Current files, each with its older versions (newest first).
-      db.query(`
-        select f.id, f.file_name, f.content_type, f.size_bytes, f.uploaded_at, f.version, u.full_name as uploaded_by_name,
-               coalesce((select json_agg(json_build_object('id', o.id, 'version', o.version, 'file_name', o.file_name, 'size_bytes', o.size_bytes,
-                                                           'uploaded_at', o.uploaded_at, 'uploaded_by_name', ou.full_name) order by o.version desc)
-                           from project_files o left join users ou on ou.id = o.uploaded_by
-                          where o.project_id = f.project_id and coalesce(o.group_id, o.id) = coalesce(f.group_id, f.id) and not o.current), '[]') as versions
-          from project_files f left join users u on u.id = f.uploaded_by
-         where f.project_id = $1 and f.current order by f.uploaded_at`, [projectId]),
-      db.query(`
-        select l.id, l.title, l.url, l.added_at, u.full_name as added_by_name
-          from project_links l left join users u on u.id = l.added_by where l.project_id = $1 order by l.added_at`, [projectId]),
-      db.query('select coalesce(sum(size_bytes), 0)::bigint as bytes from project_files where project_id = $1', [projectId]),
+      loadLinks(db, 'project', projectId),
       db.query(`
         select m.user_id, m.access, u.full_name, u.designation from project_members m join users u on u.id = m.user_id
          where m.project_id = $1 order by m.access desc, u.full_name`, [projectId]),
@@ -233,12 +185,9 @@ export default async function projectRoutes(app) {
     // A tracker: tasks with codes, statuses and so on, edited one at a time.
     project.tracker = tasks.some((t) => t.code || t.status);
     project.sites = sites;
-    project.files = fileRows.rows.map((f) => ({ ...f, versions: typeof f.versions === 'string' ? JSON.parse(f.versions) : f.versions }));
-    project.links = links.rows;
+    project.links = links;
     project.members = members.rows;
     project.updates = updates.rows;
-    // Everything stored for it, older versions included.
-    project.files_total_bytes = Number(stored.rows[0].bytes);
     return project;
   });
 
@@ -265,7 +214,6 @@ export default async function projectRoutes(app) {
     const { id: projectId } = parse(serialParam, req.params);
     // Only fields actually sent are updated; defaults from the create schema don't apply.
     const patch = parsePatch(body.omit({ island_id: true }).partial(), req.body);
-    const before = one((await db.query('select status from projects where id = $1', [projectId])).rows, 'Project').status;
     const sharing = patch.visibility !== undefined || patch.members !== undefined || patch.owner_id !== undefined || patch.unit_id !== undefined;
     await assertAccess(db, req.user, projectId, sharing ? 'manage' : 'edit');
     const members = patch.members;
@@ -289,7 +237,6 @@ export default async function projectRoutes(app) {
     });
     const row = one((await db.query(`${SELECT} where p.id = $1`, [projectId])).rows);
     delete row.total_count;
-    if (patch.status) await announceFileDeletion(projectId, before);
     return row;
   });
 
@@ -298,14 +245,12 @@ export default async function projectRoutes(app) {
     const { id: projectId } = parse(serialParam, req.params);
     const b = parse(updateBody, req.body);
     await assertAccess(db, req.user, projectId, 'edit');
-    const before = one((await db.query('select status from projects where id = $1', [projectId])).rows, 'Project').status;
     const { rows: [{ n: taskCount }] } = await db.query('select count(*)::int as n from project_tasks where project_id = $1', [projectId]);
     if (taskCount && b.progress_pct != null) throw badRequest('Progress is calculated from the tasks: update the task breakdown instead');
     const { rows } = await db.tx(req.user.id, (t) => t.query(`
       insert into project_updates (project_id, body, progress_pct, status, created_by)
       values ($1, $2, $3, $4, $5) returning *`,
     [projectId, b.body, b.progress_pct ?? null, b.status ?? null, req.user.id]));
-    if (b.status) await announceFileDeletion(projectId, before);
     reply.code(201);
     return rows[0];
   });
@@ -318,108 +263,6 @@ export default async function projectRoutes(app) {
     return editUpdate(db, req.user, 'project_updates', 'project_id', projectId, updateId, b.body);
   });
 
-  // --- Files: kept while the project is open --------------------------------
-  const fileParams = z.object({ id: z.coerce.number().int().positive(), fileId: z.coerce.number().int().positive() });
-
-  app.post('/projects/:id/files', async (req, reply) => {
-    const { id: projectId } = parse(serialParam, req.params);
-    const upload = decodeUpload(parse(uploadBody, req.body));
-    await assertAccess(db, req.user, projectId, 'edit');
-    const { rows: [p] } = await db.query('select status from projects where id = $1', [projectId]);
-    if (CLOSED.includes(p.status)) throw badRequest('This project is closed: files can no longer be added');
-    const row = await db.tx(req.user.id, (t) => files.save(t, 'project_files', { column: 'project_id', id: projectId }, { ...upload, userId: req.user.id }));
-    reply.code(201);
-    return row;
-  });
-
-  app.get('/projects/:id/files/:fileId', async (req, reply) => {
-    const { id: projectId, fileId } = parse(fileParams, req.params);
-    await assertAccess(db, req.user, projectId, 'view');
-    return sendFile(reply, await files.read('project_files', { column: 'project_id', id: projectId }, fileId));
-  });
-
-  // Every file in one ZIP (stored, not recompressed: they're mostly PDFs).
-  app.get('/projects/:id/zip', async (req, reply) => {
-    const { id: projectId } = parse(serialParam, req.params);
-    await assertAccess(db, req.user, projectId, 'view');
-    const all = await files.readAll('project_files', { column: 'project_id', id: projectId }, { currentOnly: true });
-    if (!all.length) throw notFound('Files');
-    const entries = {};
-    for (const r of all) {
-      let name = r.file_name.replace(/[\\/:*?"<>|]/g, '_');
-      for (let n = 2; entries[name]; n++) name = r.file_name.replace(/(\.[^.]*)?$/, (ext) => ` (${n})${ext || ''}`);
-      entries[name] = [r.bytes, { level: 0 }];
-    }
-    const zip = zipSync(entries);
-    reply.header('content-type', 'application/zip');
-    reply.header('content-disposition', `attachment; filename="${projectRef(projectId)} files.zip"`);
-    return reply.send(zip);
-  });
-
-  app.delete('/projects/:id/files/:fileId', async (req) => {
-    const { id: projectId, fileId } = parse(fileParams, req.params);
-    await assertAccess(db, req.user, projectId, 'edit');
-    // The file goes with all its versions.
-    const { rows } = await db.query(`
-      delete from project_files where project_id = $2
-         and coalesce(group_id, id) = (select coalesce(group_id, id) from project_files where id = $1 and project_id = $2)
-      returning storage_key`, [fileId, projectId]);
-    if (!rows.length) throw notFound('File');
-    await files.removed(rows);
-    return { ok: true, deleted: rows.length };
-  });
-
-  // An edited copy of a file: becomes its new version, the old one stays in
-  // its history.
-  app.post('/projects/:id/files/:fileId/versions', async (req, reply) => {
-    const { id: projectId, fileId } = parse(fileParams, req.params);
-    const upload = decodeUpload(parse(uploadBody, req.body));
-    await assertAccess(db, req.user, projectId, 'edit');
-    const { rows: [p] } = await db.query('select status from projects where id = $1', [projectId]);
-    if (CLOSED.includes(p.status)) throw badRequest('This project is closed: files can no longer be added');
-    const row = await db.tx(req.user.id, async (t) => {
-      const { rows: [old] } = await t.query(
-        'select id, group_id, version from project_files where id = $1 and project_id = $2 and current for update', [fileId, projectId]);
-      if (!old) throw notFound('File');
-      await t.query('update project_files set current = false where id = $1', [old.id]);
-      return files.save(t, 'project_files', { column: 'project_id', id: projectId }, { ...upload, userId: req.user.id },
-        { group_id: old.group_id ?? old.id, version: old.version + 1 });
-    });
-    reply.code(201);
-    return row;
-  });
-
-  // Links to files kept in Microsoft 365 (OneDrive, SharePoint), opened and
-  // edited there.
-  const linkBody = z.object({
-    url: z.string().trim().max(2000).url().refine((u) => u.startsWith('https://'), 'must start with https://'),
-    title: optText(200),
-  });
-  app.post('/projects/:id/links', async (req, reply) => {
-    const { id: projectId } = parse(serialParam, req.params);
-    const b = parse(linkBody, req.body);
-    await assertAccess(db, req.user, projectId, 'edit');
-    const title = b.title || linkTitle(b.url);
-    const { rows } = await db.tx(req.user.id, (t) => t.query(
-      'insert into project_links (project_id, title, url, added_by) values ($1, $2, $3, $4) returning id, title, url, added_at',
-      [projectId, title, b.url, req.user.id]));
-    reply.code(201);
-    return rows[0];
-  });
-
-  app.delete('/projects/:id/links/:linkId', async (req) => {
-    const { id: projectId, linkId } = parse(z.object({ id: z.coerce.number().int().positive(), linkId: z.coerce.number().int().positive() }), req.params);
-    await assertAccess(db, req.user, projectId, 'edit');
-    const { rowCount } = await db.tx(req.user.id, (t) => t.query('delete from project_links where id = $1 and project_id = $2', [linkId, projectId]));
-    if (!rowCount) throw notFound('Link');
-    return { ok: true };
-  });
-
-  app.delete('/projects/:id/files', async (req) => {
-    const { id: projectId } = parse(serialParam, req.params);
-    await assertAccess(db, req.user, projectId, 'edit');
-    const { rows } = await db.query('delete from project_files where project_id = $1 returning storage_key', [projectId]);
-    await files.removed(rows);
-    return { ok: true, deleted: rows.length };
-  });
+  // Files: links to Microsoft 365, edited there. Same access as editing.
+  linkRoutes(app, 'project', '/projects/:id', (req, projectId) => assertAccess(db, req.user, projectId, 'edit'));
 }

@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Select } from '../components/ui.jsx';
+import { LinksCard } from '../components/Links.jsx';
 import { date, dateTime, localDate } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 import { DOC_STATUS, DocStatus, DocType } from './Documents.jsx';
@@ -16,7 +17,6 @@ export default function Document() {
   return <Async state={state}>{(d) => <DocumentView doc={d} reload={state.reload} />}</Async>;
 }
 
-const kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 function DocumentView({ doc: d, reload }) {
   const [editing, setEditing] = useState(false);
@@ -27,18 +27,6 @@ function DocumentView({ doc: d, reload }) {
   });
   const [note, setNote] = useState('');
   const post = useSubmit(async () => { await api(`/documents/${d.id}/updates`, { method: 'POST', body: { body: note } }); setNote(''); reload(); });
-  const upload = useSubmit(async (file) => {
-    if (file.size > 10 * 1024 * 1024) throw new Error('Files can be up to 10 MB');
-    const data = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(',')[1]);
-      r.onerror = () => reject(new Error('Could not read the file'));
-      r.readAsDataURL(file);
-    });
-    await api(`/documents/${d.id}/files`, { method: 'POST', body: { file_name: file.name, content_type: file.type || undefined, data } });
-    reload();
-  });
-  const removeFile = useSubmit(async (fileId) => { await api(`/documents/${d.id}/files/${fileId}`, { method: 'DELETE' }); reload(); });
 
   if (editing) return <DocumentForm doc={d} onDone={() => { setEditing(false); reload(); }} />;
   const open = d.status === 'pending';
@@ -85,17 +73,7 @@ function DocumentView({ doc: d, reload }) {
     </div>
 
     <div className="grid-2">
-      <Card title="Files">
-        <ErrorBox error={upload.error || removeFile.error} />
-        {d.files.length === 0 ? <Empty>No files attached.</Empty> :
-          <ul className="people">{d.files.map((f) => <li key={f.id}>
-            <span><a href={`/api/v1/documents/${d.id}/files/${f.id}`}><strong>{f.file_name}</strong></a><br />
-              <small className="muted">{kb(f.size_bytes)} · {dateTime(f.uploaded_at)}{f.uploaded_by_name && ` · ${f.uploaded_by_name}`}</small></span>
-            {d.can_edit && <button className="btn ghost small" onClick={() => removeFile.submit(f.id)}>Remove</button>}
-          </li>)}</ul>}
-        {canPost && <label className="btn small file-pick">{upload.busy ? 'Uploading…' : 'Attach a file'}
-          <input type="file" hidden disabled={upload.busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload.submit(f); }} /></label>}
-      </Card>
+      <LinksCard links={d.links} base={`/documents/${d.id}`} canAdd={canPost} canRemove={d.can_edit} reload={reload} empty="No files linked." />
       <Card title="Notes">
         {canPost && <form className="form narrow" onSubmit={(e) => { e.preventDefault(); post.submit(); }}>
           <ErrorBox error={post.error} />

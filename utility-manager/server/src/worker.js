@@ -31,8 +31,7 @@ async function getApp(env) {
   if (!config.databaseUrl) throw new Error('Configure a HYPERDRIVE binding or a DATABASE_URL secret');
   // Workers can't share a database connection between requests, so each
   // query opens its own; Hyperdrive keeps that cheap.
-  // FILES: the R2 bucket for uploaded files (wrangler.jsonc).
-  return buildApp({ db: createPgDb(config, { perRequest: true }), config, logger: createLogger(config.logLevel), bucket: env.FILES ?? null });
+  return buildApp({ db: createPgDb(config, { perRequest: true }), config, logger: createLogger(config.logLevel) });
 }
 
 export default {

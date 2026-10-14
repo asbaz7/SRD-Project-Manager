@@ -124,20 +124,19 @@ test('filters, search and CSV export like the old list', async () => {
   assert.match(csv.raw.body, /Aminath Jaleela; Hassan Azim/);
 });
 
-test('files are attached and downloaded; notes are posted by the sender and recipients only', async () => {
-  const pdf = Buffer.from('%PDF-1.4 test file');
-  const up = await call('POST', `/documents/${tender.id}/files`, T.nashmee, { file_name: 'RPT-2026-22 signed.pdf', content_type: 'application/pdf', data: pdf.toString('base64') });
-  assert.equal(up.status, 201);
-  const down = await call('GET', `/documents/${tender.id}/files/${up.body.id}`, T.yasir);
-  assert.equal(down.status, 200);
-  assert.equal(down.raw.headers['content-type'], 'application/pdf');
-  assert.match(down.raw.headers['content-disposition'], /RPT-2026-22 signed\.pdf/);
-  assert.equal(down.raw.body, pdf.toString());
-  assert.equal((await call('POST', `/documents/${tender.id}/files`, T.eng, { file_name: 'x.pdf', data: pdf.toString('base64') })).status, 404);
+test('files are Microsoft 365 links added by the sender and recipients; notes too', async () => {
+  const url = 'https://stelco.sharepoint.com/sites/SRD/Shared%20Documents/RPT-2026-22%20signed.pdf';
+  const up = await call('POST', `/documents/${tender.id}/links`, T.nashmee, { url });
+  assert.equal(up.status, 201, JSON.stringify(up.body));
+  assert.equal(up.body.title, 'RPT-2026-22 signed.pdf');
+  assert.deepEqual((await call('GET', `/documents/${tender.id}`, T.yasir)).body.links.map((l) => l.url), [url]);
+  assert.equal((await call('POST', `/documents/${tender.id}/links`, T.yasir, { url, title: 'Signed copy' })).status, 201, 'a recipient can add');
+  assert.equal((await call('POST', `/documents/${tender.id}/links`, T.eng, { url })).status, 404);
+  assert.equal((await call('POST', `/documents/${tender.id}/files`, T.nashmee, { file_name: 'x.pdf', data: 'eA==' })).status, 404, 'no uploads');
   assert.equal((await call('POST', `/documents/${tender.id}/updates`, T.yasir, { body: 'Signed copy sent back' })).status, 201);
   assert.equal((await call('POST', `/documents/${tender.id}/updates`, T.eng, { body: 'hi' })).status, 404);
-  assert.equal((await call('DELETE', `/documents/${tender.id}/files/${up.body.id}`, T.yasir)).status, 403);
-  assert.equal((await call('DELETE', `/documents/${tender.id}/files/${up.body.id}`, T.nashmee)).status, 200);
+  assert.equal((await call('DELETE', `/documents/${tender.id}/links/${up.body.id}`, T.yasir)).status, 403, 'only the sender removes');
+  assert.equal((await call('DELETE', `/documents/${tender.id}/links/${up.body.id}`, T.nashmee)).status, 200);
 });
 
 test('a document is visible only to its sender, whoever entered it, its recipients and administrators', async () => {

@@ -10,7 +10,6 @@
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { SESSION_COOKIE, loadSession, loadUser } from './auth.js';
-import { createFiles } from './files.js';
 import { createTelegram } from './telegram.js';
 import { parseCookies, serializeCookie } from './cookies.js';
 import { HttpError, badRequest, errorHandler, forbidden, notFound, unauthorized } from './errors.js';
@@ -20,7 +19,7 @@ import userRoutes from './routes/users.js';
 import locationRoutes from './routes/locations.js';
 import assetRoutes from './routes/assets.js';
 import incidentRoutes from './routes/incidents.js';
-import projectRoutes, { purgeProjectFiles } from './routes/projects.js';
+import projectRoutes from './routes/projects.js';
 import dashboardRoutes from './routes/dashboard.js';
 import auditRoutes from './routes/audit.js';
 import conditionReportRoutes from './routes/conditionReports.js';
@@ -107,7 +106,7 @@ function clientIp(c, config) {
     || 'unknown';
 }
 
-export async function buildApp({ db, config, logger = true, bucket = null }) {
+export async function buildApp({ db, config, logger = true }) {
   const log = logger === false ? silentLogger : typeof logger === 'object' ? logger : createLogger(config.logLevel);
   const hono = new Hono();
   const rateLimit = createRateLimiter();
@@ -211,9 +210,7 @@ export async function buildApp({ db, config, logger = true, bucket = null }) {
   const telegram = createTelegram({ db, config, log });
 
   // The object route modules register on.
-  // Uploaded files: in the R2 bucket when there is one, else in the database.
-  const files = createFiles(db, bucket, log);
-  const api = { db, config, log, telegram, asUser, files };
+  const api = { db, config, log, telegram, asUser };
   for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
     api[method] = (path, options, handler) => {
       if (typeof options === 'function') [handler, options] = [options, {}];
@@ -236,13 +233,8 @@ export async function buildApp({ db, config, logger = true, bucket = null }) {
   return {
     log,
     telegram,
-    // Daily jobs (Cloudflare cron trigger, see worker.js): delete files of
-    // projects closed over 30 days ago, then the Telegram summary.
-    daily: async () => {
-      const purged = await purgeProjectFiles(db, files);
-      if (purged) log.info({ purged }, 'project files deleted');
-      await telegram.daily(asUser);
-    },
+    // Daily job (Cloudflare cron trigger, see worker.js): the Telegram summary.
+    daily: () => telegram.daily(asUser),
     fetch: (request, env, ctx) => hono.fetch(request, env, ctx),
     // Test helper: run a request in-process (used by the API tests).
     async inject({ method = 'GET', url, headers = {}, payload }) {
