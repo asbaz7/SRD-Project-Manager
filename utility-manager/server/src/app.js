@@ -9,7 +9,7 @@
 //   config.rateLimit: { max, timeWindow }     e.g. { max: 10, timeWindow: '1 minute' }
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
-import { SESSION_COOKIE, createSession, destroySession, loadSession } from './auth.js';
+import { SESSION_COOKIE, loadSession, loadUser } from './auth.js';
 import { createTelegram } from './telegram.js';
 import { parseCookies, serializeCookie } from './cookies.js';
 import { HttpError, badRequest, errorHandler, forbidden, notFound, unauthorized } from './errors.js';
@@ -31,6 +31,7 @@ import documentRoutes from './routes/documents.js';
 import surveyRoutes from './routes/surveys.js';
 
 const PREFIX = '/api/v1';
+const ON_BEHALF_OF = Symbol('on behalf of');
 const PUBLIC_ROUTES = new Set([`${PREFIX}/auth/login`, `${PREFIX}/health`, `${PREFIX}/telegram/webhook`]);
 const PASSWORD_ROUTES = new Set([`${PREFIX}/auth/password`, `${PREFIX}/auth/me`, `${PREFIX}/auth/logout`]);
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -112,13 +113,14 @@ export async function buildApp({ db, config, logger = true }) {
 
   hono.use('*', secureHeaders(SECURITY_HEADERS));
 
-  // Identify the caller from the session cookie or a Bearer token, and apply
+  // Identify the caller from the session cookie or a Bearer token (or, for
+  // a call the system makes on someone's behalf, asUser below), and apply
   // the rules every API call shares.
-  async function authenticate(req) {
+  async function authenticate(req, onBehalfOf) {
     const header = req.headers.authorization;
     const bearer = header?.startsWith('Bearer ') ? header.slice(7) : null;
-    req.user = await loadSession(db, bearer || req.cookies[SESSION_COOKIE]);
-    req.viaCookie = !bearer && !!req.user;
+    req.user = onBehalfOf ? await loadUser(db, onBehalfOf) : await loadSession(db, bearer || req.cookies[SESSION_COOKIE]);
+    req.viaCookie = !onBehalfOf && !bearer && !!req.user;
 
     const path = req.routeOptions.url;
     if (PUBLIC_ROUTES.has(path)) return;
@@ -176,7 +178,7 @@ export async function buildApp({ db, config, logger = true }) {
     };
     let response;
     try {
-      await authenticate(req);
+      await authenticate(req, c.env?.[ON_BEHALF_OF]);
       if (options.config?.rateLimit) rateLimit(`${routePath}|${req.ip}`, options.config.rateLimit);
       req.body = await readBody(c);
       if (options.preHandler) await options.preHandler(req, reply);
@@ -192,22 +194,18 @@ export async function buildApp({ db, config, logger = true }) {
   };
 
   // Run an API call as a given user, with the same checks as the website
-  // (used by the Telegram bot): a session that lasts only for this call.
+  // (used by the Telegram bot). The user rides in the call's environment
+  // under a Symbol, which no request from outside can carry.
   async function asUser(userId, method, path, body) {
-    const { token } = await createSession(db, userId, { ttlHours: 0.05, ip: null, userAgent: 'telegram bot' });
-    try {
-      const res = await hono.request(PREFIX + path, {
-        method,
-        headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      });
-      const text = await res.text();
-      let json;
-      try { json = JSON.parse(text); } catch { json = undefined; }
-      return { status: res.status, body: json };
-    } finally {
-      await destroySession(db, token);
-    }
+    const res = await hono.request(PREFIX + path, {
+      method,
+      headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }, { [ON_BEHALF_OF]: userId });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch { json = undefined; }
+    return { status: res.status, body: json };
   }
   const telegram = createTelegram({ db, config, log });
 

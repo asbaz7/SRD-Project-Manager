@@ -61,28 +61,45 @@ export async function destroySession(db, token) {
   if (token) await db.query('delete from sessions where token_hash = $1', [sha256(token)]);
 }
 
+// The signed-in person, with what the access rules need.
+const USER_SELECT = `
+  select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical, u.permissions,
+         u.designation, u.unit_id, (select coalesce(array_agg(un.id order by un.id), '{}') from units un where un.head_user_id = u.id) as head_of,
+         coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
+                  filter (where sc.id is not null), '[]') as scopes`;
+
 export async function loadSession(db, token) {
   if (!token || token.length > 100) return null;
+  const hash = sha256(token);
   const { rows } = await db.query(
-    `select u.id, u.email, u.full_name, u.role, u.must_change_password, u.technical, u.permissions,
-            u.designation, u.unit_id, (select coalesce(array_agg(un.id order by un.id), '{}') from units un where un.head_user_id = u.id) as head_of,
-            s.last_seen_at, s.expires_at,
-            coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
-                     filter (where sc.id is not null), '[]') as scopes
+    `${USER_SELECT}, s.last_seen_at
        from sessions s
        join users u on u.id = s.user_id and u.active
        left join user_scopes sc on sc.user_id = u.id
       where s.token_hash = $1 and s.expires_at > now()
       group by u.id, s.token_hash`,
-    [sha256(token)],
+    [hash],
   );
   const row = rows[0];
   if (!row) return null;
   // Touch at most every 5 minutes to keep writes low.
   if (Date.now() - new Date(row.last_seen_at).getTime() > 5 * 60_000) {
-    db.query('update sessions set last_seen_at = now() where token_hash = $1', [sha256(token)]).catch(() => {});
+    db.query('update sessions set last_seen_at = now() where token_hash = $1', [hash]).catch(() => {});
   }
   return toUser(row);
+}
+
+// A user by id, for calls the system makes on someone's behalf (the
+// Telegram bot): the same checks, without a session.
+export async function loadUser(db, userId) {
+  const { rows } = await db.query(
+    `${USER_SELECT}
+       from users u left join user_scopes sc on sc.user_id = u.id
+      where u.id = $1 and u.active
+      group by u.id`,
+    [userId],
+  );
+  return toUser(rows[0]);
 }
 
 function toUser(row) {

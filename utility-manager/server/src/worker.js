@@ -42,12 +42,19 @@ export default {
       console.error(JSON.stringify({ level: 'fatal', msg: 'app failed to start', err: { message: err.message, stack: err.stack } }));
       return Response.json({ error: 'The service is unavailable. Please try again shortly.' }, { status: 503 });
     }
-    return requestScope.run(connectionLimit(), () => app.fetch(request, env, ctx));
+    // One set of database connections per request, closed when it ends.
+    const connections = connectionLimit();
+    try {
+      return await requestScope.run(connections, () => app.fetch(request, env, ctx));
+    } finally {
+      connections.close();
+    }
   },
 
   // Cron trigger (wrangler.jsonc): the morning Telegram summary.
   async scheduled(event, env, ctx) {
     app ??= await getApp(env);
-    ctx.waitUntil(requestScope.run(connectionLimit(), () => app.daily()).catch((err) => console.error(JSON.stringify({ level: 'error', msg: 'daily summary failed', err: { message: err.message } }))));
+    const connections = connectionLimit();
+    ctx.waitUntil(requestScope.run(connections, () => app.daily()).finally(() => connections.close()).catch((err) => console.error(JSON.stringify({ level: 'error', msg: 'daily summary failed', err: { message: err.message } }))));
   },
 };

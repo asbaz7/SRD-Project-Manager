@@ -328,6 +328,14 @@ test('genset move stages can be posted from Telegram', async () => {
   assert.equal((await db.query('select status from assets where id = $1', [g5])).rows[0].status, 'maintenance');
 });
 
+test('the bot acts as the person without creating sessions for it', async () => {
+  const count = async () => (await db.query('select count(*)::int n from sessions')).rows[0].n;
+  const before = await count();
+  await say(ADMIN_TG, '/status Maafushi');
+  assert.match(repliesTo(ADMIN_TG), /Maafushi/);
+  assert.equal(await count(), before);
+});
+
 test('/status shows each genset once: one state, the reason once, work by reference', async () => {
   await say(ADMIN_TG, '/down Maafushi 7 voltage issue');
   await say(ADMIN_TG, '/status Maafushi');
