@@ -51,7 +51,7 @@ function TakeoverView({ t, reload }) {
   const match = survey
     ? (i) => (filters.stage ? surveyState(i) === filters.stage : true)
     : (i) => (!show || i.state === show)
-      && (!filters.svc || !filters.svcst || (i[`${filters.svc}_status`] || 'not_set') === filters.svcst);
+      && (!filters.svc || !filters.svcst || i[`${filters.svc}_status`] === filters.svcst);
   const serviceFilter = !survey && filters.svc && filters.svcst;
   const atoll = t.atolls.find((a) => a.code === filters.atoll);
   const list = t.islands.filter((i) => (!atoll || i.atoll_code === atoll.code) && match(i));
@@ -95,9 +95,7 @@ function TakeoverView({ t, reload }) {
             <Select value={filters.svc || ''} onChange={(v) => setFilter({ svc: v, svcst: v ? (v === 'electricity' ? 'fenaka' : 'no_service') : '' })}
               placeholder="Any service" options={SERVICES} aria-label="Service" />
             {filters.svc && <Select value={filters.svcst || ''} onChange={(v) => setFilter('svcst', v)}
-              options={[...statuses(filters.svc), ['not_set', 'Not set']]
-                .map(([k, l]) => [k, l, t.islands.filter((i) => (i[`${filters.svc}_status`] || 'not_set') === k).length])
-                .filter(([k, , n]) => k !== 'not_set' || n).map(([k, l, n]) => [k, `${l} (${n})`])} aria-label="Status" />}
+              options={statuses(filters.svc).map(([k, l]) => [k, `${l} (${t.islands.filter((i) => i[`${filters.svc}_status`] === k).length})`])} aria-label="Status" />}
           </div>
         </>}
       </> : <>
