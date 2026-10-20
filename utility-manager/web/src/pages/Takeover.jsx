@@ -76,7 +76,7 @@ function TakeoverView({ t, reload }) {
         <div className="tko-headline"><strong>{pct(done, total)}%</strong><span className="small">{num(done)} of {num(total)} inhabited islands under STELCO</span></div>
         <div className="tko-bar"><span style={{ width: `${pct(done, total)}%` }} /></div>
         {summary && <>
-          <p className="small muted">{num(t.totals.pending)} under FENAKA{t.totals.other ? ` · ${num(t.totals.other)} other operator` : ''} · {num(t.totals.not_set)} not set</p>
+          <p className="small muted">{num(t.totals.pending)} under FENAKA{t.totals.other ? ` · ${num(t.totals.other)} other operator` : ''}{t.totals.not_set ? ` · ${num(t.totals.not_set)} not set` : ''}</p>
           {SERVICES.map(([k, label]) => {
             const s = t.services[k];
             const of = s.taken_over + s.fenaka;
@@ -85,7 +85,7 @@ function TakeoverView({ t, reload }) {
               <small className="muted">{num(s.taken_over)} / {num(of)}</small></div>;
           })}
           <div className="chips">
-            {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['other', 'Other operator'], ['not_set', 'Not set']].map(([k, l]) =>
+            {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['other', 'Other operator'], ...(t.totals.not_set ? [['not_set', 'Not set']] : [])].map(([k, l]) =>
               <button key={k} className={`chip ${(filters.show || '') === k ? 'on' : ''}`} onClick={() => setFilter('show', k)}>{l}</button>)}
           </div>
           {/* One service on its own, e.g. the islands with no water service yet. */}
@@ -93,8 +93,9 @@ function TakeoverView({ t, reload }) {
             <Select value={filters.svc || ''} onChange={(v) => setFilter({ svc: v, svcst: v ? (v === 'electricity' ? 'fenaka' : 'no_service') : '' })}
               placeholder="Any service" options={SERVICES} aria-label="Service" />
             {filters.svc && <Select value={filters.svcst || ''} onChange={(v) => setFilter('svcst', v)}
-              options={[...statuses(filters.svc), ['not_set', 'Not set']].map(([k, l]) =>
-                [k, `${l} (${t.islands.filter((i) => (i[`${filters.svc}_status`] || 'not_set') === k).length})`])} aria-label="Status" />}
+              options={[...statuses(filters.svc), ['not_set', 'Not set']]
+                .map(([k, l]) => [k, l, t.islands.filter((i) => (i[`${filters.svc}_status`] || 'not_set') === k).length])
+                .filter(([k, , n]) => k !== 'not_set' || n).map(([k, l, n]) => [k, `${l} (${n})`])} aria-label="Status" />}
           </div>
         </>}
       </> : <>
@@ -112,7 +113,7 @@ function TakeoverView({ t, reload }) {
 
     {/* Legend and the way back, bottom left. */}
     <div className="glass tko-float tko-legend-float small">
-      {!survey ? <><span><i className="dot taken" /> Under STELCO</span><span><i className="dot pending" /> Under FENAKA</span><span><i className="dot other" /> Other operator</span><span><i className="dot none" /> Not set</span></>
+      {!survey ? <><span><i className="dot taken" /> Under STELCO</span><span><i className="dot pending" /> Under FENAKA</span><span><i className="dot other" /> Other operator</span>{t.totals.not_set > 0 && <span><i className="dot none" /> Not set</span>}</>
         : <><span><i className="dot sv-completed" /> Completed</span><span><i className="dot sv-ongoing" /> Ongoing</span><span><i className="dot sv-planned" /> Planned</span><span><i className="dot sv-not_started" /> Not started</span><span><i className="dot sv-none" /> STELCO / other</span></>}
       {filters.atoll && <button className="btn small" onClick={() => pickAtoll('')}>← Whole country</button>}
     </div>
@@ -446,7 +447,8 @@ function IslandForm({ row, atolls, onClose, onSaved }) {
       <Field label="Phase / batch"><input maxLength="100" value={f.phase} onChange={set('phase')} placeholder="e.g. Phase 2" /></Field>
       {SERVICES.map(([k, label]) => <Field key={k} label={label}>
         <div className="tko-service-input">
-          <Select value={f[`${k}_status`]} onChange={set(`${k}_status`)} placeholder="Not set" options={statuses(k)} />
+          <Select value={f[`${k}_status`]} onChange={set(`${k}_status`)} required={k === 'electricity'}
+            placeholder={k === 'electricity' ? 'Choose…' : 'Not set'} options={statuses(k)} />
           {dated(f[`${k}_status`]) && <input type="date" value={f[`${k}_on`]} onChange={set(`${k}_on`)}
             aria-label={`${label}: taken over on`} title="Taken over on" />}
         </div></Field>)}
