@@ -46,9 +46,11 @@ function TakeoverView({ t, reload }) {
   const done = t.totals.taken_over;
   const total = t.expected_islands;
   const survey = filters.view === 'survey';
+  // "Not set" only while some island is (an old link may still ask for it).
+  const show = filters.show === 'not_set' && !t.totals.not_set ? '' : filters.show;
   const match = survey
     ? (i) => (filters.stage ? surveyState(i) === filters.stage : true)
-    : (i) => (!filters.show || i.state === filters.show)
+    : (i) => (!show || i.state === show)
       && (!filters.svc || !filters.svcst || (i[`${filters.svc}_status`] || 'not_set') === filters.svcst);
   const serviceFilter = !survey && filters.svc && filters.svcst;
   const atoll = t.atolls.find((a) => a.code === filters.atoll);
@@ -86,7 +88,7 @@ function TakeoverView({ t, reload }) {
           })}
           <div className="chips">
             {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['other', 'Other operator'], ...(t.totals.not_set ? [['not_set', 'Not set']] : [])].map(([k, l]) =>
-              <button key={k} className={`chip ${(filters.show || '') === k ? 'on' : ''}`} onClick={() => setFilter('show', k)}>{l}</button>)}
+              <button key={k} className={`chip ${(show || '') === k ? 'on' : ''}`} onClick={() => setFilter('show', k)}>{l}</button>)}
           </div>
           {/* One service on its own, e.g. the islands with no water service yet. */}
           <div className="tko-svc-filter">
@@ -130,8 +132,8 @@ function TakeoverView({ t, reload }) {
         <button className="btn small primary" onClick={() => setEditing({ atoll_code: atoll?.code || '' })}>Add island</button>
       </div>}
       <div className="tko-drawer-body">
-        {!atoll && !filters.show && !filters.stage && !serviceFilter ? <AtollList atolls={t.atolls} survey={survey} onPick={pickAtoll} />
-          : list.length === 0 ? <Empty>No islands here{filters.show || filters.stage || serviceFilter ? ' with this status' : ' on the list yet'}.</Empty>
+        {!atoll && !show && !filters.stage && !serviceFilter ? <AtollList atolls={t.atolls} survey={survey} onPick={pickAtoll} />
+          : list.length === 0 ? <Empty>No islands here{show || filters.stage || serviceFilter ? ' with this status' : ' on the list yet'}.</Empty>
             : <IslandList islands={list} showAtoll={!atoll} picked={picked} survey={survey} onPick={(i) => setPicked(i.id)} />}
       </div>
     </section>
