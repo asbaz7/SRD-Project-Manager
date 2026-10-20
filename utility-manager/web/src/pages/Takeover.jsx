@@ -12,7 +12,7 @@ import { date, num } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 const SERVICES = [['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']];
-const STATUS = { taken_over: 'Taken over', fenaka: 'Under FENAKA', other_operator: 'Other operator', not_applicable: 'Not applicable' };
+const STATUS = { taken_over: 'Taken over', fenaka: 'Under FENAKA', other_operator: 'Other operator', no_service: 'No service yet' };
 // Only a takeover has a date (when); the survey has its own.
 const dated = (st) => st === 'taken_over';
 const STATE = { taken_over: 'Under STELCO', pending: 'Under FENAKA', other: 'Other operator', not_set: 'Not set' };
@@ -391,7 +391,7 @@ function IslandList({ islands, showAtoll, picked, survey, onPick }) {
   return <ul className="tko-list">{islands.map((i) => <li key={i.id} className={picked === i.id ? 'picked' : ''}>
     <button onClick={() => onPick(i)}>
       <span className="grow"><strong>{showAtoll && `${i.atoll_code}. `}{i.name}</strong>
-        <span className="tko-mini">{SERVICES.map(([k, label]) => i[`${k}_status`] && i[`${k}_status`] !== 'not_applicable' && i[`${k}_status`] !== 'other_operator'
+        <span className="tko-mini">{SERVICES.map(([k, label]) => i[`${k}_status`] && i[`${k}_status`] !== 'no_service' && i[`${k}_status`] !== 'other_operator'
           ? <span key={k} className={`tko-pill ${i[`${k}_status`]}`} title={`${label}: ${STATUS[i[`${k}_status`]]}`}>{label[0]}</span> : null)}</span></span>
       {survey && surveyState(i) ? <small className={`sv-text ${surveyState(i)}`}>{SURVEY_STATE[surveyState(i)]}</small>
         : <small className={`tko-state ${i.state}`}>{STATE[i.state]}</small>}
@@ -445,7 +445,7 @@ function IslandForm({ row, atolls, onClose, onSaved }) {
       <Field label="Team"><input maxLength="300" value={f.survey_team} onChange={set('survey_team')} placeholder="Who is surveying" /></Field>
       <Field label="Survey report (Microsoft 365 link)" wide><input type="url" maxLength="2000" value={f.survey_link} onChange={set('survey_link')} placeholder="https://…sharepoint.com/…" /></Field>
       <Field label="Notes" wide><textarea rows="2" maxLength="2000" value={f.notes} onChange={set('notes')} /></Field>
-      <p className="muted small wide">Taken over: the date it was. Other operator: say who in the notes (e.g. MWSC).</p>
+      <p className="muted small wide">Taken over: the date it was. Other operator: say who in the notes (e.g. MWSC). No service yet: the island has no such service (no plant or network).</p>
       <div className="form-actions">
         {row.id && can('admin') && <button type="button" className="btn danger" disabled={remove.busy} onClick={remove.submit} style={{ marginRight: 'auto' }}>Remove</button>}
         <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>

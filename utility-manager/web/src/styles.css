@@ -698,6 +698,7 @@ tr.picked > td { background: color-mix(in srgb, var(--accent) 14%, transparent);
 .tko-legend-float .dot.other { background: #7c8cf8; }
 .tko-pill.fenaka { color: var(--warn); background: color-mix(in srgb, var(--warn-fill) 10%, transparent); }
 .tko-pill.other_operator { color: #9aa6ff; background: rgba(124, 140, 248, .15); }
+.tko-pill.no_service { color: var(--muted); background: transparent; box-shadow: inset 0 0 0 1px var(--hairline); }
 .tko-state.other { color: #9aa6ff; }
 
 /* Takeover / Survey switch and survey colours */

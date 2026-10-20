@@ -9,11 +9,11 @@ import { INHABITED_ISLANDS, NATIONAL_ATOLLS } from '../nationalAtolls.js';
 
 export const TAKEOVER_SERVICES = ['electricity', 'water', 'sewerage'];
 // Who runs each service: STELCO (taken over), still FENAKA, another
-// operator (MWSC, a private party), or none there. The survey before the
-// takeover is the island's (migration 059).
-export const TAKEOVER_STATUSES = ['taken_over', 'fenaka', 'other_operator', 'not_applicable'];
+// operator (MWSC, a private party), or no such service on the island yet
+// (migration 061). The survey before the takeover is the island's (059).
+export const TAKEOVER_STATUSES = ['taken_over', 'fenaka', 'other_operator', 'no_service'];
 export const SURVEY_STAGES = ['planned', 'ongoing', 'completed'];
-const OUTSIDE = ['not_applicable', 'other_operator'];
+const OUTSIDE = ['no_service', 'other_operator'];
 const status = z.enum(TAKEOVER_STATUSES).nullish();
 const m365 = z.string().trim().max(2000).url().refine((u) => u.startsWith('https://'), 'must start with https://');
 const islandBody = z.object({

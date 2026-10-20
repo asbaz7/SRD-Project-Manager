@@ -432,7 +432,7 @@ describe('national takeover tracker', () => {
     // Electricity handed over, water not yet: still pending; then both.
     let r = await call('PATCH', `/takeover/islands/${add.body.id}`, { token: admin, body: { electricity_status: 'taken_over', electricity_on: '2026-10-14' } });
     assert.equal(r.body.state, 'pending');
-    r = await call('PATCH', `/takeover/islands/${add.body.id}`, { token: admin, body: { water_status: 'taken_over', sewerage_status: 'not_applicable' } });
+    r = await call('PATCH', `/takeover/islands/${add.body.id}`, { token: admin, body: { water_status: 'taken_over', sewerage_status: 'no_service' } });
     assert.equal(r.body.state, 'taken_over');
     assert.equal(r.body.phase, 'Phase 3', 'other fields kept');
     t = (await call('GET', '/takeover', { token: admin })).body;
