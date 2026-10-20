@@ -611,7 +611,7 @@ input.qty { width: 80px; text-align: right; }
 .tko-summary .chips { margin: 10px 0 0; }
 .tko-svc-filter { display: flex; gap: 8px; margin-top: 10px; }
 .tko-svc-filter select { flex: 1; min-width: 0; }
-.tko-svc-filter select:first-child { flex: 0 0 38%; }
+.tko-svc-filter select:first-child:not(:only-child) { flex: 0 0 38%; }
 .tko-legend-float { left: 16px; bottom: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 14px; }
 .tko-legend-float span { display: inline-flex; align-items: center; gap: 6px; }
 .tko-drawer { top: 16px; right: 16px; bottom: 16px; width: 364px; display: flex; flex-direction: column; padding: 14px 8px 8px 14px; }
