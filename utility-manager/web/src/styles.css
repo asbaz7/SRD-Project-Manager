@@ -609,6 +609,8 @@ input.qty { width: 80px; text-align: right; }
 .tko-headline strong { font-size: 2.2rem; line-height: 1; font-variant-numeric: tabular-nums; }
 .tko-svc { display: grid; grid-template-columns: 82px 1fr auto; align-items: center; gap: 8px; }
 .tko-summary .chips { margin: 10px 0 0; }
+.tko-svc-filter { display: flex; gap: 8px; margin-top: 10px; }
+.tko-svc-filter select { flex: 1; min-width: 0; }
 .tko-legend-float { left: 16px; bottom: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 14px; }
 .tko-legend-float span { display: inline-flex; align-items: center; gap: 6px; }
 .tko-drawer { top: 16px; right: 16px; bottom: 16px; width: 364px; display: flex; flex-direction: column; padding: 14px 8px 8px 14px; }

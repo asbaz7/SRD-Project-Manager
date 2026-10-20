@@ -46,7 +46,9 @@ function TakeoverView({ t, reload }) {
   const survey = filters.view === 'survey';
   const match = survey
     ? (i) => (filters.stage ? surveyState(i) === filters.stage : true)
-    : (i) => !filters.show || i.state === filters.show;
+    : (i) => (!filters.show || i.state === filters.show)
+      && (!filters.svc || !filters.svcst || (i[`${filters.svc}_status`] || 'not_set') === filters.svcst);
+  const serviceFilter = !survey && filters.svc && filters.svcst;
   const atoll = t.atolls.find((a) => a.code === filters.atoll);
   const list = t.islands.filter((i) => (!atoll || i.atoll_code === atoll.code) && match(i));
   const island = t.islands.find((i) => i.id === picked);
@@ -66,7 +68,7 @@ function TakeoverView({ t, reload }) {
       </header>
       <div className="tko-switch" role="tablist">
         <button role="tab" aria-selected={!survey} className={!survey ? 'on' : ''} onClick={() => setFilter({ stage: '', view: '' })}>Takeover</button>
-        <button role="tab" aria-selected={survey} className={survey ? 'on' : ''} onClick={() => setFilter({ show: '', view: 'survey' })}>Survey</button>
+        <button role="tab" aria-selected={survey} className={survey ? 'on' : ''} onClick={() => setFilter({ show: '', svc: '', svcst: '', view: 'survey' })}>Survey</button>
       </div>
       {!survey ? <>
         <div className="tko-headline"><strong>{pct(done, total)}%</strong><span className="small">{num(done)} of {num(total)} inhabited islands under STELCO</span></div>
@@ -83,6 +85,14 @@ function TakeoverView({ t, reload }) {
           <div className="chips">
             {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['other', 'Other operator'], ['not_set', 'Not set']].map(([k, l]) =>
               <button key={k} className={`chip ${(filters.show || '') === k ? 'on' : ''}`} onClick={() => setFilter('show', k)}>{l}</button>)}
+          </div>
+          {/* One service on its own, e.g. the islands with no water service yet. */}
+          <div className="tko-svc-filter">
+            <Select value={filters.svc || ''} onChange={(v) => setFilter({ svc: v, svcst: v ? filters.svcst || 'no_service' : '' })}
+              placeholder="Any service" options={SERVICES} aria-label="Service" />
+            {filters.svc && <Select value={filters.svcst || ''} onChange={(v) => setFilter('svcst', v)}
+              options={[...Object.entries(STATUS), ['not_set', 'Not set']].map(([k, l]) =>
+                [k, `${l} (${t.islands.filter((i) => (i[`${filters.svc}_status`] || 'not_set') === k).length})`])} aria-label="Status" />}
           </div>
         </>}
       </> : <>
@@ -117,8 +127,8 @@ function TakeoverView({ t, reload }) {
         <button className="btn small primary" onClick={() => setEditing({ atoll_code: atoll?.code || '' })}>Add island</button>
       </div>}
       <div className="tko-drawer-body">
-        {!atoll && !filters.show && !filters.stage ? <AtollList atolls={t.atolls} survey={survey} onPick={pickAtoll} />
-          : list.length === 0 ? <Empty>No islands here{filters.show || filters.stage ? ' with this status' : ' on the list yet'}.</Empty>
+        {!atoll && !filters.show && !filters.stage && !serviceFilter ? <AtollList atolls={t.atolls} survey={survey} onPick={pickAtoll} />
+          : list.length === 0 ? <Empty>No islands here{filters.show || filters.stage || serviceFilter ? ' with this status' : ' on the list yet'}.</Empty>
             : <IslandList islands={list} showAtoll={!atoll} picked={picked} survey={survey} onPick={(i) => setPicked(i.id)} />}
       </div>
     </section>
