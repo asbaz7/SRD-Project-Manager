@@ -90,7 +90,7 @@ function buildTools(db) {
     if (!text) return undefined;
     const letters = (v) => String(v || '').toUpperCase().replace(/ATOLL/g, '').replace(/[^A-Z]/g, '');
     const key = letters(text);
-    const list = (await db.query('select id, code, name from atolls order by code')).rows;
+    const list = (await db.query('select id, code, name from atolls where active order by code')).rows;
     const a = list.find((x) => letters(x.code) === key || letters(x.name) === key || x.code === ATOLL_NAMES[key]);
     if (!a) throw new ToolError(`No atoll "${text}". Atolls: ${list.map((x) => `${x.code} (${x.name})`).join(', ')}`);
     return a.id;

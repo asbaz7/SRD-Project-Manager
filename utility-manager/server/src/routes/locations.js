@@ -43,10 +43,14 @@ export default async function locationRoutes(app) {
   const { db } = app;
 
   // --- Atolls ---------------------------------------------------------------
-  app.get('/atolls', async () => {
+  // Atolls SRD looks after; archived ones (e.g. Kaafu, handed over in Oct
+  // 2026) only when asked for.
+  app.get('/atolls', async (req) => {
+    const q = parse(z.object({ include_inactive: z.coerce.boolean().optional() }), req.query);
     const { rows } = await db.query(`
       select a.*, count(i.id) filter (where i.active) as island_count
         from atolls a left join islands i on i.atoll_id = a.id
+       ${q.include_inactive ? '' : 'where a.active'}
        group by a.id order by a.code`);
     return rows;
   });
