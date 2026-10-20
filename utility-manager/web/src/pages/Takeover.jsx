@@ -13,6 +13,8 @@ import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 const SERVICES = [['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']];
 const STATUS = { taken_over: 'Taken over', fenaka: 'Under FENAKA', other_operator: 'Other operator', no_service: 'No service yet' };
+// Every island has electricity: only water and sewerage can have no service yet.
+const statuses = (service) => Object.entries(STATUS).filter(([k]) => service !== 'electricity' || k !== 'no_service');
 // Only a takeover has a date (when); the survey has its own.
 const dated = (st) => st === 'taken_over';
 const STATE = { taken_over: 'Under STELCO', pending: 'Under FENAKA', other: 'Other operator', not_set: 'Not set' };
@@ -88,10 +90,10 @@ function TakeoverView({ t, reload }) {
           </div>
           {/* One service on its own, e.g. the islands with no water service yet. */}
           <div className="tko-svc-filter">
-            <Select value={filters.svc || ''} onChange={(v) => setFilter({ svc: v, svcst: v ? filters.svcst || 'no_service' : '' })}
+            <Select value={filters.svc || ''} onChange={(v) => setFilter({ svc: v, svcst: v ? (v === 'electricity' ? 'fenaka' : 'no_service') : '' })}
               placeholder="Any service" options={SERVICES} aria-label="Service" />
             {filters.svc && <Select value={filters.svcst || ''} onChange={(v) => setFilter('svcst', v)}
-              options={[...Object.entries(STATUS), ['not_set', 'Not set']].map(([k, l]) =>
+              options={[...statuses(filters.svc), ['not_set', 'Not set']].map(([k, l]) =>
                 [k, `${l} (${t.islands.filter((i) => (i[`${filters.svc}_status`] || 'not_set') === k).length})`])} aria-label="Status" />}
           </div>
         </>}
@@ -444,7 +446,7 @@ function IslandForm({ row, atolls, onClose, onSaved }) {
       <Field label="Phase / batch"><input maxLength="100" value={f.phase} onChange={set('phase')} placeholder="e.g. Phase 2" /></Field>
       {SERVICES.map(([k, label]) => <Field key={k} label={label}>
         <div className="tko-service-input">
-          <Select value={f[`${k}_status`]} onChange={set(`${k}_status`)} placeholder="Not set" options={Object.entries(STATUS)} />
+          <Select value={f[`${k}_status`]} onChange={set(`${k}_status`)} placeholder="Not set" options={statuses(k)} />
           {dated(f[`${k}_status`]) && <input type="date" value={f[`${k}_on`]} onChange={set(`${k}_on`)}
             aria-label={`${label}: taken over on`} title="Taken over on" />}
         </div></Field>)}
@@ -487,8 +489,8 @@ function AtollForm({ atoll, kind, onClose, onSaved }) {
         <button type="button" className={mode === 'survey' ? 'on' : ''} onClick={() => setMode('survey')}>Survey</button>
       </div>
       {mode === 'service' ? <>
-        <Field label="Service"><Select value={f.service} onChange={(v) => setF({ ...f, service: v })} options={SERVICES} /></Field>
-        <Field label="Status"><Select value={f.status} onChange={(v) => setF({ ...f, status: v })} options={Object.entries(STATUS)} /></Field>
+        <Field label="Service"><Select value={f.service} onChange={(v) => setF({ ...f, service: v, status: v === 'electricity' && f.status === 'no_service' ? 'taken_over' : f.status })} options={SERVICES} /></Field>
+        <Field label="Status"><Select value={f.status} onChange={(v) => setF({ ...f, status: v })} options={statuses(f.service)} /></Field>
         {dated(f.status) && <Field label="Taken over on (optional)"><input type="date" value={f.on} onChange={(e) => setF({ ...f, on: e.target.value })} /></Field>}
       </> : <>
         <Field label="Stage"><Select value={f.stage} onChange={(v) => setF({ ...f, stage: v })} options={Object.entries(SURVEY)} /></Field>

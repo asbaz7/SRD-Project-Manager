@@ -15,13 +15,16 @@ export const TAKEOVER_STATUSES = ['taken_over', 'fenaka', 'other_operator', 'no_
 export const SURVEY_STAGES = ['planned', 'ongoing', 'completed'];
 const OUTSIDE = ['no_service', 'other_operator'];
 const status = z.enum(TAKEOVER_STATUSES).nullish();
+// Every island has electricity.
+const noServiceElectricity = 'every island has electricity: no service yet is for water and sewerage';
+const electricityStatus = status.refine((s) => s !== 'no_service', noServiceElectricity);
 const m365 = z.string().trim().max(2000).url().refine((u) => u.startsWith('https://'), 'must start with https://');
 const islandBody = z.object({
   atoll_code: z.enum(NATIONAL_ATOLLS.map((a) => a.code)),
   name: text(100),
   island_id: id.nullish(),
   phase: optText(100),
-  electricity_status: status, electricity_on: date.nullish(),
+  electricity_status: electricityStatus, electricity_on: date.nullish(),
   water_status: status, water_on: date.nullish(),
   sewerage_status: status, sewerage_on: date.nullish(),
   notes: optText(2000),
@@ -114,7 +117,7 @@ export default async function takeoverRoutes(app) {
     const b = parse(z.object({
       service: z.enum(TAKEOVER_SERVICES), status: z.enum(TAKEOVER_STATUSES),
       on: date.nullish(), all: z.boolean().default(false),
-    }), req.body);
+    }).refine((x) => !(x.service === 'electricity' && x.status === 'no_service'), noServiceElectricity), req.body);
     const { rowCount } = await db.tx(req.user.id, (t) => t.query(
       `update takeover_islands set ${b.service}_status = $2, ${b.service}_on = $3, updated_by = $4
         where atoll_code = $1 ${b.all ? '' : `and ${b.service}_status is null`}`,

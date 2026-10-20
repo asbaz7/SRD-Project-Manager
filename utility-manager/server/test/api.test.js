@@ -435,6 +435,9 @@ describe('national takeover tracker', () => {
     r = await call('PATCH', `/takeover/islands/${add.body.id}`, { token: admin, body: { water_status: 'taken_over', sewerage_status: 'no_service' } });
     assert.equal(r.body.state, 'taken_over');
     assert.equal(r.body.phase, 'Phase 3', 'other fields kept');
+    // Every island has electricity: never "no service yet".
+    assert.equal((await call('PATCH', `/takeover/islands/${add.body.id}`, { token: admin, body: { electricity_status: 'no_service' } })).status, 400);
+    assert.equal((await call('POST', '/takeover/atolls/HA', { token: admin, body: { service: 'electricity', status: 'no_service' } })).status, 400);
     t = (await call('GET', '/takeover', { token: admin })).body;
     assert.equal(t.atolls.find((a) => a.code === 'HA').taken_over, 1);
     assert.equal(t.totals.islands, t.islands.filter((i) => i.counted).length);
