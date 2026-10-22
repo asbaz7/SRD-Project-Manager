@@ -1,5 +1,5 @@
 // Telegram bot: alerts to group chats, a daily summary, and reporting from
-// Telegram ("/down Maafushi G3 radiator leak").
+// Telegram ("/down Maafushi G3 radiator leak  <i>(a genset's reason is logged as a major fault; start it with "minor" for a minor one)</i>").
 //
 // Each manager links their Telegram account to their login once, with a
 // short-lived code from their account page. The bot then performs actions by
@@ -443,12 +443,19 @@ export function createTelegram({ db, config, log }) {
       const opts = (a.options || []).map((x) => esc(assetName(x))).join(', ');
       return opts ? `Which one? ${r.island.name} has: ${opts}` : `${esc(r.island.name)} has no assets registered.`;
     }
-    const note = a.rest.join(' ').trim().slice(0, 1000) || null;
+    // A genset going down: what's wrong is also logged as a fault, major
+    // unless the reason starts with "minor" (e.g. /down Maafushi G3 minor oil leak).
+    let rest = a.rest;
+    const levelWord = norm(rest[0] ?? '');
+    const genset = status === 'down' && a.asset.kind === 'genset';
+    let fault = genset ? 'major' : undefined;
+    if (genset && ['minor', 'major'].includes(levelWord) && rest.length > 1) { fault = levelWord; rest = rest.slice(1); }
+    const note = rest.join(' ').trim().slice(0, 1000) || null;
     if (status === 'down' && !note) return `Say what's wrong, e.g. <code>/down ${esc(r.island.name)} ${esc(a.asset.tag)} radiator leak</code>`;
-    const res = await asUser(user.id, 'POST', '/assets/status', { items: [{ asset_id: a.asset.id, status, note }] });
+    const res = await asUser(user.id, 'POST', '/assets/status', { items: [{ asset_id: a.asset.id, status, note, fault }] });
     if (res.status !== 200) return apiError(res);
     const w = res.body.work?.[0];
-    return `${STATUS_ICON[status]} ${esc(r.island.atoll_code)}. ${esc(r.island.name)} ${esc(assetName(a.asset))} is now <b>${status}</b>${note ? `: ${esc(note)}` : ''}\n${link(`/assets/${a.asset.id}`, 'Open')}${w ? ` · 🔧 Work ${link(`/work/${w.id}`, w.ref)}: ${esc(w.title)}` : ''}`;
+    return `${STATUS_ICON[status]} ${esc(r.island.atoll_code)}. ${esc(r.island.name)} ${esc(assetName(a.asset))} is now <b>${status}</b>${note ? `: ${esc(note)}` : ''}${fault ? `\n${fault === 'major' ? '■' : '▲'} ${fault} fault logged` : ''}\n${link(`/assets/${a.asset.id}`, 'Open')}${w ? ` · 🔧 Work ${link(`/work/${w.id}`, w.ref)}: ${esc(w.title)}` : ''}`;
   }
 
   async function cmdIncident(user, words, asUser) {

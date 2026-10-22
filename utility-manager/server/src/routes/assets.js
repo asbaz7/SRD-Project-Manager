@@ -68,6 +68,8 @@ const statusItem = z.object({
   status: z.enum(STATUSES),
   note: optText(1000),
   running_hours: optNumber,
+  // A genset set down with a note: the note is also logged as a fault.
+  fault: z.enum(['minor', 'major']).optional(),
 });
 const statusBatch = z.object({
   reported_at: datetime.optional(),
@@ -349,6 +351,12 @@ export default async function assetRoutes(app) {
           `insert into asset_status_log (asset_id, status, note, running_hours, reported_at, reported_by)
            values ($1, $2, $3, $4, $5, $6)`,
           [item.asset_id, item.status, item.note, item.running_hours ?? null, reportedAt, req.user.id]);
+        if (item.fault && item.note && before.find((b) => b.id === item.asset_id)?.kind === 'genset') {
+          const f = await noteFault(t, item.asset_id, { level: item.fault, note: item.note, userId: req.user.id });
+          // The work opened for it just now (migration 017) clears that fault when done.
+          await t.query(`update work_orders set fault_id = $2 where asset_id = $1 and fault_id is null and created_at = now()
+                          and status not in ('completed', 'cancelled')`, [item.asset_id, f.id]);
+        }
       }
       // Back in service after being down: its faults were dealt with.
       const back = body.items.filter((i) => ['running', 'standby'].includes(i.status)

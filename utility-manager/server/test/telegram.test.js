@@ -162,9 +162,24 @@ test('/down sets an asset down as the linked user, and /up brings it back', asyn
   assert.equal(rows[0].status, 'down');
   assert.equal(rows[0].status_note, 'radiator leak');
   assert.equal(rows[0].email, 'mgr@srd.mv');
+  // What's wrong is logged as a major fault, and the work opened for it clears it.
+  const g3 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = '3'`, [maafushi.id])).rows[0].id;
+  const open = async () => (await db.query('select id, level, note from fault_log where asset_id = $1 and cleared_at is null order by id', [g3])).rows;
+  let faults = await open();
+  assert.deepEqual(faults.map((f) => [f.level, f.note]), [['major', 'radiator leak']]);
+  const { rows: [wo] } = await db.query("select fault_id from work_orders where asset_id = $1 and status not in ('completed', 'cancelled') order by created_at desc limit 1", [g3]);
+  assert.equal(String(wo.fault_id), String(faults[0].id));
+  assert.equal((await db.query('select fault_level from assets where id = $1', [g3])).rows[0].fault_level, 'major');
 
   await say(MANAGER_TG, '/up maafushi genset 3');
   assert.match(repliesTo(MANAGER_TG), /is now <b>running<\/b>/);
+  assert.equal((await open()).length, 0, 'back in service clears it');
+  // "minor" first: a minor fault.
+  await say(MANAGER_TG, '/down maafushi g3 minor oil leak');
+  assert.match(repliesTo(MANAGER_TG), /down<\/b>: oil leak\n▲ minor fault logged/);
+  faults = await open();
+  assert.deepEqual(faults.map((f) => [f.level, f.note]), [['minor', 'oil leak']]);
+  await say(MANAGER_TG, '/up maafushi g3');
   // The bot's temporary sessions are cleaned up.
   assert.equal((await db.query(`select count(*)::int n from sessions where user_agent = 'telegram bot'`)).rows[0].n, 0);
 });
@@ -320,6 +335,8 @@ test('/fault logs a genset fault, and clears it', async () => {
   const g4 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id join islands i on i.id = f.island_id
     where i.name = 'Maafushi' and s.kind = 'genset' and s.tag = '4' and s.active`)).rows[0].id;
   const fault = async () => (await db.query('select fault_level, fault_note from assets where id = $1', [g4])).rows[0];
+  // Clear first: the earlier /down Maafushi 4 fuel pump logged a fault.
+  await say(ADMIN_TG, '/fault Maafushi G4 fixed');
   await say(ADMIN_TG, '/fault Maafushi G4 oil leak at the front seal');
   assert.match(repliesTo(ADMIN_TG), /Genset 4: <b>minor fault<\/b> logged: oil leak at the front seal/);
   assert.deepEqual(await fault(), { fault_level: 'minor', fault_note: 'oil leak at the front seal' });

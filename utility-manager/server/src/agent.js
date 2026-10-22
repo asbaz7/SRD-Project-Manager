@@ -299,19 +299,22 @@ function buildTools(db) {
     },
     set_asset_status: {
       write: true,
-      description: "Record an asset's status (e.g. a genset going down or back up). The person confirms before it's saved. A note is required when it goes down.",
+      description: "Record an asset's status (e.g. a genset going down or back up). The person confirms before it's saved. A note is required when it goes down; for a genset the note is also logged as a fault (major unless they say it's minor).",
       schema: z.object({
         asset_id: id,
         status: z.enum(SETTABLE_STATUSES).describe('disconnected = installed but not connected to the network: not a fault'),
         note: z.string().max(1000).optional().describe('What happened, in their words'),
+        fault: z.enum(['minor', 'major']).optional().describe('Going down: how bad the fault is (major unless they say minor)'),
       }),
-      describe: async (user, { asset_id, status, note }, asUser) => {
+      describe: async (user, { asset_id, status, note, fault }, asUser) => {
         if (status === 'down' && !note) throw new ToolError('Ask what is wrong first: a note is required when it goes down');
         const a = await get(asUser, user, `/assets/${asset_id}`);
-        return `Set <b>${esc(assetLabel(a))}</b> to <b>${status}</b>${note ? `: ${esc(note)}` : ''}`;
+        const level = status === 'down' && a.kind === 'genset' ? fault || 'major' : null;
+        return `Set <b>${esc(assetLabel(a))}</b> to <b>${status}</b>${note ? `: ${esc(note)}` : ''}${level ? ` (logged as a ${level} fault)` : ''}`;
       },
-      run: async (user, { asset_id, status, note }, asUser) => {
-        const body = check(await asUser(user.id, 'POST', '/assets/status', { items: [{ asset_id, status, note: note || null }] }));
+      run: async (user, { asset_id, status, note, fault }, asUser) => {
+        const level = status === 'down' ? fault || 'major' : undefined;
+        const body = check(await asUser(user.id, 'POST', '/assets/status', { items: [{ asset_id, status, note: note || null, fault: level }] }));
         const w = body.work?.[0];
         return { text: `Status saved: <b>${status}</b>${w ? ` · work ${esc(w.ref)} opened` : ''}`, result: { saved: true, status, work: w?.ref } };
       },
