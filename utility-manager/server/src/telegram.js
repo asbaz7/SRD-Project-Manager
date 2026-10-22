@@ -567,7 +567,7 @@ export function createTelegram({ db, config, log }) {
       const out = await agent.reply(chat.id, user, text, asUser);
       const body = [out.text && toTelegram(out.text), out.confirm?.summary].filter(Boolean).join('\n\n');
       await reply(body, out.confirm ? { reply_markup: { inline_keyboard: [[
-        { text: '✅ Yes, save it', callback_data: `ag:${out.confirm.id}:y` }, { text: '❌ No', callback_data: `ag:${out.confirm.id}:n` },
+        { text: out.confirm.count > 1 ? `✅ Yes, save all ${out.confirm.count}` : '✅ Yes, save it', callback_data: `ag:${out.confirm.id}:y` }, { text: '❌ No', callback_data: `ag:${out.confirm.id}:n` },
       ]] } } : {});
     } catch (err) {
       log.error({ err: { message: err.message, status: err.status, stack: err.stack } }, 'telegram assistant failed');

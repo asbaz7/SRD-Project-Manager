@@ -3,8 +3,9 @@
 // Claude looks things up through tools that call the API as the person
 // asking (asUser), so the website's rules apply unchanged: technical access,
 // island scope, roles. Changes (genset status, work updates, incidents, new
-// work) are never made directly: the tool call becomes a pending change that
-// the person confirms with ✅ or cancels with ❌, and only then is it written.
+// work) are never made directly: the tool calls become pending changes that
+// the person confirms with ✅ or cancels with ❌ (all of a message's changes
+// together), and only then are they written.
 //
 // Configuration: the ANTHROPIC_API_KEY secret, and optionally AGENT_MODEL
 // (default Claude Haiku 5.5). Without a key the assistant is off.
@@ -25,6 +26,10 @@ const QUIET_HOURS = 3;
 const KEEP_RESULT_CHARS = 300;
 const MAX_MESSAGES = 60;
 const PENDING_TTL_MS = 60 * 60 * 1000;
+// Changes one message can ask for, confirmed together.
+const MAX_CHANGES = 5;
+// A pending confirmation's changes (saved before Oct 2026 as a single one).
+const pendingChanges = (p) => p.changes || [p];
 const RESULT_LIMIT = 40000;
 
 const STATE_LABEL = WORK_STATE_LABEL;
@@ -43,7 +48,7 @@ How to work:
 - Work orders (WO-0001, WO-0002…; the number is the work_id) are jobs on equipment: repairs, overhauls, services, genset moves. Use list_work / get_work for them.
 - Projects (PRJ-0001, PRJ-0002…; the number is the project_id) are separate from work orders: larger efforts such as installations, studies or the Powerhouse Takeover, with a progress % and often a task list (codes like TKO-001, priorities P1-P4). When someone asks about projects, use list_projects / get_project, never the work tools; when they ask about works, jobs or repairs, use list_work.
 - To record anything (a genset's status, an update on work, an interruption, new work), call the matching tool. The person is then shown exactly what will be written and taps ✅ or ❌, so don't ask "shall I?" first. Do ask first when it's unclear which island, genset or work order they mean.
-- Only propose one change at a time.
+- When one message asks for several changes (e.g. bring a genset back up and close its work order), propose them all in the same turn, in the order they should happen: the person confirms them together.
 - The person's access is enforced by the system: if a tool says something isn't allowed, tell them it needs other access or the website.
 - If the tools can't do what's asked, say so and point them to the website.
 - Messages may mix English and Dhivehi; answer in English.
@@ -461,24 +466,26 @@ export function createAgent({ db, config, log }) {
       // Look-ups asked for together run together; a change is only described here.
       const caught = (p, id) => p.catch((err) => { if (!(err instanceof ToolError)) throw err; return result(id, err.message, true); });
       const slots = [];
-      let pending = null;
+      const changes = [];
       for (const use of uses) {
         const tool = tools[use.name];
         const input = tool?.schema.safeParse(use.input);
         if (!tool) slots.push(result(use.id, `No tool called ${use.name}`, true));
         else if (!input.success) slots.push(result(use.id, `Invalid input: ${z.prettifyError(input.error)}`, true));
-        else if (tool.write && pending) slots.push(result(use.id, 'One change at a time: propose this again once the first is confirmed or cancelled.', true));
+        else if (tool.write && changes.length >= MAX_CHANGES) slots.push(result(use.id, `At most ${MAX_CHANGES} changes at once: propose this again once these are confirmed or cancelled.`, true));
         else if (tool.write) {
           const summary = await caught(Promise.resolve().then(() => tool.describe(user, input.data, asUser)).then((text) => ({ text })), use.id);
-          if (summary.text !== undefined) pending = { id: randomBytes(6).toString('hex'), tool_use_id: use.id, name: use.name, input: input.data, summary: summary.text, at: Date.now() };
+          if (summary.text !== undefined) changes.push({ tool_use_id: use.id, name: use.name, input: input.data, summary: summary.text });
           else slots.push(summary);
         } else slots.push(caught(Promise.resolve().then(() => tool.run(user, input.data, asUser)).then((out) => result(use.id, out)), use.id));
       }
       const results = await Promise.all(slots);
-      if (pending) {
-        // The other results wait with it: they go back together once the person answers.
-        conv.pending = { ...pending, results };
-        return { text, confirm: { id: pending.id, summary: pending.summary } };
+      if (changes.length) {
+        // The other results wait with them: they go back together once the person answers.
+        const summary = changes.length === 1 ? changes[0].summary : changes.map((c, i) => `${i + 1}. ${c.summary}`).join('\n\n');
+        const pending = { id: randomBytes(6).toString('hex'), changes, summary, at: Date.now(), results };
+        conv.pending = pending;
+        return { text, confirm: { id: pending.id, summary, count: changes.length } };
       }
       conv.messages.push({ role: 'user', content: results });
     }
@@ -491,7 +498,7 @@ export function createAgent({ db, config, log }) {
     const content = [];
     if (conv.pending) {
       // They wrote instead of tapping: the proposed change lapses.
-      content.push(...conv.pending.results, result(conv.pending.tool_use_id, 'Not confirmed: the person sent a new message instead. Nothing was changed.', true));
+      content.push(...conv.pending.results, ...pendingChanges(conv.pending).map((c) => result(c.tool_use_id, 'Not confirmed: the person sent a new message instead. Nothing was changed.', true)));
       conv.pending = null;
     }
     content.push({ type: 'text', text });
@@ -509,26 +516,33 @@ export function createAgent({ db, config, log }) {
     const p = conv.pending;
     if (!p || p.id !== pendingId) return null;
     conv.pending = null;
+    const changes = pendingChanges(p);
     let text;
-    let outcome;
+    let outcomes;
     if (Date.now() - p.at > PENDING_TTL_MS) {
       text = 'That was over an hour ago, so I didn\'t save it. Ask me again if it still applies.';
-      outcome = result(p.tool_use_id, 'Expired before it was confirmed. Nothing was changed.', true);
+      outcomes = changes.map((c) => result(c.tool_use_id, 'Expired before it was confirmed. Nothing was changed.', true));
     } else if (!approve) {
       text = '❌ Cancelled. Nothing was changed.';
-      outcome = result(p.tool_use_id, 'The person tapped ❌: nothing was changed.', true);
+      outcomes = changes.map((c) => result(c.tool_use_id, 'The person tapped ❌: nothing was changed.', true));
     } else {
-      try {
-        const r = await tools[p.name].run(user, p.input, asUser);
-        text = `✅ ${r.text}`;
-        outcome = result(p.tool_use_id, { confirmed: true, ...r.result });
-      } catch (err) {
-        if (!(err instanceof ToolError)) throw err;
-        text = `⚠️ Not saved: ${esc(err.message)}`;
-        outcome = result(p.tool_use_id, `Confirmed, but it failed: ${err.message}`, true);
+      // In the order proposed; one failing doesn't stop the rest.
+      const lines = [];
+      outcomes = [];
+      for (const c of changes) {
+        try {
+          const r = await tools[c.name].run(user, c.input, asUser);
+          lines.push(`✅ ${r.text}`);
+          outcomes.push(result(c.tool_use_id, { confirmed: true, ...r.result }));
+        } catch (err) {
+          if (!(err instanceof ToolError)) throw err;
+          lines.push(`⚠️ Not saved: ${esc(err.message)}`);
+          outcomes.push(result(c.tool_use_id, `Confirmed, but it failed: ${err.message}`, true));
+        }
       }
+      text = lines.join('\n');
     }
-    conv.messages.push({ role: 'user', content: [...p.results, outcome] });
+    conv.messages.push({ role: 'user', content: [...p.results, ...outcomes] });
     await save(conv);
     return text;
   }

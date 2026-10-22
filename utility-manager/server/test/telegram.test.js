@@ -544,6 +544,37 @@ test('the assistant only writes after the person taps ✅', async () => {
   assert.equal(claudeScript.length, 0);
 });
 
+test('several changes in one message are proposed and confirmed together', async () => {
+  const tagged = async (tag) => (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id where f.island_id = $1 and s.tag = $2 and s.kind = 'genset'`, [maafushi.id, tag])).rows[0].id;
+  const g3 = await tagged('3');
+  const g5 = await tagged('5');
+  const statusOf = async (assetId) => (await db.query('select status from assets where id = $1', [assetId])).rows[0].status;
+  await db.query("update assets set status = 'down' where id = any($1)", [[g3, g5]]);
+  claudeScript = [(body) => {
+    assert.match(body.system.map((b) => b.text).join(' '), /propose them all in the same turn/);
+    return [toolUse('set_asset_status', { asset_id: g3, status: 'running' }), toolUse('set_asset_status', { asset_id: g5, status: 'standby' })];
+  }];
+  await say(MANAGER_TG, 'maafushi g3 back up, g5 on standby');
+  const proposal = sent.find((m) => m.chat_id === MANAGER_TG);
+  assert.match(proposal.text, /1\. Set <b>K\. Maafushi Genset 3<\/b> to <b>running<\/b>[\s\S]*2\. Set <b>K\. Maafushi Genset 5<\/b> to <b>standby<\/b>/, proposal.text);
+  const [yes] = proposal.reply_markup.inline_keyboard[0];
+  assert.match(yes.text, /save all 2/);
+  assert.equal(await statusOf(g3), 'down', 'nothing saved before the tap');
+  await tap(MANAGER_TG, yes.callback_data);
+  assert.match(repliesTo(MANAGER_TG), /✅ Status saved: <b>running<\/b>\n✅ Status saved: <b>standby<\/b>/);
+  assert.equal(await statusOf(g3), 'running');
+  assert.equal(await statusOf(g5), 'standby');
+  // Claude hears how both went.
+  claudeScript = [(body) => {
+    const results = body.messages.at(-2).content.filter((b) => b.type === 'tool_result');
+    assert.equal(results.length, 2);
+    assert.ok(results.every((x) => /confirmed/.test(x.content)));
+    return [{ type: 'text', text: 'OK.' }];
+  }];
+  await say(MANAGER_TG, 'thanks');
+  assert.equal(claudeScript.length, 0);
+});
+
 test('a proposed change lapses when the person writes something else instead', async () => {
   claudeScript = [() => [toolUse('add_work_update', { work_id: 999999, text: 'hello' })], (body) => {
     assert.match(lastToolResults(body)[0].content, /not found/i);
