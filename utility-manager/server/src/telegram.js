@@ -13,6 +13,7 @@ import { createAgent, toTelegram } from './agent.js';
 import { ATOLL_NAMES, matchIsland } from './islandNames.js';
 import { SERVICE_LABEL, WORK_STATE_LABEL } from './domain.js';
 import { assetName, esc, workRef } from './format.js';
+import { readInterruption, zoneOffset } from './interruptionText.js';
 
 const API = 'https://api.telegram.org';
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -30,7 +31,7 @@ const WORK_STATE_WORDS = {
   dismantling: 'dismantling', dismantle: 'dismantling', transit: 'in_transit', in_transit: 'in_transit', shipping: 'in_transit',
   shipped: 'in_transit', installing: 'installing', install: 'installing', arrived: 'installing',
 };
-const SEVERITIES = ['low', 'medium', 'high', 'critical'];
+const CATEGORY_LABEL = { outage: 'outage', breakdown: 'breakdown', maintenance: 'planned work', quality: 'quality', safety: 'safety', other: 'other' };
 
 export { assetName, esc };
 const where = (a) => `${a.atoll_code}. ${a.island_name}`;
@@ -57,7 +58,7 @@ Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator b
 /hours Maafushi G1 12345 G2 23456  <i>(monthly running hours; condition stays as it was)</i>
 /hours Maafushi G3 12345 minor oil leak  <i>(with its condition: ok, minor, major or down, and the fault)</i>
   <i>(add</i> newmeter <i>after the hours if the meter was replaced)</i>
-/interruption Guraidhoo water high supply cut to north ward
+/interruption Guraidhoo water supply cut to north ward since 14:20  <i>(I read the service, kind, severity, genset or RO, times and customers from it; put</i> high <i>or</i> critical <i>first to set the severity)</i>
   <i>(service and severity are optional: electricity is assumed)</i>
 /update WO-12 seal arrived, fitting tomorrow
 /update WO-12 parts waiting for crankshaft
@@ -458,32 +459,37 @@ export function createTelegram({ db, config, log }) {
     return `${STATUS_ICON[status]} ${esc(r.island.atoll_code)}. ${esc(r.island.name)} ${esc(assetName(a.asset))} is now <b>${status}</b>${note ? `: ${esc(note)}` : ''}${fault ? `\n${fault === 'major' ? '■' : '▲'} ${fault} fault logged` : ''}\n${link(`/assets/${a.asset.id}`, 'Open')}${w ? ` · 🔧 Work ${link(`/work/${w.id}`, w.ref)}: ${esc(w.title)}` : ''}`;
   }
 
+  // /interruption: the island, then what happened in their words. The rest is
+  // read from it (interruptionText.js): service, kind, severity, the genset or
+  // plant, times, customers. The reply says what was understood.
   async function cmdIncident(user, words, asUser) {
     const r = words.length ? await takeIsland(words) : {};
-    if (!r.island) return words.length ? islandHelp(r) : 'e.g. <code>/interruption Guraidhoo water high supply cut to north ward</code>';
-    let rest = r.rest;
-    let service = null;
-    let severity = 'medium';
-    for (let i = 0; i < 2 && rest.length; i++) {
-      const w = rest[0].toLowerCase();
-      if (['electricity', 'water', 'sewerage'].includes(w)) {
-        service = w;
-        rest = rest.slice(1);
-      } else if (SEVERITIES.includes(w)) {
-        severity = w;
-        rest = rest.slice(1);
-      }
-    }
-    const title = rest.join(' ').trim();
-    if (title.length < 3) return 'Add a short description, e.g. <code>/interruption Maafushi high power cut to the harbour area</code>';
-    const lower = title.toLowerCase();
-    service ??= /\b(sewer|sewage|stp)/.test(lower) ? 'sewerage' : /\b(water|ro|desal)/.test(lower) && !/\b(power|electric|genset|engine)/.test(lower) ? 'water' : 'electricity';
-    const category = /\b(outage|cut|blackout|no power|no water|trip|tripped|supply)/.test(lower) ? 'outage' : 'breakdown';
+    if (!r.island) return words.length ? islandHelp(r) : 'e.g. <code>/interruption Guraidhoo water supply cut to north ward since 14:20</code>';
+    const { rows: assets } = await db.query(
+      `select s.id, s.kind, s.tag, s.facility_id, f.service from assets s join facilities f on f.id = s.facility_id
+        where f.island_id = $1 and s.active and f.active`, [r.island.id]);
+    const x = readInterruption(r.rest, { assets, offsetMin: zoneOffset(config.timezone) });
+    if (x.title.length < 3) return 'Add a short description, e.g. <code>/interruption Maafushi G3 tripped since 14:20, whole island off</code>';
+    // Something like it already open: report it anyway, but say so.
+    const { rows: open } = await db.query(
+      `select id, 'INT-' || lpad(id::text, 6, '0') as ref, title from incidents where island_id = $1 and service = $2 and status = 'open'
+          and started_at > now() - interval '12 hours' order by started_at desc limit 3`, [r.island.id, x.service]);
     const res = await asUser(user.id, 'POST', '/incidents', {
-      service, island_id: r.island.id, category, severity, title: title.slice(0, 200), started_at: new Date().toISOString(),
+      service: x.service, island_id: r.island.id, category: x.category, severity: x.severity, title: x.title.slice(0, 200),
+      facility_id: x.asset?.facility_id ?? null, asset_id: x.asset?.id ?? null,
+      started_at: x.started_at.toISOString(), resolved_at: x.resolved_at?.toISOString() ?? null,
+      customers_affected: x.customers_affected,
     });
     if (res.status !== 201) return apiError(res);
-    return `🚨 Reported <b>${esc(res.body.ref)}</b>: ${esc(title)}\n${SERVICE_LABEL[service]} · ${severity} · ${esc(r.island.atoll_code)}. ${esc(r.island.name)}\n${link(`/interruptions/${res.body.id}`, 'Open (add details there)')}`;
+    const hm = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: config.timezone });
+    const read = [SERVICE_LABEL[x.service], CATEGORY_LABEL[x.category] || x.category, x.severity];
+    if (x.asset) read.push(assetName(x.asset));
+    const when = [x.started_given ? `since ${hm(x.started_at)}` : null, x.resolved_at ? `restored ${hm(x.resolved_at)}` : null,
+      x.customers_affected ? `${x.customers_affected} customers` : null].filter(Boolean);
+    return [`🚨 Reported <b>${esc(res.body.ref)}</b>: ${esc(x.title)}`,
+      `${esc(r.island.atoll_code)}. ${esc(r.island.name)} · ${esc(read.join(' · '))}${when.length ? `\n${esc(when.join(' · '))}` : ''}`,
+      ...(open.length ? [`⚠️ Already open here: ${open.map((o) => `${link(`/interruptions/${o.id}`, o.ref)} ${esc(o.title)}`).join(', ')}`] : []),
+      link(`/interruptions/${res.body.id}`, 'Open (fix anything misread)')].join('\n');
   }
 
   async function cmdWorkUpdate(user, words, asUser, forceStatus) {

@@ -256,6 +256,14 @@ test('alerts go to chats that turned them on; serious incidents from Telegram al
   assert.match(repliesTo(GROUP), /🚨 <b>High: power cut to the harbour area<\/b>/);
   const inc = (await db.query(`select service, severity, category from incidents order by id desc limit 1`)).rows[0];
   assert.deepEqual(inc, { service: 'electricity', severity: 'high', category: 'outage' });
+  // The genset named is linked, the time read, and the one already open mentioned.
+  await say(MANAGER_TG, '/interruption Maafushi G3 tripped at 0:05, 120 customers');
+  const said = repliesTo(MANAGER_TG);
+  assert.match(said, /Electricity · outage · \w+ · Genset 3/, said);
+  assert.match(said, /since 00:05 · 120 customers/);
+  assert.match(said, /Already open here: .*INT-\d{6}.*power cut to the harbour area/);
+  const linked = (await db.query(`select x.asset_id, s.tag, x.customers_affected from incidents x left join assets s on s.id = x.asset_id order by x.id desc limit 1`)).rows[0];
+  assert.deepEqual([linked.tag, linked.customers_affected], ['3', 120]);
 
   // A genset going down alerts the group too.
   await say(MANAGER_TG, '/down Maafushi 2 overheating');
