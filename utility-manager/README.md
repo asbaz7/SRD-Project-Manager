@@ -1,6 +1,6 @@
 # SRD Utility Manager
 
-Management system for the South Regional Department's **electricity, water
+Management system for the South Central Regional Department's **electricity, water
 and sewerage** services, used by management staff. Managers report incidents
 on their islands, keep asset status up to date and manage projects. It
 replaces the genset status sheets, outage registers and project trackers with

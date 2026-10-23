@@ -21,7 +21,7 @@ export default function Login() {
       <form className="card login-card" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <div className="brand"><span className="logo"><img src="/stelco-icon.png" alt="" width="55" height="24" /><span className="wordmark">STELCO</span></span></div>
         <h1>SRD Utility Manager</h1>
-        <p className="muted">Electricity, water and sewerage operations — South Regional Department</p>
+        <p className="muted">Electricity, water and sewerage operations — South Central Regional Department</p>
         <ErrorBox error={error} />
         <label className="field"><span className="field-label">Email</span>
           <input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus /></label>

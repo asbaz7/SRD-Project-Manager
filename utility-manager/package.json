@@ -2,7 +2,7 @@
   "name": "srd-utility-manager",
   "version": "0.1.0",
   "private": true,
-  "description": "Electricity, water and sewerage operations system for the South Regional Department",
+  "description": "Electricity, water and sewerage operations system for the South Central Regional Department",
   "workspaces": [
     "server",
     "web"

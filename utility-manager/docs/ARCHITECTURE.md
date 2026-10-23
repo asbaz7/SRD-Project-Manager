@@ -1,6 +1,6 @@
 # SRD Utility Manager — System Architecture
 
-The system of record for the South Regional Department's electricity, water
+The system of record for the South Central Regional Department's electricity, water
 and sewerage services, used by **management staff**. Managers report incidents
 as soon as they know of them, keep asset status current and manage projects
 for their assigned islands. It replaces the genset status sheets, outage
