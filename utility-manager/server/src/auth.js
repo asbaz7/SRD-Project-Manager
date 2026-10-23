@@ -49,6 +49,7 @@ const sha256 = (token) => createHash('sha256').update(token).digest();
 
 export async function createSession(db, userId, { ttlHours, ip, userAgent }) {
   let token = randomBytes(32).toString('base64url');
+  while (token.startsWith(API_TOKEN_PREFIX)) token = randomBytes(32).toString('base64url');   // keep apart from access tokens
   const expiresAt = new Date(Date.now() + ttlHours * 3600_000);
   await db.query(
     `insert into sessions (token_hash, user_id, expires_at, ip, user_agent) values ($1, $2, $3, $4, $5)`,
@@ -68,8 +69,34 @@ const USER_SELECT = `
          coalesce(json_agg(json_build_object('atoll_id', sc.atoll_id, 'island_id', sc.island_id))
                   filter (where sc.id is not null), '[]') as scopes`;
 
+// Access tokens for other systems (the Fleet Manager, reconnected Oct 2026)
+// start with this; sessions don't. A token acts as its service account.
+export const API_TOKEN_PREFIX = 'srd_';
+
+export async function createApiToken() {
+  const token = API_TOKEN_PREFIX + randomBytes(32).toString('base64url');
+  return { token, hash: sha256(token), hint: token.slice(-4) };
+}
+
+async function loadApiToken(db, token) {
+  const { rows } = await db.query(
+    `${USER_SELECT}, t.id as token_id, t.last_used_at
+       from api_tokens t
+       join users u on u.id = t.user_id and u.active
+       left join user_scopes sc on sc.user_id = u.id
+      where t.token_hash = $1 and t.revoked_at is null
+      group by u.id, t.id`, [sha256(token)]);
+  const row = rows[0];
+  if (!row) return null;
+  if (!row.last_used_at || Date.now() - new Date(row.last_used_at).getTime() > 5 * 60_000) {
+    db.query('update api_tokens set last_used_at = now() where id = $1', [row.token_id]).catch(() => {});
+  }
+  return { ...toUser({ ...row, must_change_password: false }), viaToken: true };
+}
+
 export async function loadSession(db, token) {
   if (!token || token.length > 100) return null;
+  if (token.startsWith(API_TOKEN_PREFIX)) return loadApiToken(db, token);
   const hash = sha256(token);
   const { rows } = await db.query(
     `${USER_SELECT}, s.last_seen_at

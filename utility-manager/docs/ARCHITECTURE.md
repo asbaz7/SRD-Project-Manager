@@ -168,18 +168,25 @@ icon and a label. Each service has its own identity colour.
 Work orders carry a `service` (migration 005): taken from the asset or
 facility, or chosen for island-wide work.
 
-## Works on its own: no outside systems (Oct 2026)
+## Outside systems: the Fleet Manager (Oct 2026)
 
-SRD Utility Manager depends on no other app for its data. From 9 to 14 Oct
-2026 the Fleet Manager connector used a service account and an access token
-to send genset condition reports; on 14 Oct it was disconnected
-(migration 045):
-- access tokens are no longer accepted, and the screens and endpoints that
-  issued them (`/admin/api-tokens`, `/admin/service-accounts`) and received
-  reports (`POST /condition-reports`) are gone;
-- its token is revoked and its service account switched off;
-- the 146 genset reports it sent (Jul-Oct 2026) stay in the history, marked
-  `fleet_manager`. New records come only from monthly updates entered in the app.
+SRD Utility Manager depends on no other app for its data: everything can be
+entered in the app. The Fleet Manager may connect as well:
+- 9-14 Oct 2026 it sent genset condition reports with an access token; on
+  14 Oct it was disconnected (migration 045: token revoked, service account
+  switched off). The 146 reports it sent stay in the history as `fleet_manager`.
+- 23 Oct 2026 it was reconnected, at the user's request, to read records and
+  send monthly genset updates. Administrators create a **service account**
+  (`POST /admin/service-accounts`: a technical manager for the region that
+  can't sign in with a password) and an **access token** for it on the Users
+  page (`/admin/api-tokens`; `srd_…`, shown once, only its hash kept; a new
+  token switches a switched-off service account back on; revoking cuts it off
+  at once). With `Authorization: Bearer srd_…` it uses the same API as the
+  website, under the same access rules.
+- Monthly records: `GET` / `POST /facilities/:id/genset-update` (the website's
+  monthly update). Sent with a token they are kept as source `fleet_manager`
+  next to any in-app update of the month (`update`); the newest is the latest.
+  The old `POST /condition-reports` intake is not back.
 
 The system's own Telegram bot (@SRDmanagerbot) is part of it, not an outside
 system.

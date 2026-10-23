@@ -1,6 +1,5 @@
 // Technical vs non-technical staff, work commenters, and per-project sharing.
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { buildApp } from '../src/app.js';
 import { hashPassword } from '../src/auth.js';
@@ -330,17 +329,52 @@ test('surveys: templates, answers kept to the template, technical types hidden f
   assert.equal((await call('DELETE', `/surveys/${g.body.id}`, T.office)).status, 200, 'own draft');
 });
 
-test('outside systems cannot connect: no access tokens, no report intake', async () => {
-  // A token made the old way is refused, as are the endpoints that issued
-  // tokens and received reports.
-  const token = 'srd_' + 'x'.repeat(43);
-  const { rows: [u] } = await db.query("select id from users where email = 'tech@srd.mv'");
-  await db.query("insert into api_tokens (user_id, name, token_hash, token_hint) values ($1, 'old', $2, 'xxxx')", [u.id, createHash('sha256').update(token).digest()]);
+test('access tokens: a service account for the Fleet Manager reads records and sends monthly updates, until revoked', async () => {
+  const svc = await call('POST', '/admin/service-accounts', T.admin, { full_name: 'Fleet Manager', email: 'fleet-manager@srd.mv' });
+  assert.equal(svc.status, 201, JSON.stringify(svc.body));
+  assert.equal(svc.body.service_account, true);
+  assert.equal((await call('POST', '/admin/service-accounts', T.tech, { full_name: 'x', email: 'x@srd.mv' })).status, 403);
+  // Not listed among people; can't sign in with a password.
+  assert.ok(!(await call('GET', '/users/directory', T.tech)).body.some((u) => u.id === svc.body.id));
+  // Tokens are only for service accounts.
+  assert.equal((await call('POST', '/admin/api-tokens', T.admin, { user_id: U.tech, name: 'x' })).status, 404);
+  assert.equal((await call('POST', '/admin/api-tokens', T.tech, { user_id: svc.body.id, name: 'x' })).status, 403);
+
+  // Switched off (as on 14 Oct 2026): a new token switches it back on.
+  await db.query('update users set active = false where id = $1', [svc.body.id]);
+  const made = await call('POST', '/admin/api-tokens', T.admin, { user_id: svc.body.id, name: 'Fleet Manager' });
+  assert.equal(made.status, 201);
+  const token = made.body.token;
+  assert.match(token, /^srd_[A-Za-z0-9_-]{40,}$/);
+  const list = (await call('GET', '/admin/api-tokens', T.admin)).body;
+  assert.equal(list[0].token_hint, token.slice(-4));
+  assert.ok(!JSON.stringify(list).includes(token), 'the token itself is never shown again');
+
+  // It reads like a technical manager...
+  assert.equal((await call('GET', '/auth/me', token)).body.fullName, 'Fleet Manager');
+  const g = (await call('GET', '/engines', token)).body.engines.find((e) => e.island_name === 'Maafushi');
+  const ph = (await call('GET', `/assets/${g.id}`, token)).body.facility_id;
+  const form = await call('GET', `/facilities/${ph}/genset-update`, token);
+  assert.equal(form.status, 200);
+  // ...and sends the month's records, kept as from the Fleet Manager and signed with its name.
+  const sent = await call('POST', `/facilities/${ph}/genset-update`, token, { items: [{ asset_id: g.id, total_hours: 50000, meter_replaced: true }] });
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  const rec = (await db.query(`select r.source, u.full_name from engine_reports r join users u on u.id = r.received_by
+    where r.asset_id = $1 order by r.received_at desc limit 1`, [g.id])).rows[0];
+  assert.deepEqual(rec, { source: 'fleet_manager', full_name: 'Fleet Manager' });
+  // The same from the website is the monthly update.
+  await call('POST', `/facilities/${ph}/genset-update`, T.tech, { items: [{ asset_id: g.id, total_hours: 50010 }] });
+  assert.equal((await db.query("select source from engine_conditions where asset_id = $1", [g.id])).rows[0].source, 'update');
+
+  // Its "last used" stamps are hidden from the audit trail unless asked for.
+  const stamps = (rows) => rows.filter((l) => l.entity === 'api_tokens' && l.action === 'update'
+    && Object.keys(l.changes).length === 1 && l.changes.last_used_at);
+  assert.equal(stamps((await call('GET', '/audit?limit=200', T.admin)).body.items).length, 0);
+
+  // Revoked: refused at once; made-up tokens too.
+  await call('DELETE', `/admin/api-tokens/${made.body.id}`, T.admin);
   assert.equal((await call('GET', '/auth/me', token)).status, 401);
-  assert.equal((await call('GET', '/engines', token)).status, 401);
-  for (const [method, url] of [['GET', '/admin/api-tokens'], ['POST', '/admin/api-tokens'], ['POST', '/admin/service-accounts'], ['POST', '/condition-reports']]) {
-    assert.equal((await call(method, url, T.admin, method === 'GET' ? undefined : {})).status, 404, `${method} ${url}`);
-  }
+  assert.equal((await call('GET', '/engines', 'srd_not-a-real-token-at-all-0000000000000000000')).status, 401);
 });
 
 test('project files are Microsoft 365 links: nothing is stored', async () => {

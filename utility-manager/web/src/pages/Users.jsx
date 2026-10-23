@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { Async, Card, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import { PERMISSIONS, ROLES, date } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
+import AccessTokens from '../components/AccessTokens.jsx';
 
 export default function Users() {
   const state = useApi('/users');
@@ -29,6 +30,7 @@ export default function Users() {
         </table>
       )}</Async>
     </Card>
+    {state.data && <AccessTokens users={state.data} reload={state.reload} />}
     {editing && <UserForm user={editing.id ? editing : null} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); state.reload(); }} />}
   </>;
 }

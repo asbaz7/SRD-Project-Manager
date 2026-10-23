@@ -84,7 +84,9 @@ export default async function gensetUpdateRoutes(app) {
     const { rows: at } = await db.query('select id, status_at from assets where id = any($1::uuid[])', [items.map((i) => i.asset.id)]);
     for (const i of items) i.asset.status_at = at.find((x) => x.id === i.asset.id)?.status_at ?? null;
     const today = localToday(config.timezone);
-    const result = await db.tx(req.user.id, (t) => applyGensetUpdate(t, { facilityId, items, userId: req.user.id, today }));
+    // Sent with an access token: from the Fleet Manager, kept as its own source.
+    const source = req.user.viaToken ? 'fleet_manager' : 'update';
+    const result = await db.tx(req.user.id, (t) => applyGensetUpdate(t, { facilityId, items, userId: req.user.id, today, source }));
     return { ok: true, ...result };
   });
 }

@@ -185,8 +185,10 @@ function since(prev, total, metered, done) {
  * history and made the latest. The powerhouse counts as updated for the
  * month once every genset in use (not disconnected) has its figures.
  * items: [{ asset, total_hours, meter_replaced, status, fault_level, fault, condition, needs_overhaul, alt_needs_service }]
+ * source: 'update' (in the app), or 'fleet_manager' (sent by the Fleet
+ * Manager with its access token).
  */
-export async function applyGensetUpdate(t, { facilityId, items, userId, today }) {
+export async function applyGensetUpdate(t, { facilityId, items, userId, today, source = 'update' }) {
   const month = `${today.slice(0, 7)}-01`;
   const at = new Date().toISOString();
   for (const it of items) {
@@ -234,7 +236,7 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
       alt_needs_service: it.alt_needs_service ?? prev?.alt_needs_service ?? false,
       overhaul_spares_received: prev?.overhaul_spares_received ?? null,
     };
-    const opts = { source: 'update', userId, sourceRef: it.meter_replaced ? 'meter replaced' : null, at, setStatus: false };
+    const opts = { source, userId, sourceRef: it.meter_replaced ? 'meter replaced' : null, at, setStatus: false };
     await keepEngineReport(t, it.asset.id, month, today, r, opts);
     await setLatest(t, it.asset, month, today, r, opts);
     await t.query(`insert into hours_log (asset_id, month, total_hours) values ($1, $2, $3)
@@ -249,7 +251,7 @@ export async function applyGensetUpdate(t, { facilityId, items, userId, today })
      where s.facility_id = $1 and s.kind = 'genset' and s.active and s.status not in ('decommissioned', 'disconnected')`, [facilityId, month]);
   const due = typeof count.due === 'string' ? count.due.replace(/[{}"]/g, '').split(',').filter(Boolean) : count.due;
   if (!count.left) {
-    const p = { source: 'update', reported_on: today, genset_count: count.done, userId };
+    const p = { source, reported_on: today, genset_count: count.done, userId };
     await keepPowerhouseReport(t, facilityId, month, p);
     await setLatestPowerhouse(t, facilityId, month, p);
   }
