@@ -210,6 +210,19 @@ export default async function projectRoutes(app) {
     return one((await db.query(`${SELECT} where p.id = $1`, [rows[0].id])).rows);
   });
 
+  // A cancelled project can be deleted, with its tasks, updates, sharing and
+  // links, by whoever manages it (its creator, owner or an administrator).
+  // The audit trail keeps a record.
+  app.delete('/projects/:id', async (req) => {
+    const { id: projectId } = parse(serialParam, req.params);
+    await assertAccess(db, req.user, projectId, 'manage');
+    const { rows: [p] } = await db.query('select status, island_id from projects where id = $1', [projectId]);
+    if (p.status !== 'cancelled') throw badRequest('Only a cancelled project can be deleted: cancel it first');
+    if (p.island_id) await assertIslandWrite(db, req.user, { islandId: p.island_id });
+    await db.tx(req.user.id, (t) => t.query('delete from projects where id = $1', [projectId]));
+    return { ok: true };
+  });
+
   app.patch('/projects/:id', async (req) => {
     const { id: projectId } = parse(serialParam, req.params);
     // Only fields actually sent are updated; defaults from the create schema don't apply.

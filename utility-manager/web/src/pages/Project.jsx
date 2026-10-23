@@ -28,6 +28,13 @@ function ProjectView({ project: p, reload }) {
     reload();
   });
 
+  const navigate = useNavigate();
+  const remove = useSubmit(async () => {
+    if (!window.confirm(`Delete ${p.ref} "${p.title}"${p.tasks.length ? ` and its ${p.tasks.length} tasks` : ''}, with its updates and links? This can't be undone (the audit trail keeps a record).`)) return;
+    await api(`/projects/${p.id}`, { method: 'DELETE' });
+    navigate('/projects');
+  });
+
   const [filters, setFilter] = useFilters();
   if (editing) return <ProjectForm project={p} onDone={() => { setEditing(false); reload(); }} />;
   // A tracker project opens on its tasks; its details, updates, files and
@@ -39,11 +46,15 @@ function ProjectView({ project: p, reload }) {
   </nav>;
   const head = <PageHead title={p.title} crumbs={[{ to: '/projects', label: 'Projects' }, { label: p.ref }]}
     subtitle={p.tracker ? [p.unit_name, p.owner_name && `Owner: ${p.owner_name}`].filter(Boolean).join(' · ') : undefined}
-    actions={writable && <button className="btn" onClick={() => setEditing(true)}>{p.can_manage ? 'Edit & sharing' : 'Edit'}</button>} />;
-  if (tab === 'tracker') return <>{head}{tabs}<Tracker project={p} reload={reload} /></>;
-  if (tab === 'sites') return <>{head}{tabs}<Sites project={p} /></>;
+    actions={writable && <>
+      {/* Cancelled projects can be deleted by whoever manages them. */}
+      {p.status === 'cancelled' && p.can_manage && <button className="btn danger" disabled={remove.busy} onClick={remove.submit}>Delete</button>}
+      <button className="btn" onClick={() => setEditing(true)}>{p.can_manage ? 'Edit & sharing' : 'Edit'}</button></>} />;
+  const removeError = remove.error && <ErrorBox error={remove.error} />;
+  if (tab === 'tracker') return <>{head}{removeError}{tabs}<Tracker project={p} reload={reload} /></>;
+  if (tab === 'sites') return <>{head}{removeError}{tabs}<Sites project={p} /></>;
   return <>
-    {head}{tabs}
+    {head}{removeError}{tabs}
     <div className="grid-2">
       <Card title="Details">
         <dl className="facts">

@@ -236,6 +236,20 @@ test('staff: permissions chosen per user', async () => {
   assert.equal((await call('PATCH', `/users/${plain.id}`, T.admin, { permissions: ['bogus'] })).status, 400);
 });
 
+test('a cancelled project can be deleted by whoever manages it', async () => {
+  const p = (await call('POST', '/projects', T.tech, { service: 'electricity', island_id: maafushi.id, title: 'Wrong entry',
+    tasks: [{ name: 'One', progress: 0 }] })).body;
+  assert.ok(p.id, JSON.stringify(p));
+  assert.equal((await call('DELETE', `/projects/${p.id}`, T.tech)).status, 400, 'not cancelled yet');
+  await call('PATCH', `/projects/${p.id}`, T.tech, { status: 'cancelled' });
+  assert.notEqual((await call('DELETE', `/projects/${p.id}`, T.tech2)).status, 200, 'not theirs');
+  assert.equal((await call('DELETE', `/projects/${p.id}`, T.tech)).status, 200);
+  assert.equal((await call('GET', `/projects/${p.id}`, T.tech)).status, 404);
+  assert.equal((await db.query('select count(*)::int n from project_tasks where project_id = $1', [p.id])).rows[0].n, 0);
+  const audit = (await db.query("select count(*)::int n from audit_log where entity = 'projects' and action = 'delete' and entity_id = $1", [String(p.id)])).rows[0].n;
+  assert.equal(audit, 1, 'the audit trail keeps a record');
+});
+
 test('projects: type, task breakdown and progress calculated from the tasks', async () => {
   const p = await call('POST', '/projects', T.tech, {
     title: 'ADh. Dhidhdhoo PH Upgrade', island_id: maafushi.id, project_type: 'infrastructure', status: 'ongoing',
