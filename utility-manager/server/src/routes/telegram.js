@@ -54,7 +54,7 @@ export default async function telegramRoutes(app) {
   });
 
   app.post('/telegram/test', admin, async (req) => {
-    await telegram.alert(`👋 Test alert from SRD Utility Manager, sent by ${telegram.esc(req.user.fullName)}.`);
+    await telegram.alert(`👋 Test alert from SCRD Utility Manager, sent by ${telegram.esc(req.user.fullName)}.`);
     return { ok: true };
   });
 

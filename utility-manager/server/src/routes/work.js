@@ -58,7 +58,7 @@ const body = z.object({
   description: optText(5000),
   status: z.enum(WORK_STATES).default('in_progress'),
   assigned_to: optText(200),                // team or contractor
-  assigned_user_id: id.nullish(),           // or one of SRD's users
+  assigned_user_id: id.nullish(),           // or one of SCRD's users
   unit_id: unitId.nullish(),                // and / or one of the department's units
   fault_report_month: date.nullish(),       // logged from this report's fault
   fault_id: z.coerce.number().int().positive().nullish(), // logged for this fault (migration 060)

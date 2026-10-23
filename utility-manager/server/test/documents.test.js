@@ -125,7 +125,7 @@ test('filters, search and CSV export like the old list', async () => {
 });
 
 test('files are Microsoft 365 links added by the sender and recipients; notes too', async () => {
-  const url = 'https://stelco.sharepoint.com/sites/SRD/Shared%20Documents/RPT-2026-22%20signed.pdf';
+  const url = 'https://stelco.sharepoint.com/sites/SCRD/Shared%20Documents/RPT-2026-22%20signed.pdf';
   const up = await call('POST', `/documents/${tender.id}/links`, T.nashmee, { url });
   assert.equal(up.status, 201, JSON.stringify(up.body));
   assert.equal(up.body.title, 'RPT-2026-22 signed.pdf');

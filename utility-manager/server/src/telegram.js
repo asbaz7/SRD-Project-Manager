@@ -40,7 +40,7 @@ const where = (a) => `${a.atoll_code}. ${a.island_name}`;
 // Telegram echoes back in a header. Derived from the token: nothing extra to store.
 export const webhookSecret = (token) => createHash('sha256').update(`srd-telegram-webhook:${token}`).digest('hex').slice(0, 48);
 
-const HELP = `<b>SRD Utility Bot</b>
+const HELP = `<b>SCRD Utility Bot</b>
 
 <b>Just ask</b>
 Write normally, e.g. <i>how is Thoddoo doing?</i> or <i>Fenfushi G2 alternator back together, WO-1 done</i>. In a group, mention me or reply to me. Before anything is saved I show what I'll write, and you tap ✅ or ❌.
@@ -222,7 +222,7 @@ export function createTelegram({ db, config, log }) {
     const e = d.engines || {};
     const day = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: config.timezone });
     const mw = (kw) => (kw >= 10000 ? `${(kw / 1000).toFixed(1)} MW` : `${Math.round(kw)} kW`);
-    const lines = [`📋 <b>SRD summary: ${esc(day)}</b>`];
+    const lines = [`📋 <b>SCRD summary: ${esc(day)}</b>`];
     if (!technical) {
       lines.push(workLine);
       const inc = (d.incidents.list || []).filter((i) => ['high', 'critical'].includes(i.severity)).slice(0, 5);

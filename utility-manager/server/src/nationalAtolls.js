@@ -1,5 +1,5 @@
 // The Maldives' 20 administrative atolls, north to south, for the national
-// takeover tracker (routes/takeover.js). SRD's own atolls are also in the
+// takeover tracker (routes/takeover.js). SCRD's own atolls are also in the
 // atolls table; the codes match.
 export const NATIONAL_ATOLLS = [
   ['HA', 'Haa Alif'], ['HDh', 'Haa Dhaalu'], ['Sh', 'Shaviyani'], ['N', 'Noonu'], ['R', 'Raa'], ['B', 'Baa'],

@@ -384,7 +384,7 @@ test('project files are Microsoft 365 links: nothing is stored', async () => {
   for (const url of [`/projects/${p.id}/files`, `/projects/${p.id}/files/1/versions`]) {
     assert.equal((await call('POST', url, T.tech, { file_name: 'x.xlsx', data: Buffer.from('x').toString('base64') })).status, 404, url);
   }
-  const url = 'https://stelco.sharepoint.com/:x:/r/sites/SRD/Shared%20Documents/Power_House_New_Connections_2027.xlsx?d=w1&web=1';
+  const url = 'https://stelco.sharepoint.com/:x:/r/sites/SCRD/Shared%20Documents/Power_House_New_Connections_2027.xlsx?d=w1&web=1';
   const link = await call('POST', `/projects/${p.id}/links`, T.tech, { url });
   assert.equal(link.status, 201, JSON.stringify(link.body));
   assert.equal(link.body.title, 'Power_House_New_Connections_2027.xlsx', 'titled from the file name in the address');

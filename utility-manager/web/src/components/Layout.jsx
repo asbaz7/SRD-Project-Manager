@@ -36,7 +36,7 @@ function Brand() {
   return (
     <NavLink to="/" className="brand">
       <span className="logo"><img src="/stelco-icon.png" alt="" width="42" height="18" /><span className="wordmark">STELCO</span></span>
-      <span className="brand-name">SRD Utility Manager<small>South Central Regional Department</small></span>
+      <span className="brand-name">SCRD Utility Manager<small>South Central Regional Department</small></span>
     </NavLink>
   );
 }

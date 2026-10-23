@@ -12,8 +12,8 @@ There are two ways to run it:
 Both options need the code first:
 
 ```bash
-git clone -b claude/blissful-bardeen-zmzjcl https://github.com/asbaz7/SRD-Project-Manager.git
-cd SRD-Project-Manager/utility-manager
+git clone -b claude/blissful-bardeen-zmzjcl https://github.com/asbaz7/SCRD-Project-Manager.git
+cd SCRD-Project-Manager/utility-manager
 ```
 
 ---
@@ -119,7 +119,7 @@ If other computers can't connect, allow port 3000 through the server's
 firewall:
 
 - **Windows** (in an Administrator terminal):
-  `netsh advfirewall firewall add rule name="SRD Utility Manager" dir=in action=allow protocol=TCP localport=3000`
+  `netsh advfirewall firewall add rule name="SCRD Utility Manager" dir=in action=allow protocol=TCP localport=3000`
 - **Linux:** `sudo ufw allow 3000/tcp`
 
 Ask IT to give the server a **fixed IP address**, or a name such as

@@ -237,7 +237,7 @@ function WorkForm({ work, onDone }) {
         <Field label="Details" wide><textarea rows="3" value={f.description || ''} onChange={set('description')} /></Field>
         <Field label="Unit" hint={work ? '' : 'Your unit, unless you choose another.'}><Select value={unit ? String(unit) : ''} onChange={set('unit_id')} placeholder="— no unit —"
           options={(units.data || []).filter((u) => technical || user?.headOf?.includes(u.id)).map((u) => [String(u.id), u.name])} /></Field>
-        <Field label="Assigned to" hint={anyone ? '' : user?.headOf?.length ? 'You can assign people in your unit.' : 'The General Manager or a unit head assigns work to others.'}><Select value={f.assigned_user_id || ''} onChange={set('assigned_user_id')} placeholder="— nobody in SRD —"
+        <Field label="Assigned to" hint={anyone ? '' : user?.headOf?.length ? 'You can assign people in your unit.' : 'The General Manager or a unit head assigns work to others.'}><Select value={f.assigned_user_id || ''} onChange={set('assigned_user_id')} placeholder="— nobody in SCRD —"
           options={assignable.slice().sort((a, b) => b.technical - a.technical || a.full_name.localeCompare(b.full_name))
             .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}`])} /></Field>
         <Field label="Team or contractor" hint="Optional, e.g. the island's mechanical team or an outside firm."><input value={f.assigned_to || ''} onChange={set('assigned_to')} /></Field>

@@ -43,7 +43,7 @@ export default async function locationRoutes(app) {
   const { db } = app;
 
   // --- Atolls ---------------------------------------------------------------
-  // Atolls SRD looks after; archived ones (e.g. Kaafu, handed over in Oct
+  // Atolls SCRD looks after; archived ones (e.g. Kaafu, handed over in Oct
   // 2026) only when asked for.
   app.get('/atolls', async (req) => {
     const q = parse(z.object({ include_inactive: z.coerce.boolean().optional() }), req.query);

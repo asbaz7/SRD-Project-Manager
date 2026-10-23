@@ -1,4 +1,4 @@
-# SRD Utility Manager
+# SCRD Utility Manager
 
 Management system for the South Central Regional Department's **electricity, water
 and sewerage** services, used by management staff. Managers report incidents

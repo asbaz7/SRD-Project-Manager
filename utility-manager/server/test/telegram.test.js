@@ -135,7 +135,7 @@ test('a manager links Telegram with a one-time code from their account page', as
   assert.equal(code.url, `https://t.me/srd_test_bot?start=${code.code}`);
 
   // Not in a group, where others would see it.
-  await say(MANAGER_TG, `/start ${code.code}`, { id: GROUP, type: 'supergroup', title: 'SRD' });
+  await say(MANAGER_TG, `/start ${code.code}`, { id: GROUP, type: 'supergroup', title: 'SCRD' });
   assert.match(repliesTo(GROUP), /private chat/);
 
   await say(MANAGER_TG, `/start ${code.code}`);
@@ -248,7 +248,7 @@ test('a unit head hears on Telegram about new work for their unit', async () => 
 });
 
 test('alerts go to chats that turned them on; serious incidents from Telegram alert the group', async () => {
-  await say(ADMIN_TG, '/alerts on', { id: GROUP, type: 'supergroup', title: 'SRD Managers' });
+  await say(ADMIN_TG, '/alerts on', { id: GROUP, type: 'supergroup', title: 'SCRD Managers' });
   assert.match(repliesTo(GROUP), /Alerts are on/);
 
   await say(MANAGER_TG, '/interruption Maafushi high power cut to the harbour area');
@@ -293,7 +293,7 @@ test('/update and /done post work updates; completion alerts the group', async (
 test('the daily summary goes to alert chats', async () => {
   await app.daily();
   const text = repliesTo(GROUP);
-  assert.match(text, /📋 <b>SRD summary/);
+  assert.match(text, /📋 <b>SCRD summary/);
   assert.match(text, /gensets running/);
   assert.match(text, /Serious interruptions/);
   assert.doesNotMatch(text, /Condition reports missing/);
@@ -304,7 +304,7 @@ test('administrators see the bot settings and alert chats; others do not', async
   const a = (await call('GET', '/telegram', { token: admin })).body;
   assert.equal(a.bot, 'srd_test_bot');
   assert.equal(a.chats.length, 1);
-  assert.equal(a.chats[0].title, 'SRD Managers');
+  assert.equal(a.chats[0].title, 'SCRD Managers');
   const m = (await call('GET', '/telegram', { token: manager })).body;
   assert.equal(m.chats, undefined);
   assert.equal((await call('POST', '/telegram/connect', { token: manager })).status, 403);
@@ -326,7 +326,7 @@ test('a group set to non-technical alerts gets incidents but not genset alerts o
   assert.match(repliesTo(GROUP), /Critical: whole island without power/);
   sent = [];
   await app.daily();
-  assert.match(repliesTo(GROUP), /SRD summary/);
+  assert.match(repliesTo(GROUP), /SCRD summary/);
   assert.doesNotMatch(repliesTo(GROUP), /gensets running/);
 });
 
@@ -612,12 +612,12 @@ test('a proposed change lapses when the person writes something else instead', a
 
 test('in groups the assistant answers only when mentioned', async () => {
   claudeScript = [];
-  await say(MANAGER_TG, 'how is maafushi', { id: GROUP, type: 'supergroup', title: 'SRD' });
+  await say(MANAGER_TG, 'how is maafushi', { id: GROUP, type: 'supergroup', title: 'SCRD' });
   assert.equal(sent.length, 0);
   claudeScript = [(body) => {
     assert.equal(body.messages.at(-1).content.at(-1).text, 'how is maafushi');
     return [{ type: 'text', text: 'Fine.' }];
   }];
-  await say(MANAGER_TG, '@srd_test_bot how is maafushi', { id: GROUP, type: 'supergroup', title: 'SRD' });
+  await say(MANAGER_TG, '@srd_test_bot how is maafushi', { id: GROUP, type: 'supergroup', title: 'SCRD' });
   assert.equal(repliesTo(GROUP), 'Fine.');
 });

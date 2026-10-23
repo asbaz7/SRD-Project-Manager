@@ -442,7 +442,7 @@ function IslandForm({ row, atolls, onClose, onSaved }) {
       <ErrorBox error={save.error || remove.error} />
       <Field label="Atoll"><Select required value={f.atoll_code} onChange={set('atoll_code')} placeholder="Choose…" options={atolls.map((a) => [a.code, `${a.code} · ${a.name}`])} /></Field>
       <Field label="Island"><input required maxLength="100" value={f.name} onChange={set('name')} /></Field>
-      {srdHere.length > 0 && <Field label="SRD island (if SRD manages it)"><Select value={f.island_id} onChange={(v) => { set('island_id')(v); const i = srdHere.find((x) => x.id === v); if (i && !f.name) set('name')(i.name); }}
+      {srdHere.length > 0 && <Field label="SCRD island (if SCRD manages it)"><Select value={f.island_id} onChange={(v) => { set('island_id')(v); const i = srdHere.find((x) => x.id === v); if (i && !f.name) set('name')(i.name); }}
         placeholder="—" options={srdHere.map((i) => [i.id, i.name])} /></Field>}
       <Field label="Phase / batch"><input maxLength="100" value={f.phase} onChange={set('phase')} placeholder="e.g. Phase 2" /></Field>
       {SERVICES.map(([k, label]) => <Field key={k} label={label}>

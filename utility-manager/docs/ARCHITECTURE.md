@@ -1,4 +1,4 @@
-# SRD Utility Manager — System Architecture
+# SCRD Utility Manager — System Architecture
 
 The system of record for the South Central Regional Department's electricity, water
 and sewerage services, used by **management staff**. Managers report incidents
@@ -87,7 +87,7 @@ utility-manager/
 │   │   ├── 001_core.sql       tables, enums, triggers, audit
 │   │   ├── 002_metrics.sql    daily-log measurements (no longer used)
 │   │   └── 003_management_only.sql  retires operator accounts
-│   ├── seed/srd_register.tsv  current SRD genset register (4 atolls, 34 islands, 140 gensets)
+│   ├── seed/srd_register.tsv  current SCRD genset register (4 atolls, 34 islands, 140 gensets)
 │   ├── scripts/               migrate, seed, create-admin CLIs
 │   ├── src/
 │   │   ├── app.js             API: security headers, auth, rate limits, routes
@@ -170,7 +170,7 @@ facility, or chosen for island-wide work.
 
 ## Outside systems: the Fleet Manager (Oct 2026)
 
-SRD Utility Manager depends on no other app for its data: everything can be
+SCRD Utility Manager depends on no other app for its data: everything can be
 entered in the app. The Fleet Manager may connect as well:
 - 9-14 Oct 2026 it sent genset condition reports with an access token; on
   14 Oct it was disconnected (migration 045: token revoked, service account

@@ -29,7 +29,7 @@ export default function AccessTokens({ users, reload }) {
     <button className="btn small ghost" onClick={() => setSvcForm({ full_name: '', email: '' })}>Add service account</button>
     <button className="btn small" disabled={!services.length} onClick={() => setForm({ user_id: services[0]?.id || '', name: '' })}>Create token</button>
   </>}>
-    <p className="muted small">For another system (such as the Fleet Manager) to read SRD's records and send monthly genset updates. It acts as a
+    <p className="muted small">For another system (such as the Fleet Manager) to read SCRD's records and send monthly genset updates. It acts as a
       <strong> service account</strong>: a technical manager that can't sign in with a password, so its changes are clearly labelled.
       Revoke a token to cut it off at once.</p>
     <ErrorBox error={revoke.error} />

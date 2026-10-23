@@ -117,8 +117,8 @@ describe('authentication', () => {
 });
 
 describe('asset register', () => {
-  test('seeded register matches the SRD data', async () => {
-    assert.equal(islands.length, 43, "34 SRD islands + 8 Alif Alif + K. Kudagiri (no gensets yet)");
+  test('seeded register matches the SCRD data', async () => {
+    assert.equal(islands.length, 43, "34 SCRD islands + 8 Alif Alif + K. Kudagiri (no gensets yet)");
     const assets = (await call('GET', '/assets?kind=genset&limit=500', { token: admin })).body;
     assert.equal(assets.total, 140);
     assert.equal(maafushi.genset_count, 8);
@@ -404,7 +404,7 @@ describe('powerhouse takeover tracker', () => {
 });
 
 describe('national takeover tracker', () => {
-  test('SRD islands start it; islands elsewhere are added; per service, an island is taken over once all are', async () => {
+  test('SCRD islands start it; islands elsewhere are added; per service, an island is taken over once all are', async () => {
     // The test register is filled after the migrations: run the seeding again.
     const sql = readFileSync(new URL('../migrations/053_national_takeover.sql', import.meta.url), 'utf8');
     // ('pending' was "survey ongoing" then; the services are FENAKA's now.)
@@ -412,7 +412,7 @@ describe('national takeover tracker', () => {
     let t = (await call('GET', '/takeover', { token: admin })).body;
     assert.equal(t.expected_islands, 187);
     assert.equal(t.atolls.length, 20);
-    // The census's inhabited islands for the atolls outside SRD, in full.
+    // The census's inhabited islands for the atolls outside SCRD, in full.
     assert.deepEqual(['HA', 'Lh', 'L', 'Gn', 'S'].map((c) => t.atolls.find((a) => a.code === c).islands), [14, 4, 11, 1, 6]);
     const k = t.atolls.find((a) => a.code === 'K');
     assert.ok(k.islands > 0 && k.taken_over === k.islands, 'Kaafu: electricity already with STELCO');
@@ -421,7 +421,7 @@ describe('national takeover tracker', () => {
     assert.equal(maafushiRow.state, 'taken_over');
     assert.ok(t.islands.filter((i) => i.atoll_code === 'HA').every((i) => i.lat != null && i.lon != null), 'islands have their place on the map');
 
-    // An island outside SRD, still with FENAKA.
+    // An island outside SCRD, still with FENAKA.
     const add = await call('POST', '/takeover/islands', { token: admin, body: {
       atoll_code: 'HA', name: 'Testfushi', phase: 'Phase 3', electricity_status: 'fenaka', water_status: 'fenaka', survey_stage: 'planned', survey_start: '2026-12-01' } });
     assert.equal(add.status, 201, JSON.stringify(add.body));
