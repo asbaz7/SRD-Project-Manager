@@ -65,7 +65,8 @@ export default async function takeoverRoutes(app) {
     const { rows } = await db.query(`${SELECT} order by t.atoll_code, t.name`);
     const islands = rows.map((i) => ({ ...i, state: islandState(i) }));
     // Islands outside the census's 187 (counted = false) are on the list and
-    // the map, but not in the counts.
+    // the map, and in the service counts (e.g. Kudagiri's water and
+    // sewerage), but not in the island counts.
     const counted = islands.filter((i) => i.counted !== false);
     const count = (list, state) => list.filter((i) => i.state === state).length;
     const atolls = NATIONAL_ATOLLS.map((a) => {
@@ -74,8 +75,8 @@ export default async function takeoverRoutes(app) {
         not_set: count(list, 'not_set'), survey: surveyed(list) };
     });
     const services = Object.fromEntries(TAKEOVER_SERVICES.map((k) => [k, {
-      taken_over: counted.filter((i) => i[`${k}_status`] === 'taken_over').length,
-      fenaka: counted.filter((i) => i[`${k}_status`] === 'fenaka').length,
+      taken_over: islands.filter((i) => i[`${k}_status`] === 'taken_over').length,
+      fenaka: islands.filter((i) => i[`${k}_status`] === 'fenaka').length,
     }]));
     return {
       expected_islands: INHABITED_ISLANDS,
