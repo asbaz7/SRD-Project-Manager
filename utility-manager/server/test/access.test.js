@@ -1,4 +1,4 @@
-// Technical vs non-technical staff, work commenters, and per-project sharing.
+// Technical vs non-technical staff, who runs work, and per-project sharing.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { buildApp } from '../src/app.js';
@@ -91,13 +91,12 @@ test('the staff type is set when creating a user, and the session reflects it', 
   assert.equal((await call('GET', '/auth/me', T.office)).body.technical, false);
 });
 
-test('work: non-technical staff see their unit\'s, technical staff run it, chosen people can comment', async () => {
+test('work: non-technical staff see their unit\'s, technical staff run it', async () => {
   // Only technical staff start work.
   assert.equal((await call('POST', '/work', T.office, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'x' })).status, 403);
   const w = (await call('POST', '/work', T.tech, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Replace radiator' })).body;
 
-  // Technical staff see all work; non-technical staff only their unit's,
-  // and work they are added to.
+  // Technical staff see all work; non-technical staff only their unit's.
   assert.ok((await call('GET', '/work', T.tech2)).body.items.some((x) => x.id === w.id));
   assert.ok(!(await call('GET', '/work', T.clerk)).body.items.some((x) => x.id === w.id));
   // Managers (office is one) also see all ongoing work.
@@ -114,33 +113,16 @@ test('work: non-technical staff see their unit\'s, technical staff run it, chose
   await db.query(`update users set unit_id = ${admin} where id = $1`, [U.office]);
   await db.query(`update work_orders set unit_id = ${admin} where id = $1`, [w.id]);
   assert.ok((await call('GET', '/dashboard', T.office)).body.work.some((x) => x.id === w.id));
-  let view = (await call('GET', `/work/${w.id}`, T.office)).body;
+  const view = (await call('GET', `/work/${w.id}`, T.office)).body;
   assert.equal(view.can_run, false);
-  assert.equal(view.can_comment, false);
+  assert.equal(view.can_update, false);
 
-  // Not added yet: no comments, and non-technical staff can't add themselves.
+  // Only the technical staff running it post updates; nobody can be added to comment.
   assert.equal((await call('POST', `/work/${w.id}/updates`, T.office, { body: 'When will it be done?' })).status, 403);
-  assert.equal((await call('POST', `/work/${w.id}/commenters`, T.office, { user_id: U.office })).status, 403);
-
-  // The technical creator adds the office manager and a viewer.
-  assert.equal((await call('POST', `/work/${w.id}/commenters`, T.tech, { user_id: U.office })).status, 201);
-  assert.equal((await call('POST', `/work/${w.id}/commenters`, T.tech, { user_id: U.clerk })).status, 201);
-  assert.ok((await call('GET', '/work', T.clerk)).body.items.some((x) => x.id === w.id), 'added: now in their list');
-  view = (await call('GET', `/work/${w.id}`, T.office)).body;
-  assert.equal(view.can_comment, true);
-  assert.deepEqual(view.commenters.map((c) => c.full_name).sort(), ['clerk', 'office']);
-
-  // They can comment, but not change the status or edit the work.
-  assert.equal((await call('POST', `/work/${w.id}/updates`, T.office, { body: 'When will it be done?' })).status, 201);
-  assert.equal((await call('POST', `/work/${w.id}/updates`, T.clerk, { body: 'Customer asked too' })).status, 201);
-  assert.equal((await call('POST', `/work/${w.id}/updates`, T.office, { body: 'done', status: 'completed' })).status, 403);
+  assert.equal((await call('POST', `/work/${w.id}/commenters`, T.tech, { user_id: U.office })).status, 404);
   assert.equal((await call('PATCH', `/work/${w.id}`, T.office, { title: 'changed' })).status, 403);
-
-  // Technical staff carry on as before; removing someone ends their access.
   assert.equal((await call('POST', `/work/${w.id}/updates`, T.tech2, { body: 'Radiator arrives Thursday' })).status, 201);
-  assert.equal((await call('DELETE', `/work/${w.id}/commenters/${U.office}`, T.tech)).status, 200);
-  assert.equal((await call('POST', `/work/${w.id}/updates`, T.office, { body: 'again?' })).status, 403);
-  assert.equal((await db.query('select count(*)::int n from work_updates where work_id = $1', [w.id])).rows[0].n, 3);
+  assert.equal((await db.query('select count(*)::int n from work_updates where work_id = $1', [w.id])).rows[0].n, 1);
 });
 
 test('projects: the creator decides who can view and who can edit', async () => {

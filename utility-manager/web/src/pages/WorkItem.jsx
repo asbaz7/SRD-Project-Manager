@@ -83,13 +83,6 @@ function WorkView({ work: w, reload }) {
           </div>
         </form>
       </Card>}
-      {!writable && !w.can_update && w.can_comment && <Card title="Add a comment">
-        <form className="form narrow" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-          <ErrorBox error={error} />
-          <Field label="Comment" hint="Everyone who can see this work will see your comment."><textarea required rows="3" value={u.body} onChange={(e) => setU({ ...u, body: e.target.value })} /></Field>
-          <div className="form-actions"><button className="btn primary" disabled={busy}>Post comment</button></div>
-        </form>
-      </Card>}
     </div>
     <Card title="Updates">
       {w.updates.length === 0 ? <Empty>No updates yet.</Empty> :
