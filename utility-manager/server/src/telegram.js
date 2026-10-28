@@ -610,7 +610,7 @@ export function createTelegram({ db, config, log }) {
     if (!user) return reply('I don\'t know you yet. Link your account first: on the website, open your name (bottom left) → <b>Link Telegram</b>.');
 
     const TECHNICAL = new Set(['status', 'down', 'up', 'running', 'standby', 'maintenance', 'disconnected', 'disconnect', 'hours', 'fault']);
-    if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /interruption, /summary, and comment on work you have been added to with /update.');
+    if (TECHNICAL.has(cmd) && !user.technical) return reply('That needs technical access. You can use /work, /interruption and /summary.');
     try {
       let text;
       if (cmd === 'status') text = await cmdStatus(user, words, asUser);
