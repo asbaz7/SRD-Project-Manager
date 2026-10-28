@@ -736,3 +736,56 @@ tr.picked > td { background: color-mix(in srgb, var(--accent) 14%, transparent);
 .tko-none { display: block; margin-top: 3px; }
 
 .row-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+/* Work list (Oct 2026): state tabs with counts, one toolbar, rows to open. */
+.work-tabs { margin: 0 0 12px; }
+.work-tabs .tab { display: inline-flex; align-items: center; gap: 8px; }
+.work-tabs .count { font-size: .76rem; font-variant-numeric: tabular-nums; padding: 1px 7px; border-radius: 999px; background: var(--track); color: var(--text-2); font-weight: 650; }
+.work-tabs .tab.active .count { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--info); }
+.work-tabs .tab.alert .count { background: color-mix(in srgb, var(--bad-fill) 16%, transparent); color: var(--bad); }
+.work-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.work-toolbar .search { position: relative; flex: 1 1 260px; display: flex; align-items: center; }
+.work-toolbar .search .icon { position: absolute; left: 12px; color: var(--muted); pointer-events: none; }
+.work-toolbar .search input { width: 100%; padding-left: 36px; }
+.work-filters { display: contents; }
+.work-filters select { flex: 0 1 auto; max-width: 180px; }
+.filters-toggle { display: none; }
+.filters-toggle .count { margin-left: 6px; font-size: .76rem; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--info); }
+a.btn.with-icon { display: inline-flex; align-items: center; gap: 6px; }
+.work-list { border-radius: var(--radius); padding: 4px 0; }
+.work-list ul { list-style: none; margin: 0; padding: 0; }
+.work-list li + li { border-top: 1px solid var(--hairline); }
+.work-row { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 6px 24px; padding: 14px 20px; color: var(--text); text-decoration: none; transition: background-color .15s ease-out; }
+.work-row:hover { text-decoration: none; background: var(--glass-hover); }
+.work-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 12px; }
+.work-main { min-width: 0; display: grid; gap: 4px; }
+.work-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.work-title strong { font-weight: 650; line-height: 1.35; text-wrap: pretty; overflow-wrap: anywhere; }
+.work-ref { flex: none; font-size: .78rem; font-weight: 650; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.work-meta { font-size: .84rem; color: var(--text-2); line-height: 1.5; }
+.work-meta .svc-dot { margin-right: 8px; }
+.work-meta .bits { display: inline; }
+.work-meta .bits > span + span::before { content: '·'; margin: 0 8px; color: var(--muted); }
+.work-update { margin: 2px 0 0; font-size: .86rem; color: var(--text-2); display: grid; gap: 2px; max-width: 75ch; }
+.work-update .text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.work-update .by { font-size: .78rem; color: var(--muted); }
+.work-update.none { color: var(--muted); font-style: italic; }
+.work-side { display: flex; flex-direction: column; align-items: flex-end; align-self: start; gap: 4px; text-align: right; font-size: .84rem; line-height: 1.35; }
+.work-side .pill { margin-bottom: 4px; }
+.work-side .holder { color: var(--text-2); }
+.work-side .due { color: var(--muted); font-variant-numeric: tabular-nums; }
+.work-side .due.late { color: var(--bad); font-weight: 650; }
+.work-empty { padding: 40px 20px; text-align: center; display: grid; gap: 6px; }
+.work-foot .pager { margin: 0; padding: 8px 20px 10px; }
+.work-foot .pager:empty { display: none; }
+@media (max-width: 860px) {
+  .work-row { grid-template-columns: 1fr; padding: 14px 16px; }
+  .work-side { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; text-align: left; gap: 6px 12px; }
+  .filters-toggle { display: inline-flex; align-items: center; }
+  .work-filters { display: none; }
+  .work-filters.open { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+  .work-filters select { max-width: none; width: 100%; }
+  .work-title { flex-direction: column; gap: 2px; }
+  .work-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
+  .work-tabs .tab { white-space: nowrap; }
+}

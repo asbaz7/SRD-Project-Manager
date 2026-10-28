@@ -23,6 +23,8 @@ const paths = {
   facility: 'M4 20V9l5 3V9l5 3V5h6v15H4Z',
   upload: 'M12 16V4m0 0-4 4m4-4 4 4M4 16v4h16v-4',
   check: 'M5 12.5 10 17l9-10',
+  search: 'M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Zm4.6-1.9L20 20',
+  download: 'M12 4v11m0 0-4-4m4 4 4-4M4 20h16',
   telegram: 'M21 4 3 11l6 2m12-9-3 16-9-7m12-9L9 13m0 0v6l3-4',
 };
 
