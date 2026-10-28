@@ -339,26 +339,14 @@ test('non-technical staff cannot use the technical bot commands', async () => {
   assert.match(repliesTo(4004), /needs technical access/);
 });
 
-test('/fault logs a genset fault, and clears it', async () => {
+test('/fault no longer records faults: it points to the monthly update and /down', async () => {
   const g4 = (await db.query(`select s.id from assets s join facilities f on f.id = s.facility_id join islands i on i.id = f.island_id
     where i.name = 'Maafushi' and s.kind = 'genset' and s.tag = '4' and s.active`)).rows[0].id;
-  const fault = async () => (await db.query('select fault_level, fault_note from assets where id = $1', [g4])).rows[0];
-  // Clear first: the earlier /down Maafushi 4 fuel pump logged a fault.
-  await say(ADMIN_TG, '/fault Maafushi G4 fixed');
+  const open = async () => (await db.query('select count(*)::int n from fault_log where asset_id = $1 and cleared_at is null', [g4])).rows[0].n;
+  const before = await open();
   await say(ADMIN_TG, '/fault Maafushi G4 oil leak at the front seal');
-  assert.match(repliesTo(ADMIN_TG), /Genset 4: <b>minor fault<\/b> logged: oil leak at the front seal/);
-  assert.deepEqual(await fault(), { fault_level: 'minor', fault_note: 'oil leak at the front seal' });
-  await say(ADMIN_TG, '/fault Maafushi G4 major crankshaft knock');
-  assert.deepEqual(await fault(), { fault_level: 'major', fault_note: 'oil leak at the front seal; crankshaft knock' }, 'both faults');
-  await say(ADMIN_TG, '/fault Maafushi G4');
-  assert.match(repliesTo(ADMIN_TG), /e\.g\./);
-  await say(ADMIN_TG, '/fault Maafushi G4 fixed');
-  assert.match(repliesTo(ADMIN_TG), /faults cleared/);
-  assert.deepEqual(await fault(), { fault_level: 'none', fault_note: null });
-  const log = (await db.query('select level, cleared_reason from fault_log where asset_id = $1 order by logged_at', [g4])).rows;
-  assert.deepEqual(log.slice(-2).map((l) => [l.level, l.cleared_reason]), [['minor', 'Marked fixed'], ['major', 'Marked fixed']]);
-  await say(4004, '/fault Maafushi G4 leak');
-  assert.match(repliesTo(4004), /needs technical access/);
+  assert.match(repliesTo(ADMIN_TG), /monthly update.*\/down/s);
+  assert.equal(await open(), before, 'nothing logged');
 });
 
 test('/hours records the monthly running hours, with or without a condition', async () => {
