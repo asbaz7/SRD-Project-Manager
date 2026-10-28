@@ -5,7 +5,6 @@ import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { GensetUpdateForm } from './GensetUpdates.jsx';
-import { LogFaultButton } from '../components/LogFault.jsx';
 import { useApi, useRowLink } from '../hooks.js';
 
 export default function Island() {
@@ -103,8 +102,7 @@ export default function Island() {
                   {a.status_note && <><br /><small className="muted">{a.status_note}</small></>}
                   {a.status_at && <><br /><small className="muted">{date(a.status_at)}{a.status_by_name && ` · ${a.status_by_name}`}</small></>}</td>
                 {f.kind === 'powerhouse' && <>
-                  <td className="wrap"><EngineState e={a} compact />{(['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault) && <><br /><small className="muted">{['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault}</small></>}
-                    {manage && a.kind === 'genset' && <div><LogFaultButton asset={{ ...a, island_name: island.name, atoll_code: island.atoll_code }} onSaved={saved} small /></div>}</td>
+                  <td className="wrap"><EngineState e={a} compact />{(['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault) && <><br /><small className="muted">{['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault}</small></>}</td>
                   <td className="num hide-sm">{a.hours_since_overhaul != null ? `${num(a.hours_since_overhaul)} h` : '—'}</td>
                   <td className="hide-sm small nowrap">{date(a.last_overhaul_on)}</td>
                 </>}

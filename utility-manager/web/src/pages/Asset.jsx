@@ -6,7 +6,6 @@ import { Link, useParams } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { AssetForm } from '../components/forms.jsx';
-import { LogFaultButton } from '../components/LogFault.jsx';
 import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Fault, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
@@ -36,7 +35,6 @@ export default function Asset() {
         crumbs={[{ to: `/${a.service}${isEngine ? '/engines' : ''}`, label: isEngine ? 'Engines' : SERVICES[a.service]?.label || 'Assets' }, { to: `/islands/${a.island_id}`, label: `${a.atoll_code} · ${a.island_name}` }, { label: `${assetLabel(a)}` }]}
         actions={manage && <>
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
-          {isEngine && <LogFaultButton asset={a} onSaved={state.reload} />}
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
           {isEngine && <button className="btn" onClick={() => setModal('event')}>Add maintenance record</button>}
           {!a.work.some((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status))
@@ -317,10 +315,10 @@ function MarkFixed({ asset: a, reload, fault, all = false }) {
 }
 
 // Every fault logged on this genset, newest first, and how each was cleared;
-// a fault can be logged from here too.
+// faults are logged with the monthly update or on Telegram.
 function FaultLog({ log, asset, manage, reload }) {
   if (!log?.length && !manage) return null;
-  return <Card title={`Fault log (${log?.length || 0})`} actions={manage && <LogFaultButton asset={asset} onSaved={reload} small />}>
+  return <Card title={`Fault log (${log?.length || 0})`}>
     {!log?.length ? <p className="muted small">No faults logged.</p> :
     <div className="scroll-y"><table>
       <thead><tr><th>Logged</th><th>Fault</th><th>Cleared</th></tr></thead>
