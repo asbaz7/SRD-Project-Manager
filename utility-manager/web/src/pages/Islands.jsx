@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import AtollMap from '../components/AtollMap.jsx';
-import { num } from '../format.js';
+import { FACILITY_KINDS, SERVICES, num } from '../format.js';
+import { Icon } from '../components/icons.jsx';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 // The islands page is the map: every island of the department where it is,
@@ -17,7 +19,7 @@ export default function Islands() {
   const state = useApi('/islands');
 
   return <>
-    <PageHead title="Islands" subtitle="Every island of the department. Drag to move, scroll or pinch to zoom; tap an atoll to zoom in on it, an island to open it." icon="island" actions={can('admin') && <>
+    <PageHead title="Islands" subtitle="Every island of the department. Drag to move, scroll or pinch to zoom; tap an atoll to zoom in on it, an island to see its details." icon="island" actions={can('admin') && <>
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />
@@ -28,7 +30,9 @@ export default function Islands() {
       const focused = filters.atoll && islands.filter((i) => i.atoll_code === filters.atoll);
       const name = (atolls.data || []).find((a) => a.code === filters.atoll)?.name;
       return <section className="glass islands-map" aria-label="Map of the islands">
-        <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter('atoll', code || '')} />
+        <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter({ atoll: code || '', island: '' })}
+          selected={filters.island || null} onIsland={(i) => setFilter('island', i?.id || '')} />
+        {filters.island && <IslandPanel key={filters.island} id={filters.island} onClose={() => setFilter('island', '')} />}
         {/* The total, floating over the map as on the TV board. */}
         <div className="glass am-total" aria-live="polite">
           {focused ? <>
@@ -43,6 +47,42 @@ export default function Islands() {
       </section>;
     }}</Async>
   </>;
+}
+
+// The chosen island's details, over the map: where it is and what it has.
+// Its full page (gensets, plants, work) is one tap further.
+function IslandPanel({ id, onClose }) {
+  const navigate = useNavigate();
+  const state = useApi(`/islands/${id}`);
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+  const open = () => (document.startViewTransition ? document.startViewTransition(() => navigate(`/islands/${id}`)) : navigate(`/islands/${id}`));
+  return <aside className="glass island-panel" aria-label="Island details">
+    <Async state={state}>{(i) => {
+      const plants = (i.facilities || []).filter((f) => f.active);
+      return <>
+        <header>
+          <div><small>{i.atoll_code} · {i.atoll_name}</small><h2>{i.name}</h2></div>
+          <button type="button" className="btn ghost small" onClick={onClose} aria-label="Close"><Icon name="close" size={16} /></button>
+        </header>
+        <dl className="ip-facts">
+          {i.population > 0 && <><dt>Population</dt><dd>{num(i.population)}</dd></>}
+          {i.lat != null && <><dt>Location</dt><dd>{Number(i.lat).toFixed(3)}°N, {Number(i.lon).toFixed(3)}°E</dd></>}
+        </dl>
+        <h3>Services</h3>
+        {i.services.length ? <ul className="ip-svcs">{i.services.map((sv) => <li key={sv}>
+          <span className={`svc-badge ${sv}`}><Icon name={sv} size={14} /></span>
+          <span><strong>{SERVICES[sv]?.label}</strong>
+            {plants.filter((f) => f.service === sv).map((f) => <small key={f.id}>{f.name} · {FACILITY_KINDS[f.kind] || f.kind}</small>)}</span>
+        </li>)}</ul> : <p className="muted small">No services recorded.</p>}
+        {i.notes && <><h3>Notes</h3><p className="small pre">{i.notes}</p></>}
+        <button type="button" className="btn primary block" onClick={open}>Open island page</button>
+      </>;
+    }}</Async>
+  </aside>;
 }
 
 function AtollForm({ onClose, onSaved }) {
