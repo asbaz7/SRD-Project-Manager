@@ -866,27 +866,33 @@ option { background: #0c2a44; color: var(--text); }
   .am-zoom button { width: 36px; height: 36px; }
 }
 
-/* Islands map: the chosen island's panel, over the map (right; a sheet on phones). */
-.island-panel { position: absolute; top: 14px; right: 14px; bottom: 14px; width: min(340px, 38%); z-index: 2; border-radius: 18px; padding: 16px 18px;
-  display: flex; flex-direction: column; gap: 12px; overflow-y: auto; background: linear-gradient(160deg, rgb(16 44 70 / .97), rgb(8 28 48 / .96)); }
-.island-panel header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.island-panel header small { color: var(--muted); font-weight: 600; }
-.island-panel h2 { font-size: 1.5rem; font-weight: 750; letter-spacing: -.01em; }
-.island-panel h3 { font-size: .78rem; font-weight: 650; color: var(--muted); text-transform: none; margin: 4px 0 0; }
-.ip-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: .9rem; }
-.ip-facts dt { color: var(--muted); } .ip-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
-.ip-svcs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.ip-svcs li { display: flex; gap: 10px; align-items: flex-start; }
-.ip-svcs li > span:last-child { display: grid; gap: 2px; }
-.ip-svcs small { color: var(--text-2); }
-.island-panel .btn.block { margin-top: auto; }
+/* Islands map: the chosen island in full, in a panel beside the map (as the TV board's detail view). */
+.island-panel { position: absolute; top: 14px; right: 14px; bottom: 14px; width: min(max(560px, 58%), calc(100% - 300px)); z-index: 2; border-radius: 18px;
+  padding: 18px 20px; overflow-y: auto; background: linear-gradient(160deg, rgb(16 44 70 / .97), rgb(8 28 48 / .96)); }
+.island-panel .stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.island-panel .card { background: rgb(255 255 255 / .05); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ip-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.ip-head h2 { font-size: 1.9rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.1; margin-top: 4px; }
+.ip-atoll { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0; color: var(--link); font: inherit; font-weight: 650; cursor: pointer; }
+.ip-atoll .icon { vertical-align: 0; }
+.ip-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 @media (prefers-reduced-motion: no-preference) {
-  .island-panel { animation: ip-in .32s var(--ease) both; }
-  @keyframes ip-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  .island-panel { animation: ip-in .36s var(--ease) both; }
+  @keyframes ip-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 }
-@media (max-width: 860px) {
-  .island-panel { top: auto; left: 10px; right: 10px; bottom: 10px; width: auto; max-height: 52%; }
-  @media (prefers-reduced-motion: no-preference) { @keyframes ip-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } } }
+@media (max-width: 900px) {
+  .island-panel { top: 14%; left: 10px; right: 10px; bottom: 10px; width: auto; padding: 14px; }
+  .ip-head h2 { font-size: 1.5rem; }
+  @media (prefers-reduced-motion: no-preference) { @keyframes ip-in { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } } }
 }
-.am-canvas.with-panel .am-zoom { right: calc(min(340px, 38%) + 28px); }
-@media (max-width: 860px) { .am-canvas.with-panel .am-zoom { right: 10px; } }
+.am-canvas.with-panel .am-zoom { right: calc(min(max(560px, 58%), calc(100% - 300px)) + 28px); }
+@media (max-width: 900px) { .am-canvas.with-panel .am-zoom { display: none; } }
+/* Figures inside the island panel: compact tiles, value first, with the board's coloured left edge. */
+.island-panel .stats { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.island-panel .stat { flex-direction: column-reverse; justify-content: flex-end; padding: 9px 12px; border-radius: 12px; background: rgb(255 255 255 / .06);
+  border: 1px solid var(--hairline); box-shadow: inset 3px 0 0 var(--t-prog); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.island-panel .stat strong { font-size: 1.35rem; line-height: 1.15; }
+.island-panel .stat span { font-size: .76rem; }
+.island-panel .stat.alert { box-shadow: inset 3px 0 0 var(--t-over); border-color: color-mix(in srgb, var(--t-over) 45%, transparent); }
+.island-panel .stat.warn { box-shadow: inset 3px 0 0 var(--t-hold); }
+@media (max-width: 900px) { .islands-map.with-island .am-total { display: none; } }

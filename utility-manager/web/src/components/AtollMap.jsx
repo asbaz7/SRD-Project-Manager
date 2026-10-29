@@ -24,6 +24,8 @@ function smooth(pts) {
   return `${d}Z`;
 }
 
+// The island panel's width beside the map (as .island-panel in the CSS).
+const panelW = (w) => (w < 900 ? w - 28 : Math.min(Math.max(560, w * 0.58), w - 300));
 const textW = (s, size, italic) => s.length * size * (italic ? 0.56 : 0.6);
 const overlaps = (b, list) => list.some((p) => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0);
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
@@ -166,8 +168,9 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
     const x0 = from.dx + ox * from.z, y0 = from.dy - oy * from.z;      // where it sits now, from the centre
     // Centred in the part of the map the panel leaves free (left of it on
     // desktop, above it on phones).
-    const small = size.w < 520;
-    const cxOff = small ? 0 : -Math.min(200, size.w * 0.2), cyOff = small ? -size.h * 0.22 : 0;
+    // Below 900px the panel is a sheet over the lower map: the island goes above it.
+    const sheet = size.w < 900;
+    const cxOff = sheet ? 0 : -panelW(size.w) / 2, cyOff = sheet ? -size.h * 0.42 : 0;
     const zt = Math.min(12, Math.max(from.z * 2, 3));
     setGoing(i.id);
     cancelAnimationFrame(fly.current);
@@ -194,7 +197,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
     const placed = [{ x0: 0, y0: 0, x1: w < 520 ? 210 : 236, y1: w < 520 ? 66 : 92 },
       w < 520 ? { x0: w - 54, y0: 0, x1: w, y1: 130 } : { x0: w - 64, y0: h - 150, x1: w, y1: h }];
     // An island's panel takes the right side (the bottom on phones).
-    if (selected) placed.push(w < 520 ? { x0: 0, y0: h * 0.48, x1: w, y1: h } : { x0: w - Math.min(340, w * 0.38) - 28, y0: 0, x1: w, y1: h });
+    if (selected) placed.push(w < 900 ? { x0: 0, y0: h * 0.14, x1: w, y1: h } : { x0: w - panelW(w) - 14, y0: 0, x1: w, y1: h });
     const rimPts = [];
     const shapes = atolls.filter((a) => ATOLL_SHAPES[a.code]).map((a) => {
       const rings = ATOLL_SHAPES[a.code].map((ring) => ring.map(([lon, lat]) => [gx(lon), gy(lat)]));

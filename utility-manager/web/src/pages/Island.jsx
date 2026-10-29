@@ -1,17 +1,26 @@
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
-import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
+import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, Service, Stat, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { GensetUpdateForm } from './GensetUpdates.jsx';
 import { useApi, useRowLink } from '../hooks.js';
+import { Icon } from '../components/icons.jsx';
 
+// There is no separate island page: an island opens beside the map on the
+// Islands page. Old links (/islands/:id) land there with the island open.
 export default function Island() {
   const { id } = useParams();
-  // Opened from a service page (Water, Sewerage...): only that service's plants and work.
   const [params] = useSearchParams();
-  const only = SERVICES[params.get('service')] ? params.get('service') : null;
+  const svc = SERVICES[params.get('service')] ? `&service=${params.get('service')}` : '';
+  return <Navigate replace to={`/islands?island=${id}${svc}`} />;
+}
+
+// One island in full, in the panel beside the map: what is running, ongoing
+// work, every plant with its assets. only: one service's plants and work
+// (opened from that service's page). onAtoll: back to the island's atoll.
+export function IslandDetail({ id, only, onClose, onAtoll, onShowAll }) {
   const state = useApi(`/islands/${id}`);
   const rowLink = useRowLink();
   const { can, allowed } = useAuth();
@@ -23,14 +32,19 @@ export default function Island() {
     const facilities = island.facilities.filter((f) => !only || f.service === only);
     const openWork = island.open_work.filter((w) => !only || w.service === only);
     return <>
-      <PageHead title={island.name}
-        crumbs={[{ to: '/islands', label: 'Islands' }, { to: `/islands?atoll_id=${island.atoll_id}`, label: `${island.atoll_code} · ${island.atoll_name}` }, { label: island.name }]}
-        actions={<>
-          {allowed('incidents') && <Link className="btn" to={`/interruptions/new?island_id=${island.id}`}>Report interruption</Link>}
-          {island.can_edit && island.technical && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
-          {manage && island.technical && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
-        </>} />
-      {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <Link to={`/islands/${island.id}`}>Show everything on {island.name}</Link></p>}
+      <header className="ip-head">
+        <div>
+          <button type="button" className="ip-atoll" onClick={() => onAtoll(island.atoll_code)}><Icon name="back" size={14} /> {island.atoll_name} atoll</button>
+          <h2>{island.name}</h2>
+        </div>
+        <button type="button" className="btn ghost" onClick={onClose}>Close</button>
+      </header>
+      <div className="ip-actions">
+        {allowed('incidents') && <Link className="btn small" to={`/interruptions/new?island_id=${island.id}`}>Report interruption</Link>}
+        {island.can_edit && island.technical && <Link className="btn small" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
+        {manage && island.technical && <button className="btn small" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
+      </div>
+      {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <button type="button" className="link" onClick={onShowAll}>Show everything on {island.name}</button></p>}
       <div className="stats">
         {island.technical && (!only || only === 'electricity') && <>
           <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} sub={island.disconnected_count > 0 ? `${island.disconnected_count} disconnected` : ''} />
@@ -111,7 +125,7 @@ export default function Island() {
               </tr>)}</tbody>
             </table>}
           {f.moved_away?.length > 0 && <p className="small">{f.moved_away.map((m, i) => <span key={m.id}>{i > 0 && <br />}
-            🚚 {ASSET_KINDS[m.kind]} {m.from_tag} moved to <Link to={`/assets/${m.asset_id}`}>{m.to_atoll}. {m.to_island} · {ASSET_KINDS[m.kind]} {m.to_tag}</Link>
+            {ASSET_KINDS[m.kind]} {m.from_tag} moved to <Link to={`/assets/${m.asset_id}`}>{m.to_atoll}. {m.to_island} · {ASSET_KINDS[m.kind]} {m.to_tag}</Link>
             <span className="muted"> on {date(m.moved_on)}{m.source === 'merge' ? ' (records merged)' : ''}</span></span>)}</p>}
           {retired.length > 0 && <details className="small">
             <summary className="muted">Retired or not in use ({retired.length})</summary>
