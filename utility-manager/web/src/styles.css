@@ -817,8 +817,13 @@ option { background: #0c2a44; color: var(--text); }
 .islands-map { position: relative; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 118px); min-height: 560px;
   background: radial-gradient(90% 80% at 50% 40%, rgb(14 44 70 / .55), rgb(4 16 30 / .55)); }
 .atoll-map { display: flex; flex-direction: column; height: 100%; }
-.am-canvas { flex: 1; min-height: 0; position: relative; }
-.am-canvas svg { display: block; position: absolute; inset: 0; }
+.am-canvas { flex: 1; min-height: 0; position: relative; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.am-canvas:active { cursor: grabbing; }
+.am-zoom { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; padding: 0; z-index: 1; }
+.am-zoom button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.am-zoom button:hover { background: rgb(255 255 255 / .1); }
+.am-zoom button + button { border-top: 1px solid var(--hairline); }
+.am-canvas > svg { display: block; position: absolute; inset: 0; }
 .am-atoll, .am-label { cursor: pointer; }
 .am-glow { fill: none; stroke: rgb(140 185 230 / .28); stroke-width: 7; }
 .am-atoll.on .am-glow { stroke: rgb(170 210 245 / .5); }
@@ -839,5 +844,7 @@ option { background: #0c2a44; color: var(--text); }
 .am-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .am-legend .btn { margin-left: auto; }
 @media (max-width: 1100px) {
-  .islands-map { height: calc(100vh - 210px); min-height: 460px; }
+  .islands-map { height: calc(100dvh - 300px); min-height: 380px; }
+  .am-zoom { top: 10px; right: 10px; bottom: auto; }
+  .am-zoom button { width: 36px; height: 36px; }
 }

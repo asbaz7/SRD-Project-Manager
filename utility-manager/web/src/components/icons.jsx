@@ -30,6 +30,8 @@ const paths = {
   alert: 'M12 3 2.5 20h19L12 3Zm0 6.5v4.5m0 3v.01',
   clock: 'M12 7.5V12l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
   chevron: 'M6 9l6 6 6-6',
+  plus: 'M12 5v14M5 12h14',
+  minus: 'M5 12h14',
 };
 
 // Status marks: small drawn shapes beside a state's word, so state never

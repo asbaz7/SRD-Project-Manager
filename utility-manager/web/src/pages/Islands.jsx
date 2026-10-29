@@ -16,7 +16,7 @@ export default function Islands() {
   const state = useApi('/islands');
 
   return <>
-    <PageHead title="Islands" subtitle="Every island of the department. Tap an atoll to zoom in, an island to open it." icon="island" actions={can('admin') && <>
+    <PageHead title="Islands" subtitle="Every island of the department. Drag to move, scroll or pinch to zoom; tap an atoll to zoom in on it, an island to open it." icon="island" actions={can('admin') && <>
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />

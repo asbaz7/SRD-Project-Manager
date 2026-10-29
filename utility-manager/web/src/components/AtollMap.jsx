@@ -2,8 +2,10 @@
 // geography (one scale both ways), reef outlines with a lagoon fill and a
 // soft glow, and every island as a named dot. Names keep clear of rims, dots and each other, with a
 // leader line where they have to sit further out. Choosing an atoll eases
-// the map onto it.
+// the map onto it. Drag to move, scroll or pinch to zoom, or use the
+// buttons; the reset button (or choosing an atoll) frames the map again.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Icon } from './icons.jsx';
 import { useNavigate } from 'react-router-dom';
 import { ATOLL_SHAPES, ATOLL_SPLIT } from '../atollShapes.js';
 
@@ -76,11 +78,67 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     return () => cancelAnimationFrame(raf);
   }, [target]);
 
+  // The person's own pan and zoom, on top of the framed view. Choosing an
+  // atoll (or the reset button) starts it afresh.
+  const [pz, setPz] = useState({ z: 1, dx: 0, dy: 0 });
+  useEffect(() => { setPz({ z: 1, dx: 0, dy: 0 }); }, [focus]);
+  const zoomAt = (f, sx, sy) => setPz((p) => {
+    const z = Math.min(12, Math.max(0.6, p.z * f)), q = z / p.z;
+    const cx = sx ?? size.w / 2, cy = sy ?? size.h / 2;
+    return { z, dx: cx - size.w / 2 - (cx - size.w / 2 - p.dx) * q, dy: cy - size.h / 2 - (cy - size.h / 2 - p.dy) * q };
+  });
+  // Wheel zoom (a listener of our own: React's is passive and can't stop the page scrolling).
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const b = el.getBoundingClientRect();
+      zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0022)), e.clientX - b.left, e.clientY - b.top);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  });
+  // Drag to move; two fingers to pinch. A drag is never taken for a tap.
+  const drag = useRef({ pts: new Map(), moved: false });
+  const onPointerDown = (e) => {
+    const d = drag.current;
+    if (d.pts.size === 0) { d.moved = false; d.start = { x: e.clientX, y: e.clientY }; }
+    d.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  };
+  const onPointerMove = (e) => {
+    const d = drag.current;
+    const prev = d.pts.get(e.pointerId);
+    if (!prev) return;
+    const next = { x: e.clientX, y: e.clientY };
+    if (d.pts.size === 1) {
+      const mx = next.x - prev.x, my = next.y - prev.y;
+      if (Math.abs(mx) + Math.abs(my) > 0) {
+        if (!d.moved && Math.hypot(next.x - d.start.x, next.y - d.start.y) < 4) return;
+        d.moved = true;
+        setPz((p) => ({ ...p, dx: p.dx + mx, dy: p.dy + my }));
+      }
+    } else if (d.pts.size === 2) {
+      const [a, b] = [...d.pts.entries()].map(([id, pt]) => (id === e.pointerId ? next : pt));
+      const [a0, b0] = [...d.pts.values()];
+      const r0 = Math.hypot(b0.x - a0.x, b0.y - a0.y), r1 = Math.hypot(b.x - a.x, b.y - a.y);
+      if (r0 > 0) {
+        const rect = box.current.getBoundingClientRect();
+        d.moved = true;
+        zoomAt(r1 / r0, (a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top);
+      }
+    }
+    d.pts.set(e.pointerId, next);
+  };
+  const onPointerUp = (e) => { drag.current.pts.delete(e.pointerId); };
+  const tapped = () => !drag.current.moved;
+
   const { w, h } = size;
   let svg = null;
   if (view && w > 50) {
-    const gx = (lon) => w / 2 + (lon - view.cx) * view.k;
-    const gy = (lat) => h / 2 - (lat - view.cy) * view.k;
+    const k = view.k * pz.z;
+    const gx = (lon) => w / 2 + pz.dx + (lon - view.cx) * k;
+    const gy = (lat) => h / 2 + pz.dy - (lat - view.cy) * k;
     const placed = [];
     const rimPts = [];
     const shapes = atolls.filter((a) => ATOLL_SHAPES[a.code]).map((a) => {
@@ -199,7 +257,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         const d = smooth(s.rings[0]);
         const extra = s.rings.slice(1).map(smooth).join(' ');
         return <g key={s.a.code} className={`am-atoll${on ? ' on' : ''}`} opacity={dimA(s.a.code) ? 0.32 : 1}
-          onClick={(e) => { e.stopPropagation(); onAtoll(on ? null : s.a.code); }}>
+          onClick={(e) => { e.stopPropagation(); if (tapped()) onAtoll(on ? null : s.a.code); }}>
           <g clipPath={s.split ? `url(#am-clip-${s.a.code})` : undefined}>
             <path d={d} className="am-glow" filter="url(#am-glow)" />
             <path d={d} className="am-fill" fill={on ? 'url(#am-lagoon-on)' : 'url(#am-lagoon)'} />
@@ -221,7 +279,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
       {labels.map((l) => {
         const left = l.anchor === 'start';
         return <g key={l.s.a.code} className="am-label" opacity={dimA(l.s.a.code) ? 0.4 : 1}
-          onClick={(e) => { e.stopPropagation(); onAtoll(focus === l.s.a.code ? null : l.s.a.code); }}>
+          onClick={(e) => { e.stopPropagation(); if (tapped()) onAtoll(focus === l.s.a.code ? null : l.s.a.code); }}>
           <text x={l.x} y={l.y} textAnchor={l.anchor} className="am-code"><tspan>{l.s.a.code}</tspan>{!small && <tspan className="am-name" dx="8">{l.s.a.name}</tspan>}</text>
           {!small && <text x={l.x} y={l.y + 21} textAnchor={l.anchor} className="am-sub">
             {l.sub}
@@ -233,7 +291,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         const dim = dimA(m.i.atoll_code);
         const label = `${m.i.atoll_code}. ${m.i.name}`;
         return <g key={m.i.id} className="am-island" opacity={dim ? 0.3 : 1} role="link"
-          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); open(m.i); }} onKeyDown={(e) => { if (e.key === 'Enter') open(m.i); }}>
+          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); if (tapped()) open(m.i); }} onKeyDown={(e) => { if (e.key === 'Enter') open(m.i); }}>
           <title>{label}</title>
           <circle cx={m.x} cy={m.y} r={rad(m)} className="am-dot" />
           <circle cx={m.x} cy={m.y} r={14} fill="transparent" />
@@ -245,7 +303,15 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
   }
 
   return <div className="atoll-map">
-    <div className="am-canvas" ref={box} onClick={() => focus && onAtoll(null)}>{svg}</div>
+    <div className={`am-canvas${pz.z !== 1 || pz.dx || pz.dy ? ' moved' : ''}`} ref={box} onClick={() => focus && tapped() && onAtoll(null)}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onPointerLeave={onPointerUp}>
+      {svg}
+      <div className="am-zoom glass" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+        <button type="button" onClick={() => zoomAt(1.5)} aria-label="Zoom in"><Icon name="plus" size={18} /></button>
+        <button type="button" onClick={() => zoomAt(1 / 1.5)} aria-label="Zoom out"><Icon name="minus" size={18} /></button>
+        <button type="button" onClick={() => setPz({ z: 1, dx: 0, dy: 0 })} aria-label="Show the whole map"><Icon name="home" size={18} /></button>
+      </div>
+    </div>
     {focus && <div className="am-legend small">
       <span>{atolls.find((a) => a.code === focus)?.name || focus}</span>
       <button type="button" className="btn small ghost" onClick={() => onAtoll(null)}>All atolls</button>
