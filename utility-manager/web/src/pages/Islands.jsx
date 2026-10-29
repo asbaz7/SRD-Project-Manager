@@ -33,12 +33,12 @@ export default function Islands() {
         <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter({ atoll: code || '', island: '' })}
           selected={filters.island || null} onIsland={(i) => setFilter('island', i?.id || '')} />
         {filters.island && <aside className="glass island-panel" aria-label="Island">
-          <IslandDetail key={filters.island} id={filters.island} only={filters.service || null}
+          <IslandDetail key={filters.island} id={filters.island} only={filters.service || null} islands={islands}
             onClose={() => setFilter({ island: '', service: '' })} onAtoll={(code) => setFilter({ island: '', service: '', atoll: code })}
             onShowAll={() => setFilter('service', '')} />
         </aside>}
         {/* The total, floating over the map as on the TV board. */}
-        <div className="glass am-total" aria-live="polite">
+        {!filters.island && <div className="glass am-total" aria-live="polite">
           {focused ? <>
             <strong>{num(focused.length)}</strong>
             <span>island{focused.length === 1 ? '' : 's'} in {name || filters.atoll}</span>
@@ -47,7 +47,7 @@ export default function Islands() {
             <strong>{num(islands.length)}</strong>
             <span>island{islands.length === 1 ? '' : 's'} in {num(atollCount)} atoll{atollCount === 1 ? '' : 's'}</span>
           </>}
-        </div>
+        </div>}
       </section>;
     }}</Async>
   </>;

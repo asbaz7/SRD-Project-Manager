@@ -194,7 +194,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
     const gy = (lat) => h / 2 + pz.dy - (lat - view.cy) * k;
     // The islands card floats top left and the zoom buttons at the side
     // (top right on phones, bottom right otherwise): labels keep clear.
-    const placed = [{ x0: 0, y0: 0, x1: w < 520 ? 210 : 236, y1: w < 520 ? 66 : 92 },
+    const placed = [selected ? { x0: 0, y0: 0, x1: 0, y1: 0 } : { x0: 0, y0: 0, x1: w < 520 ? 210 : 236, y1: w < 520 ? 66 : 92 },
       w < 520 ? { x0: w - 54, y0: 0, x1: w, y1: 130 } : { x0: w - 64, y0: h - 150, x1: w, y1: h }];
     // An island's panel takes the right side (the bottom on phones).
     if (selected) placed.push(w < 900 ? { x0: 0, y0: h * 0.14, x1: w, y1: h } : { x0: w - panelW(w) - 14, y0: 0, x1: w, y1: h });

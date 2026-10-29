@@ -896,3 +896,6 @@ option { background: #0c2a44; color: var(--text); }
 .island-panel .stat.alert { box-shadow: inset 3px 0 0 var(--t-over); border-color: color-mix(in srgb, var(--t-over) 45%, transparent); }
 .island-panel .stat.warn { box-shadow: inset 3px 0 0 var(--t-hold); }
 @media (max-width: 900px) { .islands-map.with-island .am-total { display: none; } }
+.ip-count { margin: 4px 0 0; color: var(--text-2); font-size: .9rem; }
+.ip-count strong { color: var(--text); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.ip-count span { color: var(--muted); }

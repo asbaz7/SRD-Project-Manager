@@ -20,7 +20,7 @@ export default function Island() {
 // One island in full, in the panel beside the map: what is running, ongoing
 // work, every plant with its assets. only: one service's plants and work
 // (opened from that service's page). onAtoll: back to the island's atoll.
-export function IslandDetail({ id, only, onClose, onAtoll, onShowAll }) {
+export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = [] }) {
   const state = useApi(`/islands/${id}`);
   const rowLink = useRowLink();
   const { can, allowed } = useAuth();
@@ -36,6 +36,13 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll }) {
         <div>
           <button type="button" className="ip-atoll" onClick={() => onAtoll(island.atoll_code)}><Icon name="back" size={14} /> {island.atoll_name} atoll</button>
           <h2>{island.name}</h2>
+          {islands.length > 0 && (() => {
+            // The islands count, merged into the island's card.
+            const here = islands.filter((x) => x.atoll_code === island.atoll_code).length;
+            const atolls = new Set(islands.map((x) => x.atoll_code)).size;
+            return <p className="ip-count"><strong>{num(here)}</strong> island{here === 1 ? '' : 's'} in {island.atoll_name}
+              <span> · {num(islands.length)} in {num(atolls)} atolls</span></p>;
+          })()}
         </div>
         <button type="button" className="btn ghost" onClick={onClose}>Close</button>
       </header>
