@@ -828,33 +828,24 @@ option { background: #0c2a44; color: var(--text); }
 .am-cut { stroke: rgb(175 205 232 / .4); stroke-width: 1.2; stroke-dasharray: 5 5; pointer-events: none; }
 .am-code { font-size: 19px; font-weight: 800; fill: #fff; paint-order: stroke; stroke: rgb(4 18 34 / .75); stroke-width: 4px; stroke-linejoin: round; }
 .am-code .am-name { font-size: 18px; font-weight: 400; font-style: italic; fill: rgb(225 236 248 / .86); }
-.am-ldot.ok { fill: var(--t-done); } .am-ldot.hold { fill: var(--t-hold); } .am-ldot.over { fill: var(--t-over); }
 .am-sub { font-size: 13.5px; font-weight: 500; fill: rgb(222 233 245 / .84); paint-order: stroke; stroke: rgb(4 18 34 / .7); stroke-width: 3px; }
-.am-sub .hold { fill: #f3c66b; } .am-sub .over { fill: #ff8c8c; }
 .am-island { cursor: pointer; outline: none; }
-.am-island:focus-visible .am-halo { stroke: #fff; stroke-width: 2.5; }
-.am-dot { fill: rgb(205 216 228 / .55); }
+.am-dot { fill: rgb(214 226 240 / .78); stroke: rgb(4 18 34 / .6); stroke-width: 1; }
+.am-island:hover .am-dot, .am-island:focus-visible .am-dot { fill: #fff; }
+.am-island:focus-visible .am-dot { stroke: var(--link); stroke-width: 2; }
 .am-dot.off { fill: var(--t-over); }
-.am-mark { stroke: #0f141b; stroke-width: 3; fill: var(--t-prog); }
-.am-island.t-hold .am-mark { fill: var(--t-hold); }
-.am-island.t-over .am-mark { fill: var(--t-over); }
-.am-halo { fill: none; stroke: rgb(232 238 245 / .55); stroke-width: 1.2; }
-.am-island:hover .am-halo { stroke: #fff; }
 .am-off { fill: none; stroke: var(--t-over); stroke-width: 2.4; }
-.am-badge { font-size: 11px; font-weight: 800; fill: #fff; pointer-events: none; }
 .am-iname { font-weight: 650; fill: #eaf3ff; paint-order: stroke; stroke: rgb(4 18 34 / .85); stroke-width: 3.5px; stroke-linejoin: round; pointer-events: none; }
 .am-leader { stroke: rgb(232 238 245 / .4); stroke-width: 1; pointer-events: none; }
-.am-iname.quiet { font-weight: 550; fill: rgb(222 233 245 / .82); }
 @media (prefers-reduced-motion: no-preference) {
   .am-off.pulse { transform-box: fill-box; transform-origin: center; animation: am-ring 1.9s ease-out infinite; }
   @keyframes am-ring { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
 }
 .am-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 16px; border-top: 1px solid var(--hairline); color: var(--text-2); }
 .am-legend span { display: inline-flex; align-items: center; gap: 7px; }
-.am-legend i { width: 11px; height: 11px; border-radius: 50%; background: var(--t-prog); }
-.am-legend i.t-hold { background: var(--t-hold); } .am-legend i.t-over { background: var(--t-over); }
+.am-legend i { width: 9px; height: 9px; border-radius: 50%; }
 .am-legend i.off { background: transparent; box-shadow: inset 0 0 0 2px var(--t-over); }
-.am-legend i.quiet { width: 6px; height: 6px; background: rgb(205 216 228 / .62); }
+.am-legend i.quiet { background: rgb(214 226 240 / .78); }
 .am-legend .btn { margin-left: auto; }
 @media (max-width: 1100px) {
   .islands-map { height: calc(100vh - 210px); min-height: 460px; }

@@ -6,7 +6,7 @@ import AtollMap from '../components/AtollMap.jsx';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 // The islands page is the map: every island of the department where it is,
-// named, with the state of its work. Tap an atoll to ease onto it, an
+// named. Tap an atoll to ease onto it, an
 // island to open it. Gensets, plants and work have their own pages.
 export default function Islands() {
   const { can } = useAuth();
@@ -16,7 +16,7 @@ export default function Islands() {
   const state = useApi('/islands');
 
   return <>
-    <PageHead title="Islands" subtitle="Every island of the department, with the state of its work. Tap an atoll to zoom in, an island to open it." icon="island" actions={can('admin') && <>
+    <PageHead title="Islands" subtitle="Every island of the department. Tap an atoll to zoom in, an island to open it." icon="island" actions={can('admin') && <>
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />

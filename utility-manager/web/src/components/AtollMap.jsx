@@ -1,16 +1,13 @@
 // The department's atolls as a map, drawn as on the TV board: true
 // geography (one scale both ways), reef outlines with a lagoon fill and a
-// soft glow, quiet islands as small dots, and islands with open work as
-// markers in the state of their most pressing job (overdue, on hold, in
-// progress), with the count. An island whose power is off gets a red ring.
-// Labels keep clear of rims, markers and each other, with a leader line when
-// they have to sit further out. Choosing an atoll eases the map onto it.
+// soft glow, and every island as a named dot. An island whose power is off
+// gets a red ring. Names keep clear of rims, dots and each other, with a
+// leader line where they have to sit further out. Choosing an atoll eases
+// the map onto it.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ATOLL_SHAPES, ATOLL_SPLIT } from '../atollShapes.js';
 
-const n = (v) => Number(v || 0);
-export const islandTone = (i) => (n(i.overdue_work) ? 'over' : n(i.held_work) ? 'hold' : n(i.open_work) ? 'prog' : null);
 
 // A closed Catmull-Rom curve through the points, as cubic Béziers.
 function smooth(pts) {
@@ -40,14 +37,6 @@ function fit(codes, islands, w, h, focused) {
   const room = w < 520 ? 44 : Math.min(170, w * 0.24), top = w < 520 ? 22 : 34;
   const k = Math.min((w - room * 2) / Math.max(lon[1] - lon[0], 0.15), (h - top * 2) / Math.max(lat[1] - lat[0], 0.15)) * (focused ? 0.8 : 1);
   return { cx: (lon[0] + lon[1]) / 2, cy: (lat[0] + lat[1]) / 2, k };
-}
-
-// What an atoll's label says under its name, in parts with their tone.
-function summary(list) {
-  const sum = (k) => list.reduce((t, i) => t + n(i[k]), 0);
-  const open = sum('open_work'), hold = sum('held_work'), over = sum('overdue_work'), off = list.filter((i) => i.power_off).length;
-  const parts = [open ? [`${open} open`, ''] : ['No open work', ''], hold && [`${hold} on hold`, 'hold'], over && [`${over} overdue`, 'over'], off && [off > 1 ? `power off on ${off}` : 'power off', 'over']].filter(Boolean);
-  return { parts, tone: off || over ? 'over' : hold ? 'hold' : 'ok' };
 }
 
 export default function AtollMap({ islands, atolls, focus, onAtoll }) {
@@ -117,9 +106,8 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     // Islands: markers first, so labels keep clear of them.
     // Phones: compact, as the board's narrow mode (codes only, smaller marks).
     const small = w < 520;
-    const R = small ? 9 : 11;
-    const marks = placedIslands.map((i) => ({ i, x: gx(i.lon), y: gy(i.lat), tone: islandTone(i), off: !!i.power_off }));
-    const rad = (m) => (m.tone ? R : m.off ? 6 : 4);
+    const marks = placedIslands.map((i) => ({ i, x: gx(i.lon), y: gy(i.lat), off: !!i.power_off }));
+    const rad = (m) => (m.off ? 6 : small ? 3.5 : 4.5);
     for (const m of marks) {
       const e = rad(m) + (m.off ? 6 : 2);
       placed.push({ x0: m.x - e, x1: m.x + e, y0: m.y - e, y1: m.y + e });
@@ -131,8 +119,8 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
       if (!s.outer.length) continue;
       const xs = s.outer.map((p) => p[0]), ys = s.outer.map((p) => p[1]);
       const minX = Math.min(...xs), maxX = Math.max(...xs), midY = (Math.min(...ys) + Math.max(...ys)) / 2;
-      const sm = summary(placedIslands.filter((i) => i.atoll_code === s.a.code));
-      const sub = sm.parts.map((p) => p[0]).join(' · ');
+      const count = placedIslands.filter((i) => i.atoll_code === s.a.code).length;
+      const sub = `${count} island${count === 1 ? '' : 's'}`;
       // Bold capitals run wide: the code's width is estimated generously.
       const head = s.a.code.length * 19 * 0.66 + (small ? 0 : textW(s.a.name, 18, true)) + 22;
       const lw = (small ? head : Math.max(head, textW(sub, 13.5))) + 6, lh = small ? 24 : 42;
@@ -151,7 +139,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
       // Nowhere clear: the side with more room, kept inside the map.
       if (!best) best = w - maxX >= minX ? { anchor: 'start', x: Math.min(maxX + 14, w - lw - 4), y: midY } : { anchor: 'end', x: Math.max(minX - 14, lw + 4), y: midY };
       if (best.b) placed.push(best.b);
-      labels.push({ s, sm, head, ...best });
+      labels.push({ s, sub, head, ...best });
     }
 
     // Island names: for islands with a marker, and every island of the
@@ -159,9 +147,9 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     // with a leader line.
     const names = [];
     const leaders = [];
-    const named = marks.slice().sort((p, q) => (q.tone === 'over') - (p.tone === 'over') || q.off - p.off || n(q.i.open_work) - n(p.i.open_work));
+    const named = marks.slice().sort((p, q) => q.off - p.off);
     for (const m of named) {
-      const fs = small ? (m.tone || m.off ? 10.5 : 9.5) : m.tone || m.off ? 13 : 11.5;
+      const fs = small ? 10 : 12.5;
       const tw = textW(m.i.name, fs) + 4;
       const off = rad(m) + (m.off ? 9 : 5);
       const blockers = [...placed, ...rimPts.filter((p) => p.atoll !== m.i.atoll_code)];
@@ -235,31 +223,25 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         const left = l.anchor === 'start';
         return <g key={l.s.a.code} className="am-label" opacity={dimA(l.s.a.code) ? 0.4 : 1}
           onClick={(e) => { e.stopPropagation(); onAtoll(focus === l.s.a.code ? null : l.s.a.code); }}>
-          <circle cx={left ? l.x + 4 : l.x - l.head + 10} cy={l.y - 6} r="4.2" className={`am-ldot ${l.sm.tone}`} />
-          <text x={left ? l.x + 14 : l.x} y={l.y} textAnchor={l.anchor} className="am-code"><tspan>{l.s.a.code}</tspan>{!small && <tspan className="am-name" dx="8">{l.s.a.name}</tspan>}</text>
+          <text x={l.x} y={l.y} textAnchor={l.anchor} className="am-code"><tspan>{l.s.a.code}</tspan>{!small && <tspan className="am-name" dx="8">{l.s.a.name}</tspan>}</text>
           {!small && <text x={l.x} y={l.y + 21} textAnchor={l.anchor} className="am-sub">
-            {l.sm.parts.map(([t, tone], i) => <tspan key={t} className={tone}>{i ? ` · ${t}` : t}</tspan>)}
+            {l.sub}
           </text>}
         </g>;
       })}
       {leaders.map((ld) => <line key={ld.id} className="am-leader" x1={ld.x1} y1={ld.y1} x2={ld.x2} y2={ld.y2} />)}
-      {marks.sort((p, q) => !!(p.tone || p.off) - !!(q.tone || q.off)).map((m) => {
+      {marks.sort((p, q) => p.off - q.off).map((m) => {
         const dim = dimA(m.i.atoll_code);
-        const said = [n(m.i.open_work) && `${m.i.open_work} open work`, n(m.i.held_work) && `${m.i.held_work} on hold`, n(m.i.overdue_work) && `${m.i.overdue_work} overdue`, m.off && 'power off'].filter(Boolean);
-        const label = `${m.i.atoll_code}. ${m.i.name}: ${said.length ? said.join(', ') : 'no open work'}`;
-        return <g key={m.i.id} className={`am-island${m.tone ? ` t-${m.tone}` : ''}${m.off ? ' off' : ''}`} opacity={dim ? 0.3 : 1} role="link"
+        const label = `${m.i.atoll_code}. ${m.i.name}${m.off ? ': power off' : ''}`;
+        return <g key={m.i.id} className={`am-island${m.off ? ' off' : ''}`} opacity={dim ? 0.3 : 1} role="link"
           tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); open(m.i); }} onKeyDown={(e) => { if (e.key === 'Enter') open(m.i); }}>
           <title>{label}</title>
           {m.off && <><circle cx={m.x} cy={m.y} r={rad(m) + 5} className="am-off" /><circle cx={m.x} cy={m.y} r={rad(m) + 5} className="am-off pulse" /></>}
-          {m.tone ? <>
-            <circle cx={m.x} cy={m.y} r={R} className="am-mark" />
-            <circle cx={m.x} cy={m.y} r={R + 1.6} className="am-halo" />
-            {n(m.i.open_work) > 1 && <text x={m.x} y={m.y} dy=".36em" textAnchor="middle" className="am-badge">{m.i.open_work}</text>}
-          </> : <circle cx={m.x} cy={m.y} r={m.off ? 5 : focus === m.i.atoll_code ? 3.4 : 2.4} className={`am-dot${m.off ? ' off' : ''}`} />}
+          <circle cx={m.x} cy={m.y} r={m.off ? 5 : rad(m)} className={`am-dot${m.off ? ' off' : ''}`} />
           <circle cx={m.x} cy={m.y} r={14} fill="transparent" />
         </g>;
       })}
-      {names.map((t) => <text key={t.m.i.id} x={t.x} y={t.y} textAnchor={t.anchor} className={`am-iname${t.m.tone || t.m.off ? '' : ' quiet'}`} fontSize={t.fs}
+      {names.map((t) => <text key={t.m.i.id} x={t.x} y={t.y} textAnchor={t.anchor} className="am-iname" fontSize={t.fs}
         opacity={dimA(t.m.i.atoll_code) ? 0.3 : 1}>{t.m.i.name}</text>)}
     </svg>;
   }
@@ -267,11 +249,8 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
   return <div className="atoll-map">
     <div className="am-canvas" ref={box} onClick={() => focus && onAtoll(null)}>{svg}</div>
     <div className="am-legend small">
-      <span><i className="t-prog" /> In progress</span>
-      <span><i className="t-hold" /> On hold</span>
-      <span><i className="t-over" /> Overdue</span>
+      <span><i className="quiet" /> Island</span>
       <span><i className="off" /> Power off</span>
-      <span><i className="quiet" /> No open work</span>
       {focus && <button type="button" className="btn small ghost" onClick={() => onAtoll(null)}>All atolls</button>}
     </div>
   </div>;
