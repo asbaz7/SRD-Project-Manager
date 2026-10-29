@@ -4,6 +4,7 @@
 // leader line where they have to sit further out. Choosing an atoll eases
 // the map onto it. Drag to move, scroll or pinch to zoom, or use the
 // buttons; the reset button (or choosing an atoll) frames the map again.
+// Pressing an island flies the map onto it, then fades into its page.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './icons.jsx';
 import { useNavigate } from 'react-router-dom';
@@ -134,6 +135,33 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
   const onPointerUp = (e) => { drag.current.pts.delete(e.pointerId); };
   const tapped = () => !drag.current.moved;
 
+  // Pressing an island: the map flies onto it (zooming in, the island
+  // gliding to the centre, ringed), then its page fades in.
+  const [going, setGoing] = useState(null);
+  const fly = useRef(0);
+  const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const goTo = (i) => {
+    const url = `/islands/${i.id}`;
+    const go = () => (document.startViewTransition && !reduced() ? document.startViewTransition(() => navigate(url)) : navigate(url));
+    if (!view || reduced()) { go(); return; }
+    const from = pz, k0 = view.k;
+    const ox = (i.lon - view.cx) * k0, oy = (i.lat - view.cy) * k0;
+    const x0 = from.dx + ox * from.z, y0 = from.dy - oy * from.z;      // where it sits now, from the centre
+    const zt = Math.min(12, Math.max(from.z * 2.6, 3.5));
+    setGoing(i.id);
+    cancelAnimationFrame(fly.current);
+    const t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / 520), e = ease(p);
+      const z = Math.exp(Math.log(from.z) + (Math.log(zt) - Math.log(from.z)) * e);
+      const x = x0 * (1 - e), y = y0 * (1 - e);                         // glides to the centre
+      setPz({ z, dx: x - ox * z, dy: y + oy * z });
+      if (p < 1) fly.current = requestAnimationFrame(step); else go();
+    };
+    fly.current = requestAnimationFrame(step);
+  };
+  useEffect(() => () => cancelAnimationFrame(fly.current), []);
+
   const { w, h } = size;
   let svg = null;
   if (view && w > 50) {
@@ -245,7 +273,6 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
       if (!done) names.push({ m, x: m.x + off, y: m.y + fs * 0.35, anchor: m.x + off + tw < w - 2 ? 'start' : 'end', fs });
     }
 
-    const open = (i) => navigate(`/islands/${i.id}`);
     const dimA = (code) => focus && focus !== code;
     svg = <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Map of the department's atolls and islands">
       <defs>
@@ -295,10 +322,11 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         const dim = dimA(m.i.atoll_code);
         const label = `${m.i.atoll_code}. ${m.i.name}`;
         return <g key={m.i.id} className="am-island" opacity={dim ? 0.3 : 1} role="link"
-          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); if (tapped()) open(m.i); }} onKeyDown={(e) => { if (e.key === 'Enter') open(m.i); }}>
+          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); if (tapped() && !going) goTo(m.i); }} onKeyDown={(e) => { if (e.key === 'Enter' && !going) goTo(m.i); }}>
           <title>{label}</title>
+          {going === m.i.id && <circle cx={m.x} cy={m.y} r={rad(m) + 7} className="am-going" />}
           <circle cx={m.x} cy={m.y} r={rad(m)} className="am-dot" />
-          <circle cx={m.x} cy={m.y} r={14} fill="transparent" />
+          <circle cx={m.x} cy={m.y} r={small ? 12 : 9} fill="transparent" />
         </g>;
       })}
       {names.map((t) => <text key={t.m.i.id} x={t.x} y={t.y} textAnchor={t.anchor} className="am-iname" fontSize={t.fs}

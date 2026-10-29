@@ -844,6 +844,12 @@ option { background: #0c2a44; color: var(--text); }
 .am-island:hover .am-dot, .am-island:focus-visible .am-dot { fill: #fff; }
 .am-island:focus-visible .am-dot { stroke: var(--link); stroke-width: 2; }
 .am-iname { font-weight: 650; fill: #eaf3ff; paint-order: stroke; stroke: rgb(4 18 34 / .85); stroke-width: 3.5px; stroke-linejoin: round; pointer-events: none; }
+.am-going { fill: none; stroke: #fff; stroke-width: 2; }
+@media (prefers-reduced-motion: no-preference) {
+  .am-going { transform-box: fill-box; transform-origin: center; animation: am-going .52s var(--ease) both; }
+  @keyframes am-going { from { transform: scale(2.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .28s; }
+}
 .am-leader { stroke: rgb(232 238 245 / .4); stroke-width: 1; pointer-events: none; }
 .am-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 16px; border-top: 1px solid var(--hairline); color: var(--text-2); }
 .am-legend span { display: inline-flex; align-items: center; gap: 7px; }
