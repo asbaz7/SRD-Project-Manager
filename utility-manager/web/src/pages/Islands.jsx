@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, Modal, PageHead, Select, Stat } from '../components/ui.jsx';
-import { Icon } from '../components/icons.jsx';
+import { Icon, Mark } from '../components/icons.jsx';
 import { ASSET_STATUS, SERVICES, num, power } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
@@ -72,12 +72,12 @@ function IslandList({ islands, atolls, technical, filters, setFilter }) {
       const down = sum(a.islands, 'down_count');
       return <section key={a.code} className="atoll-group">
         <button type="button" className={`atoll-head${shut ? ' collapsed' : ''}`} aria-expanded={!shut} onClick={() => toggle(a.code)}>
-          <span className="chev" aria-hidden="true">▾</span>
+          <span className="chev" aria-hidden="true"><Icon name="chevron" size={14} /></span>
           <h2>{a.code} · {a.name}</h2>
           <span className="muted small">{a.islands.length} island{a.islands.length === 1 ? '' : 's'}</span>
           {technical && <span className="sum small">
             {sum(a.islands, 'genset_count') > 0 && <span>{num(sum(a.islands, 'running_count'))} of {num(sum(a.islands, 'genset_count'))} gensets running</span>}
-            {down > 0 && <span className="status bad">✕ {num(down)} down</span>}
+            {down > 0 && <span className="status bad"><Mark name="cross" /> {num(down)} down</span>}
             {sum(a.islands, 'installed_kw') > 0 && <strong>{power(sum(a.islands, 'installed_kw'))}</strong>}
           </span>}
         </button>
@@ -91,10 +91,10 @@ function IslandList({ islands, atolls, technical, filters, setFilter }) {
 // the "n of m running" text beside it), and flags for what needs a look.
 function IslandCard({ i, technical }) {
   const flags = [
-    technical && i.down_count > 0 && ['bad', `✕ ${i.down_count} genset${i.down_count === 1 ? '' : 's'} down`],
+    technical && i.down_count > 0 && ['bad', `${i.down_count} genset${i.down_count === 1 ? '' : 's'} down`, 'cross'],
     i.open_incidents > 0 && ['bad', `${i.open_incidents} open interruption${i.open_incidents === 1 ? '' : 's'}`],
     technical && i.licences_expired > 0 && ['bad', `${i.licences_expired === 1 ? 'Licence' : `${i.licences_expired} licences`} expired`],
-    i.open_work > 0 && ['info', `🔧 ${i.open_work} open work`],
+    i.open_work > 0 && ['info', `${i.open_work} open work`, 'work'],
     i.active_projects > 0 && ['', `${i.active_projects} project${i.active_projects === 1 ? '' : 's'}`],
   ].filter(Boolean);
   return <Link to={`/islands/${i.id}`} className={`island-card${technical && needsAttention(i) ? ' alert' : ''}`}>
@@ -108,7 +108,7 @@ function IslandCard({ i, technical }) {
       <span className="kw">{power(Number(i.installed_kw))}</span>
     </div> : <div className="gensets muted small">No gensets recorded</div>)}
     {flags.length > 0 && <div className="flags">
-      {flags.map(([tone, text]) => <span key={text} className={`flag ${tone}`}>{text}</span>)}
+      {flags.map(([tone, text, icon]) => <span key={text} className={`flag ${tone}`}>{icon === 'cross' ? <Mark name="cross" /> : icon ? <Icon name={icon} size={13} /> : null}{text}</span>)}
     </div>}
   </Link>;
 }

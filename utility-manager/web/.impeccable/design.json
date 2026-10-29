@@ -1,0 +1,733 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-29T04:16:39+00:00",
+  "title": "Design System: SCRD Utility Manager",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Board Blue",
+        "canonical": "#4a8fe0",
+        "tonalRamp": [
+          "#000b1f",
+          "#00244c",
+          "#004180",
+          "#1861ae",
+          "#3f84d4",
+          "#62a8fb",
+          "#a4cdff",
+          "#e4f0ff"
+        ]
+      },
+      "link": {
+        "role": "primary",
+        "displayName": "Shallow-Water Link",
+        "canonical": "#9cc8ff",
+        "tonalRamp": [
+          "#000b1f",
+          "#00244d",
+          "#1b4371",
+          "#3b6394",
+          "#5b85b8",
+          "#7da8dd",
+          "#a4ccff",
+          "#e4f0ff"
+        ]
+      },
+      "state-in-progress": {
+        "role": "secondary",
+        "displayName": "Board Blue (in progress)",
+        "canonical": "#4a8fe0",
+        "tonalRamp": [
+          "#000b1f",
+          "#00244c",
+          "#004180",
+          "#1861ae",
+          "#3f84d4",
+          "#62a8fb",
+          "#a4cdff",
+          "#e4f0ff"
+        ]
+      },
+      "state-on-hold": {
+        "role": "secondary",
+        "displayName": "Harbour Amber",
+        "canonical": "#d69a2d",
+        "tonalRamp": [
+          "#130900",
+          "#342100",
+          "#593b00",
+          "#815800",
+          "#ac7700",
+          "#d4982b",
+          "#fbbd56",
+          "#ffeccf"
+        ]
+      },
+      "state-overdue": {
+        "role": "secondary",
+        "displayName": "Coral Alarm",
+        "canonical": "#db5f5f",
+        "tonalRamp": [
+          "#1f0002",
+          "#4d000a",
+          "#800017",
+          "#a82f35",
+          "#cf5455",
+          "#f77877",
+          "#ffb2ae",
+          "#ffe8e7"
+        ]
+      },
+      "state-done": {
+        "role": "secondary",
+        "displayName": "Reef Green",
+        "canonical": "#3ba46e",
+        "tonalRamp": [
+          "#001005",
+          "#002e18",
+          "#00502e",
+          "#007446",
+          "#2d9863",
+          "#56bd85",
+          "#7de2a8",
+          "#c4ffda"
+        ]
+      },
+      "tone-good": {
+        "role": "secondary",
+        "displayName": "Good Text",
+        "canonical": "#6fe3a2",
+        "tonalRamp": [
+          "#001005",
+          "#002e18",
+          "#00502d",
+          "#007445",
+          "#119b5e",
+          "#48bf80",
+          "#71e5a3",
+          "#c4ffda"
+        ]
+      },
+      "tone-warn": {
+        "role": "secondary",
+        "displayName": "Warn Text",
+        "canonical": "#f3c66b",
+        "tonalRamp": [
+          "#120a00",
+          "#322200",
+          "#563d00",
+          "#7d5b00",
+          "#a57b10",
+          "#c99e41",
+          "#efc267",
+          "#ffecc9"
+        ]
+      },
+      "tone-serious": {
+        "role": "secondary",
+        "displayName": "Serious Text",
+        "canonical": "#f0a07c",
+        "tonalRamp": [
+          "#1a0400",
+          "#421500",
+          "#6e2a01",
+          "#924b28",
+          "#b76c49",
+          "#dd8f6b",
+          "#ffb594",
+          "#ffe9e0"
+        ]
+      },
+      "tone-serious-fill": {
+        "role": "secondary",
+        "displayName": "Serious Fill",
+        "canonical": "#d9774f",
+        "tonalRamp": [
+          "#1a0400",
+          "#431400",
+          "#712700",
+          "#9d4116",
+          "#c3633b",
+          "#ea875e",
+          "#ffb598",
+          "#ffe9e1"
+        ]
+      },
+      "tone-bad": {
+        "role": "secondary",
+        "displayName": "Bad Text",
+        "canonical": "#ff8c8c",
+        "tonalRamp": [
+          "#1f0002",
+          "#4d000c",
+          "#7b101f",
+          "#a1383d",
+          "#c85b5d",
+          "#f07e7f",
+          "#ffb2b0",
+          "#ffe8e7"
+        ]
+      },
+      "tone-info": {
+        "role": "secondary",
+        "displayName": "Info Text",
+        "canonical": "#8cc0ff",
+        "tonalRamp": [
+          "#000b1f",
+          "#00254c",
+          "#0f4278",
+          "#32639b",
+          "#5385c0",
+          "#75a8e6",
+          "#a3cdff",
+          "#e4f0ff"
+        ]
+      },
+      "tone-none": {
+        "role": "secondary",
+        "displayName": "No Report",
+        "canonical": "#6b7a90",
+        "tonalRamp": [
+          "#030b1b",
+          "#192538",
+          "#354357",
+          "#546277",
+          "#74839a",
+          "#96a6be",
+          "#bacae3",
+          "#e5efff"
+        ]
+      },
+      "state-neutral": {
+        "role": "secondary",
+        "displayName": "Slate Grey",
+        "canonical": "#7c8ba0",
+        "tonalRamp": [
+          "#030b1a",
+          "#192637",
+          "#364355",
+          "#546276",
+          "#758498",
+          "#97a6bc",
+          "#bacbe1",
+          "#e4f0ff"
+        ]
+      },
+      "service-electricity": {
+        "role": "tertiary",
+        "displayName": "Grid Blue",
+        "canonical": "#6ea5f7",
+        "tonalRamp": [
+          "#000923",
+          "#002254",
+          "#063e87",
+          "#2c60ac",
+          "#4d82d1",
+          "#6fa6f8",
+          "#a8cbff",
+          "#e5efff"
+        ]
+      },
+      "service-water": {
+        "role": "tertiary",
+        "displayName": "Lagoon Teal",
+        "canonical": "#34c3b6",
+        "tonalRamp": [
+          "#000f0d",
+          "#002c28",
+          "#004d47",
+          "#007168",
+          "#00978c",
+          "#2abdb0",
+          "#5ce2d4",
+          "#b7fff6"
+        ]
+      },
+      "service-sewerage": {
+        "role": "tertiary",
+        "displayName": "Outfall Violet",
+        "canonical": "#a98af0",
+        "tonalRamp": [
+          "#100029",
+          "#2f0061",
+          "#4c2885",
+          "#6b4aaa",
+          "#8c6ccf",
+          "#ae90f6",
+          "#cebdff",
+          "#f0ebff"
+        ]
+      },
+      "lagoon-deep": {
+        "role": "neutral",
+        "displayName": "Deep Lagoon",
+        "canonical": "#061628",
+        "tonalRamp": [
+          "#010b1c",
+          "#152639",
+          "#314458",
+          "#506379",
+          "#70849c",
+          "#92a7c0",
+          "#b6cce5",
+          "#e3f0ff"
+        ]
+      },
+      "lagoon-mid": {
+        "role": "neutral",
+        "displayName": "Mid Lagoon",
+        "canonical": "#0a2740",
+        "tonalRamp": [
+          "#000c1c",
+          "#0a2740",
+          "#28445f",
+          "#466481",
+          "#6786a4",
+          "#89a9c8",
+          "#accdee",
+          "#e2f0ff"
+        ]
+      },
+      "lagoon-shallow": {
+        "role": "neutral",
+        "displayName": "Shallow Lagoon",
+        "canonical": "#0f3b57",
+        "tonalRamp": [
+          "#000d19",
+          "#002840",
+          "#1c4663",
+          "#3c6684",
+          "#5d88a8",
+          "#7fabcc",
+          "#a2cff2",
+          "#e0f1ff"
+        ]
+      },
+      "bloom-teal": {
+        "role": "neutral",
+        "displayName": "Teal Bloom",
+        "canonical": "#1c7c8c",
+        "tonalRamp": [
+          "#000e12",
+          "#002b32",
+          "#004b56",
+          "#006e7d",
+          "#3790a0",
+          "#5db4c4",
+          "#82d9ea",
+          "#cff7ff"
+        ]
+      },
+      "bloom-blue": {
+        "role": "neutral",
+        "displayName": "Blue Bloom",
+        "canonical": "#2b4c9b",
+        "tonalRamp": [
+          "#000036",
+          "#031965",
+          "#1c3b88",
+          "#3a5cad",
+          "#597fd3",
+          "#7aa2f9",
+          "#afc9ff",
+          "#e7efff"
+        ]
+      },
+      "bloom-indigo": {
+        "role": "neutral",
+        "displayName": "Indigo Bloom",
+        "canonical": "#3a3d8f",
+        "tonalRamp": [
+          "#070031",
+          "#1b1263",
+          "#333586",
+          "#5056ab",
+          "#6f79d1",
+          "#919cf7",
+          "#bbc5ff",
+          "#eaedff"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Frost Ink",
+        "canonical": "#f2f6fb",
+        "tonalRamp": [
+          "#090b0e",
+          "#222529",
+          "#3f4246",
+          "#5e6266",
+          "#7f8387",
+          "#a2a5aa",
+          "#c6c9ce",
+          "#ebeff4"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Ink",
+        "canonical": "rgb(222 233 245 / .86)",
+        "tonalRamp": [
+          "#050c13",
+          "#1e262f",
+          "#3a434d",
+          "#59626d",
+          "#7a848e",
+          "#9ca6b2",
+          "#c0cad6",
+          "#e5f0fc"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "rgb(222 233 245 / .84)",
+        "tonalRamp": [
+          "#050c13",
+          "#1e262f",
+          "#3a434d",
+          "#59626d",
+          "#7a848e",
+          "#9ca6b2",
+          "#c0cad6",
+          "#e5f0fc"
+        ]
+      },
+      "glass-border": {
+        "role": "neutral",
+        "displayName": "Glass Border",
+        "canonical": "rgb(255 255 255 / .18)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "glass-hover": {
+        "role": "neutral",
+        "displayName": "Glass Hover",
+        "canonical": "rgb(255 255 255 / .1)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "glass-solid": {
+        "role": "neutral",
+        "displayName": "Solid Glass",
+        "canonical": "rgb(16 44 70 / .92)",
+        "tonalRamp": [
+          "#000c1c",
+          "#0a2740",
+          "#284460",
+          "#476481",
+          "#6786a4",
+          "#89a9c9",
+          "#accdee",
+          "#e2f0ff"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgb(255 255 255 / .12)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "track": {
+        "role": "neutral",
+        "displayName": "Track",
+        "canonical": "rgb(255 255 255 / .1)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "field-well": {
+        "role": "neutral",
+        "displayName": "Field Well",
+        "canonical": "rgb(0 10 24 / .35)",
+        "tonalRamp": [
+          "#010c1a",
+          "#152737",
+          "#324455",
+          "#506476",
+          "#718598",
+          "#93a8bc",
+          "#b6cce1",
+          "#e2f0ff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero figure on service tiles; 2.2rem on phones."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles; 1.3rem on phones."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card, section and tile headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All running text; updates clamp to two lines in lists, 75ch max."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase table headers; sidebar group labels at 0.7rem, 0.08em."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Stat numbers, tabular."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lagoon-float",
+        "value": "0 18px 50px rgb(0 8 20 / .35)",
+        "purpose": "Every glass panel."
+      },
+      {
+        "name": "lit-edge",
+        "value": "inset 0 1px 0 rgb(255 255 255 / .3)",
+        "purpose": "Top rim of every glass panel, paired with the float."
+      },
+      {
+        "name": "selection-highlight",
+        "value": "inset 0 1px 0 rgb(255 255 255 / .22)",
+        "purpose": "Active nav link, tab, bottom-bar item and switch, on white 15% glass."
+      },
+      {
+        "name": "action-glow",
+        "value": "0 6px 18px rgb(74 143 224 / .4), inset 0 1px 0 rgb(255 255 255 / .35)",
+        "purpose": "Primary buttons only."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 3px rgb(74 143 224 / .25)",
+        "purpose": "Focused inputs and selects, with an accent border."
+      },
+      {
+        "name": "state-edge",
+        "value": "inset 3px 0 0 <state colour>",
+        "purpose": "Rows carrying a state (work rows)."
+      },
+      {
+        "name": "alert-ring",
+        "value": "inset 0 0 0 1.5px <state fill>, 0 18px 50px rgb(0 8 20 / .35)",
+        "purpose": "Stats needing attention."
+      }
+    ],
+    "glass": {
+      "background": "linear-gradient(160deg, rgb(255 255 255 / .13), rgb(255 255 255 / .05) 60%)",
+      "border": "1px solid rgb(255 255 255 / .18)",
+      "backdropFilter": "blur(22px) saturate(1.35)",
+      "fallback": "rgb(16 44 70 / .92), no blur, when blur is unsupported or prefers-reduced-transparency"
+    },
+    "backdrop": {
+      "value": "22px dot grid (white 4.5%) over three radial blooms (teal 46% 30%, blue 4% 82%, indigo 98% 0%) over radial #0f3b57 > #0a2740 > #061628, fixed attachment"
+    },
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": ".12s ease",
+        "purpose": "Button, stat and card background and lift changes."
+      },
+      {
+        "name": "row-hover",
+        "value": "background-color .15s ease-out",
+        "purpose": "Work row hover."
+      },
+      {
+        "name": "press",
+        "value": "translateY(1px)",
+        "purpose": "Button active state."
+      },
+      {
+        "name": "lift",
+        "value": "translateY(-1px to -2px)",
+        "purpose": "Linked stats, tiles and island cards on hover."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "860px"
+      },
+      {
+        "name": "form-compact",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one coloured action per view, last in the page head (Log work, Post update).",
+      "html": "<button class=\"ds-btn-primary\">Log work</button>",
+      "css": ".ds-btn-primary { font: 600 15px/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; padding: 8px 15px; border-radius: 12px; border: 1px solid transparent; color: #fff; background: linear-gradient(140deg, #5aa2f0, #2f6fc9); box-shadow: 0 6px 18px rgb(74 143 224 / .4), inset 0 1px 0 rgb(255 255 255 / .35); cursor: pointer; transition: background .12s ease, transform .12s ease; } .ds-btn-primary:hover { filter: brightness(1.08); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #4a8fe0); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet glass button for every non-primary action.",
+      "html": "<button class=\"ds-btn\">Edit</button>",
+      "css": ".ds-btn { font: 600 15px/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; padding: 8px 15px; border-radius: 12px; border: 1px solid var(--glass-border, rgb(255 255 255 / .18)); background: rgb(255 255 255 / .1); color: var(--text, #f2f6fb); cursor: pointer; transition: background .12s ease, transform .12s ease; } .ds-btn:hover { background: rgb(255 255 255 / .18); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid var(--accent, #4a8fe0); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Transparent with a hairline, for desk utilities: export, pager, cancel.",
+      "html": "<button class=\"ds-btn-ghost\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 4v11m0 0-4-4m4 4 4-4M4 20h16\"/></svg> Export CSV</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 6px; font: 600 15px/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; padding: 8px 15px; border-radius: 12px; border: 1px solid var(--hairline, rgb(255 255 255 / .12)); background: transparent; color: var(--text, #f2f6fb); cursor: pointer; transition: background .12s ease; } .ds-btn-ghost:hover { background: rgb(255 255 255 / .18); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, #4a8fe0); outline-offset: 2px; }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Recessed dark well with a drawn search icon; focus is an accent border and soft ring.",
+      "html": "<label class=\"ds-search\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Zm4.6-1.9L20 20\"/></svg><input type=\"search\" placeholder=\"Search title, island or person\" aria-label=\"Search work\"></label>",
+      "css": ".ds-search { position: relative; display: flex; align-items: center; width: 320px; color: rgb(222 233 245 / .84); } .ds-search svg { position: absolute; left: 12px; pointer-events: none; } .ds-search input { width: 100%; font: 15px/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; color: #f2f6fb; background: rgb(0 10 24 / .35); border: 1px solid rgb(255 255 255 / .16); border-radius: 12px; padding: 9px 12px 9px 36px; } .ds-search input::placeholder { color: rgb(222 233 245 / .68); } .ds-search input:focus { outline: none; border-color: var(--accent, #4a8fe0); box-shadow: 0 0 0 3px rgb(74 143 224 / .25); }"
+    },
+    {
+      "name": "Nav Link",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Sidebar link: line icon and label; active is lighter glass with an inset highlight, service icons take their colour.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link\" href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5\"/></svg>Overview</a><a class=\"ds-nav-link ds-svc-water ds-active\" href=\"#\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3s6.5 7 6.5 11.5A6.5 6.5 0 0 1 5.5 14.5C5.5 10 12 3 12 3Z\"/></svg>Water</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 224px; padding: 12px; border-radius: 22px; background: linear-gradient(160deg, rgb(255 255 255 / .13), rgb(255 255 255 / .05) 60%); border: 1px solid rgb(255 255 255 / .18); box-shadow: inset 0 1px 0 rgb(255 255 255 / .3), 0 18px 50px rgb(0 8 20 / .35); } .ds-nav-link { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 12px; font: 550 15px/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; color: rgb(222 233 245 / .86); text-decoration: none; } .ds-nav-link svg { color: rgb(222 233 245 / .84); } .ds-nav-link:hover { background: rgb(255 255 255 / .1); color: #f2f6fb; } .ds-nav-link:hover svg { color: currentColor; } .ds-nav-link.ds-active { background: rgb(255 255 255 / .15); color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / .22); } .ds-nav-link.ds-svc-water.ds-active svg { color: #34c3b6; } .ds-nav-link:focus-visible { outline: 2px solid #4a8fe0; outline-offset: 2px; }"
+    },
+    {
+      "name": "State Tabs",
+      "kind": "chip",
+      "refersTo": "tab",
+      "description": "Dark track of state tabs with tabular counts; Overdue's count turns coral when non-empty.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Work by state\"><button class=\"ds-tab ds-on\" aria-current=\"page\">Ongoing<span class=\"ds-count\">12</span></button><button class=\"ds-tab ds-alert\">Overdue<span class=\"ds-count\">3</span></button><button class=\"ds-tab\">Completed<span class=\"ds-count\">48</span></button></nav>",
+      "css": ".ds-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgb(0 0 0 / .2); border: 1px solid rgb(255 255 255 / .1); } .ds-tab { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 0; border-radius: 10px; background: none; font: 600 .9rem/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; color: rgb(222 233 245 / .86); cursor: pointer; } .ds-tab:hover { background: rgb(255 255 255 / .1); } .ds-tab.ds-on { background: rgb(255 255 255 / .15); color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / .22); } .ds-tab:focus-visible { outline: 2px solid #4a8fe0; outline-offset: 2px; } .ds-count { font-size: .76rem; font-weight: 650; font-variant-numeric: tabular-nums; padding: 1px 7px; border-radius: 999px; background: rgb(255 255 255 / .1); color: rgb(222 233 245 / .86); } .ds-on .ds-count { background: rgb(74 143 224 / .16); color: #8cc0ff; } .ds-alert .ds-count { background: rgb(219 95 95 / .16); color: #ff8c8c; }"
+    },
+    {
+      "name": "State Pills",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Tinted glass labels with white type in the four board state colours plus slate for neutral states.",
+      "html": "<span class=\"ds-pill\" style=\"--c:#4a8fe0\">In progress</span> <span class=\"ds-pill\" style=\"--c:#d69a2d\">On hold</span> <span class=\"ds-pill\" style=\"--c:#db5f5f\">Overdue</span> <span class=\"ds-pill\" style=\"--c:#3ba46e\">Completed</span> <span class=\"ds-pill\" style=\"--c:#7c8ba0\">Planned</span>",
+      "css": ".ds-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font: 600 .78rem/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; white-space: nowrap; color: #fff; background: color-mix(in srgb, var(--c) 40%, transparent); border: 1px solid color-mix(in srgb, var(--c) 70%, transparent); }"
+    },
+    {
+      "name": "Status Marks",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Asset and condition states: a drawn 12px mark beside the word, never colour alone.",
+      "html": "<span class=\"ds-status ds-ok\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" aria-hidden=\"true\"><circle cx=\"6\" cy=\"6\" r=\"4\" fill=\"currentColor\"/></svg> Running</span> <span class=\"ds-status ds-info\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" aria-hidden=\"true\"><circle cx=\"6\" cy=\"6\" r=\"3.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"/></svg> Standby</span> <span class=\"ds-status ds-warn\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" aria-hidden=\"true\"><path d=\"M6 1.5 10.8 10H1.2L6 1.5Z\" fill=\"currentColor\"/></svg> Minor fault</span> <span class=\"ds-status ds-bad\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" aria-hidden=\"true\"><path d=\"M2.5 2.5l7 7m0-7-7 7\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\"/></svg> Down</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 4px; margin-right: 14px; font: 650 15px/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; white-space: nowrap; } .ds-ok { color: #6fe3a2; } .ds-info { color: #8cc0ff; } .ds-warn { color: #f3c66b; } .ds-bad { color: #ff8c8c; }"
+    },
+    {
+      "name": "Work Row",
+      "kind": "card",
+      "refersTo": "work-row",
+      "description": "One openable work item in a glass list; its state rides on a 3px left edge.",
+      "html": "<section class=\"ds-list\"><a class=\"ds-row\" href=\"#\" style=\"--c:#db5f5f\"><div class=\"ds-main\"><div class=\"ds-title\"><span class=\"ds-ref\">WO-0001</span><strong>Genset 3 down: turbocharger failure</strong></div><div class=\"ds-meta\"><span class=\"ds-dot\"></span>Example island · Genset 3 · Repair</div><p class=\"ds-update\">Replacement ordered, fitting expected next week.</p></div><div class=\"ds-side\"><span class=\"ds-pill2\">In progress</span><span>Mechanical unit</span><span class=\"ds-late\">Overdue · 12 Oct 2026</span></div></a></section>",
+      "css": ".ds-list { width: 680px; border-radius: 18px; padding: 4px 0; overflow: hidden; background: linear-gradient(160deg, rgb(255 255 255 / .13), rgb(255 255 255 / .05) 60%); border: 1px solid rgb(255 255 255 / .18); box-shadow: inset 0 1px 0 rgb(255 255 255 / .3), 0 18px 50px rgb(0 8 20 / .35); font: 15px/1.5 \"Inter Variable\", Inter, system-ui, sans-serif; color: #f2f6fb; } .ds-row { display: grid; grid-template-columns: minmax(0,1fr) 220px; gap: 6px 24px; padding: 14px 20px; color: #f2f6fb; text-decoration: none; box-shadow: inset 3px 0 0 var(--c, transparent); transition: background-color .15s ease-out; } .ds-row:hover { background: rgb(255 255 255 / .1); } .ds-row:focus-visible { outline: 2px solid #4a8fe0; outline-offset: -2px; border-radius: 12px; } .ds-main { display: grid; gap: 4px; min-width: 0; } .ds-title { display: flex; align-items: baseline; gap: 10px; } .ds-title strong { font-weight: 650; line-height: 1.35; } .ds-ref { font-size: .78rem; font-weight: 650; color: rgb(222 233 245 / .84); font-variant-numeric: tabular-nums; } .ds-meta { font-size: .84rem; color: rgb(222 233 245 / .86); } .ds-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #6ea5f7; margin-right: 8px; } .ds-update { margin: 2px 0 0; font-size: .86rem; color: rgb(222 233 245 / .86); } .ds-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: .84rem; text-align: right; color: rgb(222 233 245 / .86); } .ds-pill2 { padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; color: #fff; background: rgb(74 143 224 / .4); border: 1px solid rgb(74 143 224 / .7); } .ds-late { color: #ff8c8c; font-weight: 650; font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Lagoon Board",
+    "overview": "**Creative North Star: \"The Lagoon Board\"**\n\nThe app wears the same world as the SCRD TV board: a deep lagoon at night, navy sinking into near-black, lit from below by soft teal, blue and indigo blooms and a faint dot grid, with frosted glass panels floating over it. The glass is cool, quiet and professional; every panel has a lit top edge as if light from the water catches its rim. It is always dark, as the board is, and there is no light theme.\n\nColour does jobs only. It marks state (in progress, on hold, overdue, done), service identity (electricity, water, sewerage), and the one accent for actions and selection. Everything else is ink on glass. State is never colour alone: every state carries its word, and asset states also carry a small drawn mark (dot, ring, cross, gear, triangle, square).\n\nDensity is that of an operating tool, not a brochure: lists of work rows, tables of gensets, tiles per service. Phones are first-class; the sidebar becomes a floating glass bottom bar and the page head shrinks to its title and main action.",
+    "keyCharacteristics": [
+      "Fixed radial lagoon backdrop with three colour blooms and a 22px dot grid behind everything.",
+      "Gradient frosted glass panels (white 13% to 5%, 22px blur) with a 1px white-18% border and a lit top edge.",
+      "Selection is lighter glass with an inset highlight, never a solid accent fill (filter chips excepted).",
+      "Four board state colours, shown as tinted glass pills with white type and as a 3px left edge on rows.",
+      "One accent blue for primary actions, focus and progress.",
+      "Inter Variable throughout; tabular figures for every number."
+    ],
+    "rules": [
+      {
+        "name": "The Colour Has a Job Rule",
+        "body": "Colour appears only for state, service identity, or the one action blue. A decorative colour with no meaning does not ship.",
+        "section": "colors"
+      },
+      {
+        "name": "The Never Colour Alone Rule",
+        "body": "Every state is a word; asset and condition states also carry a drawn mark. A coloured dot, edge or fill is always backed by its label.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cool Water Rule",
+        "body": "Surfaces, backdrops and neutrals stay cool (navy, teal, frosted white). Warm hues appear only as state (on hold, serious, overdue).",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Every count, figure, reference (WO-0001), date and kilowatt value uses tabular numerals, so columns of numbers align.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "Inter Variable carries every role; weight (550 for nav, 600 for controls, 650 for titles and state words, 700 and above for figures) does the work a second face would.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lit Rim Rule",
+        "body": "Every glass panel has both the inset lit top edge and the lagoon float. A panel with one and not the other reads as a mistake.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Glass Fallback Rule",
+        "body": "Where backdrop blur is unsupported or reduced transparency is requested, glass becomes solid glass (`glass-solid`) with no blur; it never becomes transparent over the busy backdrop.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** put every new surface on gradient glass with the 1px white-18% border, the inset lit top edge and the lagoon float, over the fixed lagoon backdrop.",
+      "**Do** show state with the board colours (in progress #4a8fe0, on hold #d69a2d, overdue #db5f5f, done #3ba46e) as tinted glass pills with white type, and as a 3px left edge on rows.",
+      "**Do** pair every state colour with its word, and asset or condition states with their drawn mark.",
+      "**Do** keep one primary action per view, in the board-blue gradient, placed last in the page head's actions.",
+      "**Do** mark selection with lighter glass (white 15%) and an inset highlight.",
+      "**Do** use tabular figures for every number, date and reference.",
+      "**Do** keep the phone shell: floating bottom bar with Work among its tabs, filters folded behind a button, desk-only actions hidden."
+    ],
+    "donts": [
+      "**Don't** add a light theme or light pastel glass; the world is always dark.",
+      "**Don't** use warm tints on surfaces, backdrops or neutrals; warmth is reserved for on-hold, serious and overdue states.",
+      "**Don't** use colour as decoration or as the only signal of state.",
+      "**Don't** fill selected tabs, nav links or rows with solid accent blue; solid accent is for primary buttons and selected filter chips.",
+      "**Don't** use hard or offset shadows; depth is soft float, lit rim and tonal glass.",
+      "**Don't** set glass panels transparent without blur over the backdrop; fall back to solid glass."
+    ]
+  }
+}

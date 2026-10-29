@@ -7,6 +7,7 @@ import { PROJECT_STATES, PROJECT_TYPES, date, dateTime, num, pct } from '../form
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 import { Sites, Tracker } from './ProjectTracker.jsx';
 import { LinksCard } from '../components/Links.jsx';
+import { Icon } from '../components/icons.jsx';
 
 export default function Project() {
   const { id } = useParams();
@@ -199,7 +200,7 @@ function ProjectForm({ project, onDone }) {
             <span className="muted">{i + 1}</span>
             <input value={t.name} onChange={(e) => setTask(i, { name: e.target.value })} placeholder="Task name" aria-label={`Task ${i + 1}`} maxLength="200" />
             <input type="number" min="0" max="100" step="0.1" value={t.progress} onChange={(e) => setTask(i, { progress: e.target.value })} aria-label={`Task ${i + 1} progress`} />
-            <button type="button" className="btn ghost small" onClick={() => setTasks(tasks.filter((_, j) => j !== i))} aria-label={`Remove task ${i + 1}`}>✕</button>
+            <button type="button" className="btn ghost small" onClick={() => setTasks(tasks.filter((_, j) => j !== i))} aria-label={`Remove task ${i + 1}`}><Icon name="close" size={16} /></button>
           </div>)}
         </div>
         <button type="button" className="btn small" onClick={() => setTasks([...tasks, { name: '', progress: '0' }])}>+ Add Task</button>
@@ -227,7 +228,7 @@ function ProjectForm({ project, onDone }) {
                 .map((p) => [p.id, `${p.full_name}${p.designation ? ` · ${p.designation}` : ''}`])} aria-label="Person" />
             <Select value={m.access} onChange={(v) => setMembers(members.map((x, j) => (j === i ? { ...x, access: v } : x)))}
               options={[['view', 'Can view'], ['edit', 'Can edit']]} aria-label="Access" />
-            <button type="button" className="btn ghost small" onClick={() => setMembers(members.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
+            <button type="button" className="btn ghost small" onClick={() => setMembers(members.filter((_, j) => j !== i))} aria-label="Remove"><Icon name="close" size={16} /></button>
           </div>)}
           <button type="button" className="btn small" onClick={() => setMembers([...members, { user_id: '', access: 'view' }])}>+ Add person</button>
         </fieldset>}

@@ -2,6 +2,7 @@ import { qs } from '../api.js';
 import { Async, Card, Empty, PageHead, Pager, Select } from '../components/ui.jsx';
 import { dateTime } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
+import { Icon } from '../components/icons.jsx';
 
 const ENTITIES = {
   assets: 'Assets', facilities: 'Facilities', work_orders: 'Work', maintenance_events: 'Maintenance records', service_intervals: 'Service intervals', api_tokens: 'Access tokens', incidents: 'Interruptions', projects: 'Projects',
@@ -26,7 +27,7 @@ export default function Audit() {
     <PageHead title="Audit trail" icon="audit" />
     <div className="filters">
       <Select value={filters.entity} onChange={(v) => setFilter('entity', v)} placeholder="All records" options={ENTITIES} aria-label="Record type" />
-      {filters.entity_id && <button className="btn ghost small" onClick={() => setFilter('entity_id', '')}>✕ one record</button>}
+      {filters.entity_id && <button className="btn ghost small" onClick={() => setFilter('entity_id', '')}><Icon name="close" size={14} /> one record</button>}
       <label className="check"><input type="checkbox" checked={filters.system === '1'} onChange={(e) => setFilter('system', e.target.checked ? '1' : '')} /> Show system updates (access tokens used by other systems)</label>
     </div>
     <Async state={state}>{(page) => (

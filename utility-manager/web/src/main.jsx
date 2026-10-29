@@ -5,6 +5,7 @@ import { AuthProvider, RequireAuth } from './auth.jsx';
 import { CrashGuard } from './components/Crash.jsx';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
+import '@fontsource-variable/inter/wght.css';
 import './styles.css';
 
 // Pages load when first opened, so the first screen doesn't wait for all of

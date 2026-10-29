@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Icon } from './icons.jsx';
+import { Icon, Mark } from './icons.jsx';
 import { ASSET_STATUS, CONDITIONS, FAULTS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES } from '../format.js';
 
 export function Stat({ label, value, sub, tone = '', to }) {
@@ -13,20 +13,20 @@ export function Stat({ label, value, sub, tone = '', to }) {
 // Status is always icon + word, never colour alone.
 export function AssetStatus({ status }) {
   const s = ASSET_STATUS[status] || ASSET_STATUS.unknown;
-  return <span className={`status ${s.tone}`}>{s.icon} {s.label}</span>;
+  return <span className={`status ${s.tone}`}><Mark name={s.icon} /> {s.label}</span>;
 }
 
 export function Condition({ value, text }) {
   const c = CONDITIONS[value];
   if (!c) return <span className="status none">– No report</span>;
-  return <span className={`status ${c.tone}`} title={text || c.label}>{c.icon} {c.label}</span>;
+  return <span className={`status ${c.tone}`} title={text || c.label}><Mark name={c.icon} /> {c.label}</span>;
 }
 
 // A genset's current state: its status, and its faults when it has any.
 export function Fault({ level }) {
   const f = FAULTS[level];
   if (!f) return <span className="status none">– Not recorded</span>;
-  return <span className={`status ${f.tone}`}>{f.icon} {f.label}</span>;
+  return <span className={`status ${f.tone}`}><Mark name={f.icon} /> {f.label}</span>;
 }
 
 export function EngineState({ e, compact = false }) {
@@ -48,9 +48,9 @@ export function Flags({ e }) {
   // "requested" = the island ticked it on its sheet; otherwise due by rule.
   if (e.overhaul_due || e.needs_overhaul) flags.push(['bad', 'Overhaul due', e.needs_overhaul ? 'Island requested on its report' : 'Due by hours since overhaul']);
   if (e.alt_service_due || e.alt_needs_service) flags.push(['warn', `Alternator service${e.alt_needs_service ? ' · requested' : ''}`, e.alt_needs_service ? 'Island requested on its report' : `Due since ${e.next_alt_service_due || '—'}`]);
-  for (const w of e.open_work || []) flags.push(['info', `🔧 ${w.title}`]);
+  for (const w of e.open_work || []) flags.push(['info', w.title, undefined, 'work']);
   if (!flags.length) return null;
-  return <span className="flags">{flags.map(([tone, t, why], i) => <span key={i} className={`flag ${tone}`} title={why}>{t}</span>)}</span>;
+  return <span className="flags">{flags.map(([tone, t, why, icon], i) => <span key={i} className={`flag ${tone}`} title={why}>{icon && <Icon name={icon} size={13} />}{t}</span>)}</span>;
 }
 
 export function Severity({ value }) {
@@ -177,7 +177,7 @@ export function Modal({ title, onClose, children }) {
   return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
-        <header className="card-head"><h2>{title}</h2><button className="btn ghost" onClick={onClose} aria-label="Close">✕</button></header>
+        <header className="card-head"><h2>{title}</h2><button className="btn ghost" onClick={onClose} aria-label="Close"><Icon name="close" size={16} /></button></header>
         {children}
       </div>
     </div>,

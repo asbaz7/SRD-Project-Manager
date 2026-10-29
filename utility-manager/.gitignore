@@ -3,3 +3,9 @@ web/dist/
 data/
 .env
 .wrangler/
+
+# Impeccable working files (screenshots, decision pages, seeds)
+web/.impeccable/review/
+web/.impeccable/questions/
+web/.impeccable/mocks/
+web/.impeccable/build/

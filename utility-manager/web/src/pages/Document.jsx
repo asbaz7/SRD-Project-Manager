@@ -9,6 +9,7 @@ import { LinksCard } from '../components/Links.jsx';
 import { date, dateTime, localDate } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 import { DOC_STATUS, DocStatus, DocType } from './Documents.jsx';
+import { Icon, Mark } from '../components/icons.jsx';
 
 export default function Document() {
   const { id } = useParams();
@@ -56,7 +57,7 @@ function DocumentView({ doc: d, reload }) {
         <ol className="sign-list">{d.signers.map((s) => {
           const mine = s.id === d.my_signer;
           return <li key={s.id} className={s.signed_on ? 'signed' : s === nextUp && open ? 'next' : ''}>
-            <span className="sign-mark" aria-hidden="true">{s.signed_on ? '✓' : s.position}</span>
+            <span className="sign-mark" aria-hidden="true">{s.signed_on ? <Mark name="check" /> : s.position}</span>
             <span className="grow"><strong>{s.name}</strong>{mine && <span className="muted"> (you)</span>}<br />
               <small className="muted">{s.signed_on ? <>Signed {date(s.signed_on)}{s.recorded_by_name && s.recorded_by !== s.user_id && ` · recorded by ${s.recorded_by_name}`}</>
                 : s === nextUp && open ? 'Next to sign' : 'Waiting'}</small></span>
@@ -67,7 +68,7 @@ function DocumentView({ doc: d, reload }) {
         })}</ol>
         {open && (d.my_signer || d.can_edit) && <label className="field inline-date"><span className="field-label">Date signed</span>
           <input type="date" max={localDate(0)} value={signDate} onChange={(e) => setSignDate(e.target.value)} /></label>}
-        {d.status === 'completed' && <p className="all-clear small">✓ Signed by everyone.</p>}
+        {d.status === 'completed' && <p className="all-clear small"><Mark name="check" /> Signed by everyone.</p>}
         {d.status === 'cancelled' && <p className="muted small">This document was cancelled.</p>}
       </Card>
     </div>
@@ -143,7 +144,7 @@ function DocumentForm({ doc, onDone }) {
             {s.pick === 'other' && <input required placeholder="Name" value={s.name} onChange={(e) => setSigner(i, { name: e.target.value })} aria-label="Name" />}
             <button type="button" className="btn ghost small" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">↑</button>
             <button type="button" className="btn ghost small" disabled={i === signers.length - 1} onClick={() => move(i, 1)} aria-label="Move down">↓</button>
-            <button type="button" className="btn ghost small" disabled={signers.length === 1} onClick={() => setSigners(signers.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
+            <button type="button" className="btn ghost small" disabled={signers.length === 1} onClick={() => setSigners(signers.filter((_, j) => j !== i))} aria-label="Remove"><Icon name="close" size={16} /></button>
           </div>)}
           <button type="button" className="btn small" onClick={() => setSigners([...signers, { pick: '', name: '' }])}>+ Add recipient</button>
           <p className="muted small">Recipients with a login sign it off themselves (and are told on Telegram if linked). For others, you record their signature.

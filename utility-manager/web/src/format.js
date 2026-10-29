@@ -1,19 +1,19 @@
 export const TZ = 'Indian/Maldives';
 
 export const SERVICES = {
-  electricity: { label: 'Electricity', icon: '⚡', path: '/electricity' },
-  water: { label: 'Water', icon: '💧', path: '/water' },
-  sewerage: { label: 'Sewerage', icon: '♻', path: '/sewerage' },
+  electricity: { label: 'Electricity', icon: 'electricity', path: '/electricity' },
+  water: { label: 'Water', icon: 'water', path: '/water' },
+  sewerage: { label: 'Sewerage', icon: 'sewerage', path: '/sewerage' },
 };
 
 export const ASSET_STATUS = {
-  running: { label: 'Running', icon: '●', tone: 'ok' },
-  standby: { label: 'Standby', icon: '○', tone: 'info' },
-  down: { label: 'Down', icon: '✕', tone: 'bad' },
-  maintenance: { label: 'Maintenance', icon: '⚙', tone: 'warn' },
-  disconnected: { label: 'Disconnected', icon: '⊘', tone: 'none' },
-  decommissioned: { label: 'Decommissioned', icon: '–', tone: 'none' },
-  unknown: { label: 'No status', icon: '?', tone: 'none' },
+  running: { label: 'Running', icon: 'dot', tone: 'ok' },
+  standby: { label: 'Standby', icon: 'ring', tone: 'info' },
+  down: { label: 'Down', icon: 'cross', tone: 'bad' },
+  maintenance: { label: 'Maintenance', icon: 'gear', tone: 'warn' },
+  disconnected: { label: 'Disconnected', icon: 'slash', tone: 'none' },
+  decommissioned: { label: 'Decommissioned', icon: 'dash', tone: 'none' },
+  unknown: { label: 'No status', icon: 'question', tone: 'none' },
 };
 
 export const FACILITY_KINDS = {
@@ -78,16 +78,16 @@ export const CHECKLISTS = { diesel: 'Diesel checklist', safety_ppe: 'Safety PPE'
 export const PROJECT_STATES = { planned: 'Planned', ongoing: 'Ongoing', on_hold: 'On hold', completed: 'Completed', cancelled: 'Cancelled' };
 // A genset's faults (with its status, its current state).
 export const FAULTS = {
-  none: { label: 'No faults', icon: '✓', tone: 'ok' },
-  minor: { label: 'Minor fault', icon: '▲', tone: 'warn' },
-  major: { label: 'Major fault', icon: '■', tone: 'serious' },
+  none: { label: 'No faults', icon: 'check', tone: 'ok' },
+  minor: { label: 'Minor fault', icon: 'triangle', tone: 'warn' },
+  major: { label: 'Major fault', icon: 'square', tone: 'serious' },
 };
 
 export const CONDITIONS = {
-  ok: { label: 'OK', icon: '●', tone: 'ok' },
-  minor_fault: { label: 'Minor fault', icon: '▲', tone: 'warn' },
-  major_fault: { label: 'Major fault', icon: '■', tone: 'serious' },
-  not_running: { label: 'Not running', icon: '✕', tone: 'bad' },
+  ok: { label: 'OK', icon: 'dot', tone: 'ok' },
+  minor_fault: { label: 'Minor fault', icon: 'triangle', tone: 'warn' },
+  major_fault: { label: 'Major fault', icon: 'square', tone: 'serious' },
+  not_running: { label: 'Not running', icon: 'cross', tone: 'bad' },
 };
 export const WORK_KINDS = {
   overhaul: 'Overhaul', top_overhaul: 'Top overhaul', alternator_service: 'Alternator service', repair: 'Repair',

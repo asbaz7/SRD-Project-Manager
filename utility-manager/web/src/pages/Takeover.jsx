@@ -10,6 +10,7 @@ import { useAuth } from '../auth.jsx';
 import { Async, Empty, ErrorBox, Field, Modal, Select } from '../components/ui.jsx';
 import { date, num } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
+import { Icon } from '../components/icons.jsx';
 
 const SERVICES = [['electricity', 'Electricity'], ['water', 'Water'], ['sewerage', 'Sewerage']];
 const STATUS = { taken_over: 'Taken over', fenaka: 'Under FENAKA', other_operator: 'Other operator', no_service: 'No service yet' };
@@ -123,7 +124,7 @@ function TakeoverView({ t, reload }) {
       <header>
         <h2>{atoll ? `${atoll.code} · ${atoll.name}` : 'Atolls'}{atoll && <small className="muted"> {survey
           ? `${atoll.survey.completed} of ${atoll.survey.scope} surveyed` : `${atoll.taken_over} of ${atoll.islands} taken over`}</small>}</h2>
-        <button className="btn small ghost" onClick={() => setDrawer(false)} aria-label="Hide list">✕</button>
+        <button className="btn small ghost" onClick={() => setDrawer(false)} aria-label="Hide list"><Icon name="close" size={16} /></button>
       </header>
       {can('manager') && <div className="tko-drawer-actions">
         {atoll && atoll.islands > 0 && <button className="btn small" onClick={() => setBulk(survey ? 'survey' : 'service')}>Set for whole atoll</button>}
@@ -150,7 +151,7 @@ function IslandCard({ i, onClose, onEdit }) {
     <header>
       <h2>{i.atoll_code}. {i.island_id ? <Link to={`/islands/${i.island_id}`}>{i.name}</Link> : i.name}
         <small className={`tko-state ${i.state}`}> {STATE[i.state]}</small></h2>
-      <button className="btn small ghost" onClick={onClose} aria-label="Close">✕</button>
+      <button className="btn small ghost" onClick={onClose} aria-label="Close"><Icon name="close" size={16} /></button>
     </header>
     <dl className="tko-popup-services">{SERVICES.map(([k, label]) => <div key={k}><dt>{label}</dt><dd><Service status={i[`${k}_status`]} on={i[`${k}_on`]} /></dd></div>)}</dl>
     {(i.state === 'pending' || i.survey_stage) && <div className="tko-popup-survey">

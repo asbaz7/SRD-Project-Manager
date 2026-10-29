@@ -4,6 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, PageHead, Pager, Progress, ProjectState, Select, Service } from '../components/ui.jsx';
 import { PROJECT_STATES, PROJECT_TYPES, date } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
+import { Icon } from '../components/icons.jsx';
 
 export default function Projects() {
   const { allowed } = useAuth();
@@ -25,7 +26,7 @@ export default function Projects() {
         options={[['mine', 'My unit'], ...(units.data || []).map((u) => [String(u.id), u.name])]} />
       <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls" options={(atolls.data || []).map((a) => [a.id, a.code])} aria-label="Atoll" />
       <input type="search" placeholder="Search…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
-      {filters.island_id && <button className="btn ghost small" onClick={() => setFilter('island_id', '')}>✕ island filter</button>}
+      {filters.island_id && <button className="btn ghost small" onClick={() => setFilter('island_id', '')}><Icon name="close" size={14} /> island filter</button>}
     </div>
     <Async state={state}>{(page) => (
       <Card>
@@ -37,7 +38,7 @@ export default function Projects() {
                 <small className="muted">{p.ref} · {PROJECT_TYPES[p.project_type] ? `${PROJECT_TYPES[p.project_type]} · ` : ''}<Service value={p.service} short /> {p.island_name ? `${p.atoll_code} · ${p.island_name}` : 'Regional'}{p.unit_name && ` · ${p.unit_name}`}{p.contractor && ` · ${p.contractor}`}</small></td>
               <td><ProjectState value={p.status} /></td>
               <td><Progress value={p.progress_pct} /></td>
-              <td className={`nowrap hide-sm ${p.overdue ? 'bad' : ''}`}>{date(p.target_date)}{p.overdue && ' ⚠'}</td>
+              <td className={`nowrap hide-sm ${p.overdue ? 'bad' : ''}`}>{date(p.target_date)}{p.overdue && <> <Icon name="alert" size={13} /> overdue</>}</td>
               <td className="nowrap hide-sm muted">{date(p.last_update_at)}</td>
             </tr>)}</tbody>
           </table>}

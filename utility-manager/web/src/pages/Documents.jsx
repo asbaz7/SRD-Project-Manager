@@ -7,6 +7,7 @@ import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, PageHead, Pager, Select } from '../components/ui.jsx';
 import { date, dateTime } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
+import { Mark } from '../components/icons.jsx';
 
 export const DOC_STATUS = { pending: 'Pending', completed: 'Completed', cancelled: 'Cancelled' };
 const STATUS_PILL = { pending: 'work-awaiting_parts', completed: 'work-completed', cancelled: 'work-cancelled' };
@@ -16,7 +17,7 @@ export const DocType = ({ value }) => <span className="pill doc-type">{value}</s
 export function Signers({ signers, compact }) {
   return <div className={`signers ${compact ? 'compact' : ''}`}>{signers.map((s) => (
     <span key={s.id} className={`chip ${s.signed_on ? 'signed' : ''}`} title={s.signed_on ? `Signed ${date(s.signed_on)}` : 'Not signed yet'}>
-      {s.signed_on ? '✓ ' : ''}{s.name}
+      {s.signed_on && <Mark name="check" />} {s.name}
     </span>
   ))}</div>;
 }

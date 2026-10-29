@@ -3,7 +3,7 @@
 import { Link, NavLink, useParams } from 'react-router-dom';
 import { csvUrl, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Icon } from '../components/icons.jsx';
+import { Icon, Mark } from '../components/icons.jsx';
 import { AssetStatus, Async, Card, Condition, ConditionMeter, Empty, PageHead, Pager, Progress, ProjectState, Select, Severity, Stat, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, licenceSummary, month, num, power, since, withUnit } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
@@ -124,10 +124,10 @@ function ServiceOverview({ svc }) {
                 // Marks it as work for this fault: completing it clears the fault.
                 fault_report_month: a.fault_level && a.fault_level !== 'none' ? a.report_month || `${new Date().toISOString().slice(0, 7)}-01` : undefined })}`;
               return <li key={a.id} className={logWork ? 'with-action' : ''}><Link to={`/assets/${a.id}`}>
-                <span className={`dot ${serious ? 'bad' : 'serious'}`} aria-hidden="true">{serious ? '✕' : '■'}</span>
+                <span className={`dot ${serious ? 'bad' : 'serious'}`} aria-hidden="true"><Mark name={serious ? 'cross' : 'square'} /></span>
                 <span className="grow"><strong>{a.atoll_code} · {a.island_name} · {assetLabel(a)}</strong>
                   <small>{a.condition ? <Condition value={a.condition} /> : <AssetStatus status={a.status} />}{' '}
-                    {(['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault) || a.make_model || ''}{a.work_title && ` · 🔧 ${a.work_title}`}</small></span>
+                    {(['down', 'maintenance'].includes(a.status) ? a.status_note || a.fault : a.fault) || a.make_model || ''}{a.work_title && ` · Work: ${a.work_title}`}</small></span>
                 <Icon name="arrow" />
               </Link>{logWork && <Link className="act" to={logWork}>Log work</Link>}</li>;
             })}</ul>}
@@ -184,10 +184,10 @@ function Plants({ svc }) {
                 <span>{svc !== 'electricity' && Number(f.assets) === 0 ? 'No systems recorded'
                   : svc !== 'electricity' && Number(f.unknown) === Number(f.assets) ? `${f.assets} systems · status not set`
                     : `${f.running} of ${f.assets} running`}</span>
-                {f.down > 0 && <span className="status bad">✕ {f.down} down</span>}
-                {f.serious > 0 && <span className="status serious">■ {f.serious} serious</span>}
-                {f.minor > 0 && <span className="status warn">▲ {f.minor} minor</span>}
-                {f.open_work > 0 && <span className="flag info">🔧 {f.open_work}</span>}
+                {f.down > 0 && <span className="status bad"><Mark name="cross" /> {f.down} down</span>}
+                {f.serious > 0 && <span className="status serious"><Mark name="square" /> {f.serious} serious</span>}
+                {f.minor > 0 && <span className="status warn"><Mark name="triangle" /> {f.minor} minor</span>}
+                {f.open_work > 0 && <span className="flag info"><Icon name="work" size={13} />{f.open_work}</span>}
               </div>
               {licenceState(f) && <div className="row"><span className={`flag ${licenceState(f).tone}`}>{licenceState(f).text}</span></div>}
               {f.report_state && <div className="row"><span className={`state ${f.report_state}`}>Updated: {f.report_month ? month(f.report_month) : 'none yet'}</span></div>}

@@ -5,6 +5,7 @@ import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, PageHead, Select, UpdateText, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, MOVE_STAGES, SERVICES, WORK_KINDS, WORK_STATES, assetLabel, date, dateTime, statesFor } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
+import { Mark } from '../components/icons.jsx';
 
 export default function WorkItem() {
   const { id } = useParams();
@@ -66,8 +67,8 @@ function WorkView({ work: w, reload }) {
           <dt>Logged by</dt><dd>{w.created_by_name || '—'} · {dateTime(w.created_at)}</dd>
         </dl>
         {w.description && <p className="pre">{w.description}</p>}
-        {w.status === 'completed' && w.asset_id && w.kind !== 'relocation' && <p className="muted small">✓ Added to the engine's maintenance history. Editing the asset or completion date, or reopening, moves or takes back that entry.</p>}
-        {w.kind === 'relocation' && w.status === 'completed' && <p className="muted small">✓ Transferred to {w.dest_island_name}, with its history.</p>}
+        {w.status === 'completed' && w.asset_id && w.kind !== 'relocation' && <p className="muted small"><Mark name="check" /> Added to the engine's maintenance history. Editing the asset or completion date, or reopening, moves or takes back that entry.</p>}
+        {w.kind === 'relocation' && w.status === 'completed' && <p className="muted small"><Mark name="check" /> Transferred to {w.dest_island_name}, with its history.</p>}
         {w.kind === 'relocation' && ['dismantling', 'in_transit', 'installing'].includes(w.status) && <p className="muted small">It shows as out of service until the move is completed.</p>}
       </Card>
       {(writable || w.can_update) && <Card title="Post an update">

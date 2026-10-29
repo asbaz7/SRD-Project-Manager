@@ -7,6 +7,7 @@ import { useAuth } from '../auth.jsx';
 import { Async, Card, EngineState, Empty, ErrorBox, Flags, Modal, PageHead, Select } from '../components/ui.jsx';
 import { date, month, num } from '../format.js';
 import { useApi, useFilters, useRowLink, useSubmit } from '../hooks.js';
+import { Icon } from '../components/icons.jsx';
 
 const CHIPS = [
   ['', '', 'All engines', 'total'],
@@ -132,7 +133,7 @@ function IntervalForm({ data, onClose, onSaved }) {
             <td><input required minLength="2" maxLength="60" value={m.model_match} placeholder="e.g. KTA38" onChange={(e) => setModel(i, 'model_match', e.target.value)} aria-label="Model" /></td>
             <td><input type="number" min="1" step="1" value={m.overhaul_hours} placeholder={region.overhaul_hours} onChange={(e) => setModel(i, 'overhaul_hours', e.target.value)} aria-label="Overhaul hours" /></td>
             <td><input type="number" min="1" step="1" value={m.alt_service_months} placeholder={region.alt_service_months} onChange={(e) => setModel(i, 'alt_service_months', e.target.value)} aria-label="Alternator months" /></td>
-            <td><button type="button" className="btn ghost small" onClick={() => setModels(models.filter((_, j) => j !== i))} aria-label="Remove">✕</button></td>
+            <td><button type="button" className="btn ghost small" onClick={() => setModels(models.filter((_, j) => j !== i))} aria-label="Remove"><Icon name="close" size={16} /></button></td>
           </tr>)}
         </tbody></table>
       <div className="form-actions">

@@ -59,9 +59,10 @@ export default function Layout() {
   // plants); work, interruptions and projects move up instead.
   const main = technical ? MAIN : [MAIN[0], ISLANDS, ...MORE];
   const more = technical ? MORE : [];
-  // Phones: four tabs (Overview and the services, or the main lists); the
-  // rest, Islands included, sit under More.
-  const tabs = main.filter((n) => n !== ISLANDS).slice(0, 4);
+  // Phones: four tabs, Work always among them (logging and following work
+  // is the main job in the field); the rest, Islands included, under More.
+  const WORK = MORE.find((n) => n.to === '/work');
+  const tabs = technical ? [MAIN[0], WORK, MAIN[2], MAIN[3]] : main.filter((n) => n !== ISLANDS).slice(0, 4);
 
   return (
     <div className="shell">
@@ -96,7 +97,7 @@ export default function Layout() {
       {sheet && <>
         <div className="sheet-backdrop" onClick={() => setSheet(false)} />
         <div className="sheet" role="menu">
-          {[...main.filter((n) => !tabs.includes(n)), ...more, ...admin].map((n) => <Link key={n.to} item={n} />)}
+          {[...main, ...more].filter((n) => !tabs.includes(n)).concat(admin).map((n) => <Link key={n.to} item={n} />)}
           <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
       </>}

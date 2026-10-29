@@ -16,7 +16,7 @@ const greeting = () => {
 function attentionItems(d) {
   const items = [];
   for (const x of d.incidents.list.filter((i) => ['critical', 'high'].includes(i.severity))) {
-    items.push({ tone: 'bad', mark: '!', to: `/interruptions/${x.id}`, text: x.title, sub: `${SERVICES[x.service]?.label} · ${x.atoll_code} ${x.island_name} · ${x.severity} · ${since(x.started_at)}` });
+    items.push({ tone: 'bad', mark: 'alert', to: `/interruptions/${x.id}`, text: x.title, sub: `${SERVICES[x.service]?.label} · ${x.atoll_code} ${x.island_name} · ${x.severity} · ${since(x.started_at)}` });
   }
   const waiting = d.documents?.waiting_for_me || [];
   if (waiting.length) {
@@ -33,7 +33,7 @@ function attentionItems(d) {
   }
   if (d.reports?.missing.length) items.push({ tone: 'warn', mark: d.reports.missing.length, to: '/electricity/reports', text: `${d.reports.missing.length} powerhouse${d.reports.missing.length === 1 ? '' : 's'} due a monthly update for ${month(d.reports.expected_month)}`, sub: d.reports.missing.slice(0, 4).map((r) => `${r.atoll_code} ${r.island_name}`).join(' · ') + (d.reports.missing.length > 4 ? ' …' : '') });
   for (const w of d.work.filter((x) => x.overdue)) {
-    items.push({ tone: 'warn', mark: '⏱', to: `/work/${w.id}`, text: `${w.title} — past target date`, sub: `${w.atoll_code} ${w.island_name} · target ${date(w.target_on)}` });
+    items.push({ tone: 'warn', mark: 'clock', to: `/work/${w.id}`, text: `${w.title} — past target date`, sub: `${w.atoll_code} ${w.island_name} · target ${date(w.target_on)}` });
   }
   if (e.overhaul_due) items.push({ tone: 'info', mark: e.overhaul_due, to: '/electricity/engines?flag=overhaul', text: `${e.overhaul_due} engine${e.overhaul_due === 1 ? '' : 's'} due for overhaul`, sub: e.alt_service_due ? `${e.alt_service_due} alternator services due as well${e.alt_requested ? ` (${e.alt_requested} requested by islands)` : ''}` : '' });
   return items;
@@ -60,7 +60,7 @@ export default function Dashboard() {
           {items.length === 0 ? <p className="all-clear"><Icon name="check" /> Nothing needs attention right now.</p> :
             <ul className="attention-list">{items.slice(0, 8).map((it, i) => (
               <li key={i}><Link to={it.to}>
-                <span className={`dot ${it.tone}`} aria-hidden="true">{it.mark}</span>
+                <span className={`dot ${it.tone}`} aria-hidden="true">{typeof it.mark === 'string' ? <Icon name={it.mark} size={16} /> : it.mark}</span>
                 <span className="grow"><strong>{it.text}</strong>{it.sub && <small>{it.sub}</small>}</span>
                 <Icon name="arrow" />
               </Link></li>
@@ -123,7 +123,7 @@ export default function Dashboard() {
                 <td className="wrap"><Link to={`/projects/${p.id}`}>{p.title}</Link><br />
                   <small className="muted"><Service value={p.service} short />{p.island_name ? `${p.atoll_code} · ${p.island_name}` : 'Regional'} · <ProjectState value={p.status} /></small></td>
                 <td className="nowrap"><Progress value={p.progress_pct} />
-                  {p.target_date && <><br /><small className={p.overdue ? 'bad' : 'muted'}>{p.overdue ? '⚠ due ' : 'due '}{date(p.target_date)}</small></>}</td>
+                  {p.target_date && <><br /><small className={p.overdue ? 'bad' : 'muted'}>{p.overdue ? <><Icon name="alert" size={13} /> overdue, due </> : 'due '}{date(p.target_date)}</small></>}</td>
               </tr>)}</tbody></table>}
           </Card>
         </div>
@@ -154,7 +154,7 @@ function TakeoverTile({ t }) {
   const p = (n, d) => (d ? Math.round((n / d) * 100) : 0);
   const total = t.expected_islands;
   const done = t.totals.taken_over;
-  return <Card className="pinned" title={<><span className="pin-label">📌 Priority project</span> National takeover: FENAKA → STELCO</>}
+  return <Card className="pinned" title={<>National takeover: FENAKA → STELCO</>}
     actions={<Link to="/takeover" className="btn small primary">Open tracker</Link>}>
     <div className="pinned-row">
       <div className="pinned-figure"><strong>{p(done, total)}%</strong><span className="muted small">{done} of {total} inhabited islands</span></div>

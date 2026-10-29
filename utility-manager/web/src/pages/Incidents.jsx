@@ -4,6 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, PageHead, Pager, Select, Service, Severity } from '../components/ui.jsx';
 import { INCIDENT_CATEGORIES, SERVICES, SEVERITIES, dateTime, duration } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
+import { Icon } from '../components/icons.jsx';
 
 export default function Incidents() {
   const { allowed } = useAuth();
@@ -29,7 +30,7 @@ export default function Incidents() {
       <input type="date" value={filters.from || ''} onChange={(e) => setFilter('from', e.target.value)} aria-label="From" title="From" />
       <input type="date" value={filters.to || ''} onChange={(e) => setFilter('to', e.target.value)} aria-label="To" title="To" />
       <input type="search" placeholder="Search…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
-      {filters.island_id && <button className="btn ghost small" onClick={() => setFilter('island_id', '')}>✕ island filter</button>}
+      {filters.island_id && <button className="btn ghost small" onClick={() => setFilter('island_id', '')}><Icon name="close" size={14} /> island filter</button>}
     </div>
     <Async state={state}>{(page) => (
       <Card>

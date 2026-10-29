@@ -9,6 +9,7 @@ import { LinksCard } from '../components/Links.jsx';
 import { date, dateTime } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
 import { SurveyStatus } from './Surveys.jsx';
+import { Icon } from '../components/icons.jsx';
 
 export default function Survey() {
   const { id } = useParams();
@@ -121,7 +122,7 @@ function SurveyView({ survey: s, template: t, reload }) {
           {items.length === 0 ? <p className="muted small">None added. Use “+ {sec.repeat.label}”.</p> :
             <div className="table-scroll"><table className="survey-grid">
               <thead><tr><th>{sec.repeat.label === 'Gen' ? 'Genset details' : ''}</th>{items.map((_, i) => <th key={i}>{sec.repeat.label} {i + 1}
-                {editing && <button className="btn ghost small" onClick={() => removeItem(sec.key, i)} aria-label={`Remove ${sec.repeat.label} ${i + 1}`}>✕</button>}</th>)}</tr></thead>
+                {editing && <button className="btn ghost small" onClick={() => removeItem(sec.key, i)} aria-label={`Remove ${sec.repeat.label} ${i + 1}`}><Icon name="close" size={16} /></button>}</th>)}</tr></thead>
               <tbody>{sec.fields.map((f) => <tr key={f.key}>
                 <th scope="row">{f.label}{f.unit && <span className="muted"> ({f.unit})</span>}</th>
                 {items.map((item, i) => <td key={i}>{editing ? <Input field={f} value={item[f.key]} compact onChange={(x) => setItem(sec.key, i, f.key, x)} /> : show(f, item[f.key])}</td>)}

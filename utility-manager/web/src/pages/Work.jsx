@@ -81,7 +81,7 @@ function WorkRow({ w }) {
   // Who has it: the person, then the unit (said once).
   const who = [...new Set([w.assigned_user_name, w.assigned_to, w.unit_name].filter(Boolean))];
   const open = !['completed', 'cancelled'].includes(w.status);
-  return <Link to={`/work/${w.id}`} className="work-row">
+  return <Link to={`/work/${w.id}`} className={`work-row s-${w.status}${w.overdue ? ' late' : ''}`}>
     <div className="work-main">
       <div className="work-title"><span className="work-ref">{w.ref}</span><strong>{w.title}</strong></div>
       <div className="work-meta">

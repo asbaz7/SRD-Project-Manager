@@ -6,7 +6,7 @@ import { useAuth } from '../auth.jsx';
 import { useApi, useSubmit } from '../hooks.js';
 import { dateTime } from '../format.js';
 import { Card, ErrorBox } from './ui.jsx';
-import { Icon } from './icons.jsx';
+import { Icon, Mark } from './icons.jsx';
 
 export default function TelegramCard() {
   const { can } = useAuth();
@@ -45,7 +45,7 @@ export default function TelegramCard() {
       <ErrorBox error={connect.error || testAlert.error || setAlerts.error || remove.error} />
       <dl className="facts">
         <dt>Bot</dt><dd>{t.bot ? `@${t.bot}` : <span className="bad">Can't reach Telegram{t.status.error ? `: ${t.status.error}` : ''}. Check the token.</span>}</dd>
-        <dt>Connection</dt><dd>{t.status.connected ? <span className="good">✓ Receiving messages</span> : <span className="warn">Not connected</span>}
+        <dt>Connection</dt><dd>{t.status.connected ? <span className="good"><Mark name="check" /> Receiving messages</span> : <span className="warn">Not connected</span>}
           {t.status.last_error && <><br /><span className="muted small">Last error: {t.status.last_error}</span></>}</dd>
       </dl>
       <div className="form-actions" style={{ justifyContent: 'flex-start' }}>

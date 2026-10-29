@@ -9,6 +9,7 @@ import { AssetForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Fault, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
+import { Icon } from '../components/icons.jsx';
 
 const ago = (iso) => {
   if (!iso) return '';
@@ -298,7 +299,7 @@ function DeleteEvent({ id, onDone }) {
     await api(`/maintenance/${id}`, { method: 'DELETE' });
     onDone();
   });
-  return <button className="btn ghost small" disabled={busy} onClick={submit} aria-label="Remove record">✕</button>;
+  return <button className="btn ghost small" disabled={busy} onClick={submit} aria-label="Remove record"><Icon name="close" size={16} /></button>;
 }
 
 // Clear a genset's faults once fixed: one (fault), or all of them. They stay

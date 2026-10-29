@@ -11,6 +11,7 @@ import { ASSET_STATUS, FAULTS, dateTime, month, num } from '../format.js';
 
 const STATUSES = ['running', 'standby', 'down', 'maintenance', 'disconnected'];
 import { useApi, useFilters, useSubmit } from '../hooks.js';
+import { Mark } from '../components/icons.jsx';
 
 const SOURCE = { update: 'Monthly update', upload: 'Workbook', fleet_manager: 'Fleet Manager' };
 const missing = (state) => state === 'missing' || state === 'never';
@@ -36,7 +37,7 @@ export default function GensetUpdates() {
           <thead><tr><th>Powerhouse</th><th>Last update</th><th className="hide-sm">By</th><th className="num hide-sm">Gensets</th><th /></tr></thead>
           <tbody>{rows.map((p) => <tr key={p.facility_id} className={missing(p.state) ? 'attention' : ''}>
             <td><Link to={`/islands/${p.island_id}`}><strong>{p.atoll_code} · {p.island_name}</strong></Link></td>
-            <td><span className={`state ${p.state}`}>{p.state === 'up_to_date' ? '✓ ' : p.state === 'never' ? '✕ None yet' : ['untracked', 'not_expected'].includes(p.state) ? '– ' : '✕ '}
+            <td><span className={`state ${p.state}`}>{p.state === 'up_to_date' ? <Mark name="check" /> : p.state === 'never' ? <><Mark name="cross" /> None yet</> : ['untracked', 'not_expected'].includes(p.state) ? <Mark name="dash" /> : <Mark name="cross" />}{' '}
               {p.report_month ? month(p.report_month) : p.state === 'not_expected' ? 'Not surveyed yet' : ''}</span>
               {p.state === 'not_expected' && p.reports_from && <><br /><small className="muted">from {month(p.reports_from)}</small></>}
               {p.state === 'missing' && <><br /><small className="muted">{month(t.expected_month)} due</small></>}</td>
