@@ -134,6 +134,14 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
   };
   const onPointerUp = (e) => { drag.current.pts.delete(e.pointerId); };
   const tapped = () => !drag.current.moved;
+  // Islands on screen, for picking the one nearest a tap (dots can sit a few pixels apart).
+  const hits = useRef([]);
+  const nearest = (e) => {
+    const b = box.current.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
+    let best = null, bd = 16;
+    for (const m of hits.current) { const d = Math.hypot(m.x - px, m.y - py); if (d < bd) { bd = d; best = m.i; } }
+    return best;
+  };
 
   // Pressing an island: the map flies onto it (zooming in, the island
   // gliding to the centre, ringed), then its page fades in.
@@ -196,6 +204,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     // Phones: compact, as the board's narrow mode (codes only, smaller marks).
     const small = w < 520;
     const marks = placedIslands.map((i) => ({ i, x: gx(i.lon), y: gy(i.lat) }));
+    hits.current = marks;
     const rad = () => (small ? 3.5 : 4.5);
     for (const m of marks) {
       const e = rad(m) + 2;
@@ -288,7 +297,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         const d = smooth(s.rings[0]);
         const extra = s.rings.slice(1).map(smooth).join(' ');
         return <g key={s.a.code} className={`am-atoll${on ? ' on' : ''}`} opacity={dimA(s.a.code) ? 0.32 : 1}
-          onClick={(e) => { e.stopPropagation(); if (tapped()) onAtoll(on ? null : s.a.code); }}>
+          onClick={(e) => { e.stopPropagation(); if (!tapped() || going) return; const near = nearest(e); if (near) goTo(near); else onAtoll(on ? null : s.a.code); }}>
           <g clipPath={s.split ? `url(#am-clip-${s.a.code})` : undefined}>
             <path d={d} className="am-glow" filter="url(#am-glow)" />
             <path d={d} className="am-fill" fill={on ? 'url(#am-lagoon-on)' : 'url(#am-lagoon)'} />
@@ -322,7 +331,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         const dim = dimA(m.i.atoll_code);
         const label = `${m.i.atoll_code}. ${m.i.name}`;
         return <g key={m.i.id} className="am-island" opacity={dim ? 0.3 : 1} role="link"
-          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); if (tapped() && !going) goTo(m.i); }} onKeyDown={(e) => { if (e.key === 'Enter' && !going) goTo(m.i); }}>
+          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); if (tapped() && !going) goTo(nearest(e) || m.i); }} onKeyDown={(e) => { if (e.key === 'Enter' && !going) goTo(m.i); }}>
           <title>{label}</title>
           {going === m.i.id && <circle cx={m.x} cy={m.y} r={rad(m) + 7} className="am-going" />}
           <circle cx={m.x} cy={m.y} r={rad(m)} className="am-dot" />
