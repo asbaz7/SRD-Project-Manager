@@ -33,7 +33,13 @@ const islandSummary = (vis, seen) => `
          (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold') and ${vis.sql}) as active_projects,
          (select count(*) from work_orders w where w.island_id = i.id and w.status not in ('completed', 'cancelled') and ${seen.sql}) as open_work,
          (select count(*) from facilities fc where fc.island_id = i.id and fc.active and fc.service <> 'electricity'
-             and (fc.licence_status ~* 'expired' or fc.licence_expires_on < current_date)) as licences_expired
+             and (fc.licence_status ~* 'expired' or fc.licence_expires_on < current_date)) as licences_expired,
+         -- Where it is, for the map (from the national takeover list, migration 055).
+         -- (linked to the island, or else the same name in the same atoll).
+         (select t.lat from takeover_islands t where t.island_id = i.id or (t.atoll_code = a.code and lower(t.name) = lower(i.name))
+           order by t.island_id = i.id desc nulls last limit 1) as lat,
+         (select t.lon from takeover_islands t where t.island_id = i.id or (t.atoll_code = a.code and lower(t.name) = lower(i.name))
+           order by t.island_id = i.id desc nulls last limit 1) as lon
     from islands i
     join atolls a on a.id = i.atoll_id
     left join facilities f on f.island_id = i.id

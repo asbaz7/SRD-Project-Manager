@@ -5,6 +5,7 @@ import { useAuth } from '../auth.jsx';
 import { Async, Card, Empty, ErrorBox, Field, Modal, PageHead, Select, Stat } from '../components/ui.jsx';
 import { Icon, Mark } from '../components/icons.jsx';
 import { ASSET_STATUS, SERVICES, num, power } from '../format.js';
+import AtollMap from '../components/AtollMap.jsx';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 export default function Islands() {
@@ -56,6 +57,12 @@ function IslandList({ islands, atolls, technical, filters, setFilter }) {
       </>}
       <Stat label="Open work" value={num(sum(islands, 'open_work'))} sub={`on ${count((i) => i.open_work > 0)} islands`} to="/work" />
     </div>
+    <div className="islands-split">
+    <section className="glass islands-map" aria-label="Map">
+      <AtollMap islands={shown} atolls={atolls} focus={atolls.find((a) => a.id === filters.atoll_id)?.code || null}
+        onAtoll={(code) => setFilter('atoll_id', code ? atolls.find((a) => a.code === code)?.id || '' : '')} />
+    </section>
+    <div className="islands-list">
     <div className="filters toolbar">
       <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
         options={atolls.map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />
@@ -84,6 +91,8 @@ function IslandList({ islands, atolls, technical, filters, setFilter }) {
         {!shut && <div className="island-grid">{a.islands.map((i) => <IslandCard key={i.id} i={i} technical={technical} />)}</div>}
       </section>;
     })}
+    </div>
+    </div>
   </>;
 }
 

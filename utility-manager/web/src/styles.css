@@ -812,3 +812,43 @@ option { background: #0c2a44; color: var(--text); }
 .mark { flex: none; display: inline-block; vertical-align: -1px; }
 .flag { display: inline-flex; align-items: center; gap: 5px; }
 .flag .icon, .flag .mark { vertical-align: 0; }
+
+/* Islands page: the atolls map beside the list (Oct 2026), as on the TV board. */
+.islands-split { display: grid; grid-template-columns: minmax(340px, 42%) minmax(0, 1fr); gap: 16px; align-items: start; }
+.islands-map { position: sticky; top: 12px; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 236px); max-height: 900px; min-height: 460px; }
+.islands-list { min-width: 0; }
+.islands-list .island-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.atoll-map { display: flex; flex-direction: column; height: 100%; }
+.am-canvas { flex: 1; min-height: 0; position: relative; }
+.am-canvas svg { display: block; position: absolute; inset: 0; }
+.am-atoll, .am-label { cursor: pointer; }
+.am-glow { fill: none; stroke: rgb(140 185 230 / .28); stroke-width: 7; }
+.am-atoll.on .am-glow { stroke: rgb(170 210 245 / .5); }
+.am-rim { fill: none; stroke: rgb(175 205 232 / .62); stroke-width: 1.2; stroke-linejoin: round; }
+.am-atoll.on .am-rim { stroke: rgb(225 238 250 / .95); stroke-width: 1.8; }
+.am-atoll:hover .am-rim { stroke: rgb(205 225 245 / .9); }
+.am-cut { stroke: rgb(175 205 232 / .38); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none; }
+.am-code { font-size: 13.5px; font-weight: 800; fill: #fff; paint-order: stroke; stroke: rgb(4 18 34 / .75); stroke-width: 4px; stroke-linejoin: round; }
+.am-code .am-name { font-weight: 600; fill: rgb(225 236 248 / .9); }
+.am-sub { font-size: 11.5px; font-weight: 600; fill: rgb(222 233 245 / .84); paint-order: stroke; stroke: rgb(4 18 34 / .7); stroke-width: 3px; }
+.am-sub.bad { fill: var(--bad); }
+.am-island { cursor: pointer; outline: none; }
+.am-island:focus-visible .am-halo { stroke: #fff; stroke-width: 2; }
+.am-dot { fill: rgb(205 216 228 / .62); }
+.am-mark { stroke: #0f141b; stroke-width: 2.5; fill: var(--t-prog); }
+.am-halo { fill: none; stroke: rgb(232 238 245 / .55); stroke-width: 1; }
+.am-island.t-bad .am-mark { fill: var(--t-over); }
+.am-island.t-warn .am-mark { fill: var(--t-hold); }
+.am-island:hover .am-halo { stroke: #fff; }
+.am-badge { font-size: 10px; font-weight: 800; fill: #fff; pointer-events: none; }
+.am-iname { font-weight: 600; fill: #eaf3ff; paint-order: stroke; stroke: rgb(4 18 34 / .8); stroke-width: 3.5px; stroke-linejoin: round; pointer-events: none; }
+.am-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px; border-top: 1px solid var(--hairline); color: var(--text-2); }
+.am-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.am-legend i { width: 10px; height: 10px; border-radius: 50%; background: var(--t-prog); box-shadow: 0 0 0 1.5px rgb(232 238 245 / .4); }
+.am-legend i.t-bad { background: var(--t-over); } .am-legend i.t-warn { background: var(--t-hold); }
+.am-legend i.quiet { width: 6px; height: 6px; background: rgb(205 216 228 / .62); box-shadow: none; }
+.am-legend .btn { margin-left: auto; }
+@media (max-width: 1100px) {
+  .islands-split { grid-template-columns: 1fr; }
+  .islands-map { position: relative; top: auto; height: 62vh; min-height: 380px; }
+}
