@@ -82,8 +82,14 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
 
   // The person's own pan and zoom, on top of the framed view. Choosing an
   // atoll (or the reset button) starts it afresh.
-  const [pz, setPz] = useState({ z: 1, dx: 0, dy: 0 });
-  useEffect(() => { setPz({ z: 1, dx: 0, dy: 0 }); }, [focus]);
+  // Kept for the session, so coming back to the map finds it as it was left.
+  const saved = () => { try { return JSON.parse(sessionStorage.getItem(`am-view:${focus || ''}`)) || null; } catch { return null; } };
+  const [pz, setPz] = useState(() => saved() || { z: 1, dx: 0, dy: 0 });
+  const firstFocus = useRef(true);
+  useEffect(() => {
+    if (firstFocus.current) { firstFocus.current = false; return; }
+    setPz({ z: 1, dx: 0, dy: 0 });
+  }, [focus]);
   const zoomAt = (f, sx, sy) => setPz((p) => {
     const z = Math.min(12, Math.max(0.6, p.z * f)), q = z / p.z;
     const cx = sx ?? size.w / 2, cy = sy ?? size.h / 2;
@@ -146,6 +152,10 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
   // Pressing an island: the map flies onto it (zooming in, the island
   // gliding to the centre, ringed), then its page fades in.
   const [going, setGoing] = useState(null);
+  useEffect(() => {
+    if (going) return;
+    try { sessionStorage.setItem(`am-view:${focus || ''}`, JSON.stringify(pz)); } catch { /* private mode */ }
+  }, [pz, focus, going]);
   const fly = useRef(0);
   const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const goTo = (i) => {

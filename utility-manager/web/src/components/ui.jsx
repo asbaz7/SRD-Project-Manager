@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { Icon, Mark } from './icons.jsx';
 import { ASSET_STATUS, CONDITIONS, FAULTS, PROJECT_STATES, SERVICES, SEVERITIES, WORK_STATES } from '../format.js';
@@ -104,10 +104,20 @@ export function Card({ title, actions, children, className = '' }) {
   );
 }
 
+// Detail pages (those with crumbs) get a Back button: to the page the person
+// came from in the app, or, opened from a link, to the crumbs' nearest page.
+export function BackButton({ fallback }) {
+  const navigate = useNavigate();
+  const back = () => (window.history.state?.idx > 0 ? navigate(-1) : navigate(fallback || '/'));
+  return <button type="button" className="back-btn" onClick={back}><Icon name="back" size={16} /> Back</button>;
+}
+
 export function PageHead({ title, crumbs, actions, children, icon, tone = 'neutral', subtitle }) {
+  const parent = crumbs && [...crumbs].reverse().find((c) => c.to)?.to;
   return (
     <div className="page-head">
-      {crumbs && <nav className="crumbs">{crumbs.map((c, i) => <span key={i}>{c.to ? <Link to={c.to}>{c.label}</Link> : c.label}{i < crumbs.length - 1 && ' › '}</span>)}</nav>}
+      {crumbs && <div className="crumbs-row"><BackButton fallback={parent} />
+        <nav className="crumbs" aria-label="Breadcrumb">{crumbs.map((c, i) => <span key={i}>{c.to ? <Link to={c.to}>{c.label}</Link> : c.label}{i < crumbs.length - 1 && ' › '}</span>)}</nav></div>}
       <div className="page-title">
         {icon && <span className={`title-icon ${tone}`}><Icon name={icon} size={24} /></span>}
         <div><h1>{title}</h1>{subtitle && <p className="subtitle">{subtitle}</p>}</div>

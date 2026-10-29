@@ -148,7 +148,13 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .title-icon.neutral { background: rgb(255 255 255 / .12); border: 1px solid var(--glass-border); }
 .subtitle { color: var(--muted); margin: 2px 0 0; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.crumbs { color: var(--muted); font-size: .85rem; margin-bottom: 6px; }
+.crumbs { color: var(--muted); font-size: .85rem; }
+.crumbs-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.back-btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px 5px 8px; border-radius: 999px; border: 1px solid var(--glass-border);
+  background: rgb(255 255 255 / .08); color: var(--text); font: inherit; font-size: .86rem; font-weight: 600; cursor: pointer; transition: background-color .15s ease-out; }
+.back-btn:hover { background: rgb(255 255 255 / .16); }
+.back-btn .icon { vertical-align: 0; }
+@media (max-width: 860px) { .back-btn { padding: 8px 14px 8px 10px; font-size: .92rem; } .crumbs { display: none; } }
 .section-title { margin: 22px 0 10px; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 650; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 14px; }
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; margin-bottom: 16px; }

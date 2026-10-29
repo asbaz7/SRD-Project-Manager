@@ -31,6 +31,7 @@ const paths = {
   clock: 'M12 7.5V12l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
   chevron: 'M6 9l6 6 6-6',
   plus: 'M12 5v14M5 12h14',
+  back: 'M15 5l-7 7 7 7',
   minus: 'M5 12h14',
 };
 
