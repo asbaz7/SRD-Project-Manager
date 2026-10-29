@@ -32,8 +32,6 @@ const islandSummary = (vis, seen) => `
          (select count(*) from incidents x where x.island_id = i.id and x.status = 'open') as open_incidents,
          (select count(*) from projects p where p.island_id = i.id and p.status in ('planned', 'ongoing', 'on_hold') and ${vis.sql}) as active_projects,
          (select count(*) from work_orders w where w.island_id = i.id and w.status not in ('completed', 'cancelled') and ${seen.sql}) as open_work,
-         -- An electricity outage still open: the island's power is off.
-         exists (select 1 from incidents x where x.island_id = i.id and x.status = 'open' and x.service = 'electricity' and x.category = 'outage') as power_off,
          (select count(*) from facilities fc where fc.island_id = i.id and fc.active and fc.service <> 'electricity'
              and (fc.licence_status ~* 'expired' or fc.licence_expires_on < current_date)) as licences_expired,
          -- Where it is, for the map (from the national takeover list, migration 055).

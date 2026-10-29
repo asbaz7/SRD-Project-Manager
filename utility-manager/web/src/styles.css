@@ -833,19 +833,10 @@ option { background: #0c2a44; color: var(--text); }
 .am-dot { fill: rgb(214 226 240 / .78); stroke: rgb(4 18 34 / .6); stroke-width: 1; }
 .am-island:hover .am-dot, .am-island:focus-visible .am-dot { fill: #fff; }
 .am-island:focus-visible .am-dot { stroke: var(--link); stroke-width: 2; }
-.am-dot.off { fill: var(--t-over); }
-.am-off { fill: none; stroke: var(--t-over); stroke-width: 2.4; }
 .am-iname { font-weight: 650; fill: #eaf3ff; paint-order: stroke; stroke: rgb(4 18 34 / .85); stroke-width: 3.5px; stroke-linejoin: round; pointer-events: none; }
 .am-leader { stroke: rgb(232 238 245 / .4); stroke-width: 1; pointer-events: none; }
-@media (prefers-reduced-motion: no-preference) {
-  .am-off.pulse { transform-box: fill-box; transform-origin: center; animation: am-ring 1.9s ease-out infinite; }
-  @keyframes am-ring { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
-}
 .am-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 10px 16px; border-top: 1px solid var(--hairline); color: var(--text-2); }
 .am-legend span { display: inline-flex; align-items: center; gap: 7px; }
-.am-legend i { width: 9px; height: 9px; border-radius: 50%; }
-.am-legend i.off { background: transparent; box-shadow: inset 0 0 0 2px var(--t-over); }
-.am-legend i.quiet { background: rgb(214 226 240 / .78); }
 .am-legend .btn { margin-left: auto; }
 @media (max-width: 1100px) {
   .islands-map { height: calc(100vh - 210px); min-height: 460px; }

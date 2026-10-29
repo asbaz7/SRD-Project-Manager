@@ -1,7 +1,6 @@
 // The department's atolls as a map, drawn as on the TV board: true
 // geography (one scale both ways), reef outlines with a lagoon fill and a
-// soft glow, and every island as a named dot. An island whose power is off
-// gets a red ring. Names keep clear of rims, dots and each other, with a
+// soft glow, and every island as a named dot. Names keep clear of rims, dots and each other, with a
 // leader line where they have to sit further out. Choosing an atoll eases
 // the map onto it.
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -106,10 +105,10 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     // Islands: markers first, so labels keep clear of them.
     // Phones: compact, as the board's narrow mode (codes only, smaller marks).
     const small = w < 520;
-    const marks = placedIslands.map((i) => ({ i, x: gx(i.lon), y: gy(i.lat), off: !!i.power_off }));
-    const rad = (m) => (m.off ? 6 : small ? 3.5 : 4.5);
+    const marks = placedIslands.map((i) => ({ i, x: gx(i.lon), y: gy(i.lat) }));
+    const rad = () => (small ? 3.5 : 4.5);
     for (const m of marks) {
-      const e = rad(m) + (m.off ? 6 : 2);
+      const e = rad(m) + 2;
       placed.push({ x0: m.x - e, x1: m.x + e, y0: m.y - e, y1: m.y + e });
     }
 
@@ -147,11 +146,11 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     // with a leader line.
     const names = [];
     const leaders = [];
-    const named = marks.slice().sort((p, q) => q.off - p.off);
+    const named = marks;
     for (const m of named) {
       const fs = small ? 10 : 12.5;
       const tw = textW(m.i.name, fs) + 4;
-      const off = rad(m) + (m.off ? 9 : 5);
+      const off = rad(m) + 5;
       const blockers = [...placed, ...rimPts.filter((p) => p.atoll !== m.i.atoll_code)];
       const at = (x, y, anchor) => {
         const x0 = anchor === 'start' ? x : anchor === 'end' ? x - tw : x - tw / 2;
@@ -230,14 +229,13 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         </g>;
       })}
       {leaders.map((ld) => <line key={ld.id} className="am-leader" x1={ld.x1} y1={ld.y1} x2={ld.x2} y2={ld.y2} />)}
-      {marks.sort((p, q) => p.off - q.off).map((m) => {
+      {marks.map((m) => {
         const dim = dimA(m.i.atoll_code);
-        const label = `${m.i.atoll_code}. ${m.i.name}${m.off ? ': power off' : ''}`;
-        return <g key={m.i.id} className={`am-island${m.off ? ' off' : ''}`} opacity={dim ? 0.3 : 1} role="link"
+        const label = `${m.i.atoll_code}. ${m.i.name}`;
+        return <g key={m.i.id} className="am-island" opacity={dim ? 0.3 : 1} role="link"
           tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); open(m.i); }} onKeyDown={(e) => { if (e.key === 'Enter') open(m.i); }}>
           <title>{label}</title>
-          {m.off && <><circle cx={m.x} cy={m.y} r={rad(m) + 5} className="am-off" /><circle cx={m.x} cy={m.y} r={rad(m) + 5} className="am-off pulse" /></>}
-          <circle cx={m.x} cy={m.y} r={m.off ? 5 : rad(m)} className={`am-dot${m.off ? ' off' : ''}`} />
+          <circle cx={m.x} cy={m.y} r={rad(m)} className="am-dot" />
           <circle cx={m.x} cy={m.y} r={14} fill="transparent" />
         </g>;
       })}
@@ -248,10 +246,9 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
 
   return <div className="atoll-map">
     <div className="am-canvas" ref={box} onClick={() => focus && onAtoll(null)}>{svg}</div>
-    <div className="am-legend small">
-      <span><i className="quiet" /> Island</span>
-      <span><i className="off" /> Power off</span>
-      {focus && <button type="button" className="btn small ghost" onClick={() => onAtoll(null)}>All atolls</button>}
-    </div>
+    {focus && <div className="am-legend small">
+      <span>{atolls.find((a) => a.code === focus)?.name || focus}</span>
+      <button type="button" className="btn small ghost" onClick={() => onAtoll(null)}>All atolls</button>
+    </div>}
   </div>;
 }
