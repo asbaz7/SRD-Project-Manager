@@ -1,90 +1,31 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api, qs } from '../api.js';
+import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Async, Card, Empty, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
-import { Icon } from '../components/icons.jsx';
-import { SERVICES, num } from '../format.js';
+import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import AtollMap from '../components/AtollMap.jsx';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
+// The islands page is the map: every island of the department where it is,
+// named, with the state of its work. Tap an atoll to ease onto it, an
+// island to open it. Gensets, plants and work have their own pages.
 export default function Islands() {
   const { can } = useAuth();
   const [modal, setModal] = useState(null);
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
-  const state = useApi(`/islands${qs({ atoll_id: filters.atoll_id, q: filters.q })}`);
+  const state = useApi('/islands');
 
   return <>
-    <PageHead title="Islands" subtitle="Where the department's islands are and the services on each" icon="island" actions={can('admin') && <>
+    <PageHead title="Islands" subtitle="Every island of the department, with the state of its work. Tap an atoll to zoom in, an island to open it." icon="island" actions={can('admin') && <>
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />
     {modal === 'atoll' && <AtollForm onClose={() => setModal(null)} onSaved={() => { setModal(null); atolls.reload(); }} />}
     {modal === 'island' && <IslandForm atolls={atolls.data || []} onClose={() => setModal(null)} onSaved={() => { setModal(null); state.reload(); }} />}
-    <Async state={state}>{(islands) => <IslandList islands={islands} atolls={atolls.data || []} filters={filters} setFilter={setFilter} />}</Async>
+    <Async state={state}>{(islands) => <section className="glass islands-map" aria-label="Map of the islands">
+      <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter('atoll', code || '')} />
+    </section>}</Async>
   </>;
-}
-
-// The islands page is about the islands themselves: where they are and
-// what services they have. Gensets, plants and work have their own pages.
-// The atoll and search filters go to the server; the service filter narrows
-// the list here.
-function IslandList({ islands, atolls, filters, setFilter }) {
-  const [folded, setFolded] = useState(() => new Set());
-  const toggle = (code) => setFolded((prev) => { const next = new Set(prev); if (next.has(code)) next.delete(code); else next.add(code); return next; });
-  const shown = islands.filter((i) => !filters.service || i.services.includes(filters.service));
-  const groups = [];
-  for (const i of shown) {
-    let a = groups.at(-1);
-    if (!a || a.code !== i.atoll_code) groups.push(a = { code: i.atoll_code, name: i.atoll_name, islands: [] });
-    a.islands.push(i);
-  }
-  const count = (pred) => islands.filter(pred).length;
-  const chips = [['', 'All', islands.length], ...Object.entries(SERVICES).map(([k, s]) => [k, s.label, count((i) => i.services.includes(k))])];
-
-  return <div className="islands-split">
-    <section className="glass islands-map" aria-label="Map">
-      <AtollMap islands={shown} atolls={atolls} focus={atolls.find((a) => a.id === filters.atoll_id)?.code || null}
-        onAtoll={(code) => setFilter('atoll_id', code ? atolls.find((a) => a.code === code)?.id || '' : '')} />
-    </section>
-    <div className="islands-list">
-      <div className="filters toolbar">
-        <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
-          options={atolls.map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />
-        <input type="search" placeholder="Search island…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
-        <div className="chips">
-          {chips.map(([k, l, n]) => <button key={k} className={`chip ${(filters.service || '') === k ? 'on' : ''}`} onClick={() => setFilter('service', k)}>
-            {k && <span className={`svc-dot ${k}`} aria-hidden="true" />}{l}<strong>{n}</strong></button>)}
-        </div>
-      </div>
-      <p className="muted small">{num(shown.length)} island{shown.length === 1 ? '' : 's'} in {num(groups.length)} atoll{groups.length === 1 ? '' : 's'}</p>
-      {groups.length === 0 && <Card><Empty>No islands match these filters.</Empty></Card>}
-      {groups.map((a) => {
-        const shut = folded.has(a.code);
-        return <section key={a.code} className="atoll-group">
-          <button type="button" className={`atoll-head${shut ? ' collapsed' : ''}`} aria-expanded={!shut} onClick={() => toggle(a.code)}>
-            <span className="chev" aria-hidden="true"><Icon name="chevron" size={14} /></span>
-            <h2>{a.code} · {a.name}</h2>
-            <span className="muted small">{a.islands.length} island{a.islands.length === 1 ? '' : 's'}</span>
-          </button>
-          {!shut && <div className="island-grid">{a.islands.map((i) => <IslandCard key={i.id} i={i} />)}</div>}
-        </section>;
-      })}
-    </div>
-  </div>;
-}
-
-// One island: its name, the services it has, and its population if known.
-function IslandCard({ i }) {
-  return <Link to={`/islands/${i.id}`} className="island-card">
-    <div className="top"><strong>{i.name}</strong></div>
-    <div className="island-svcs">
-      {i.services.length ? i.services.map((sv) => <span key={sv} className="island-svc"><span className={`svc-badge ${sv}`}><Icon name={sv} size={13} /></span>{SERVICES[sv]?.label}</span>)
-        : <span className="muted small">No services recorded</span>}
-    </div>
-    {i.population > 0 && <div className="muted small">Population {num(i.population)}</div>}
-  </Link>;
 }
 
 function AtollForm({ onClose, onSaved }) {

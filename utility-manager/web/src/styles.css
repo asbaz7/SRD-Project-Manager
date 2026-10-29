@@ -814,14 +814,8 @@ option { background: #0c2a44; color: var(--text); }
 .flag .icon, .flag .mark { vertical-align: 0; }
 
 /* Islands page: the atolls map beside the list (Oct 2026), drawn as on the TV board. */
-.islands-split { display: grid; grid-template-columns: minmax(380px, 52%) minmax(0, 1fr); gap: 16px; align-items: start; }
-.islands-map { position: sticky; top: 12px; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 110px); max-height: 1000px; min-height: 520px;
+.islands-map { position: relative; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 118px); min-height: 560px;
   background: radial-gradient(90% 80% at 50% 40%, rgb(14 44 70 / .55), rgb(4 16 30 / .55)); }
-.islands-list { min-width: 0; }
-.islands-list .island-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-.island-svcs { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: .84rem; color: var(--text-2); }
-.island-svc { display: inline-flex; align-items: center; gap: 6px; }
-.island-svc .svc-badge { width: 20px; height: 20px; border-radius: 6px; }
 .atoll-map { display: flex; flex-direction: column; height: 100%; }
 .am-canvas { flex: 1; min-height: 0; position: relative; }
 .am-canvas svg { display: block; position: absolute; inset: 0; }
@@ -850,6 +844,7 @@ option { background: #0c2a44; color: var(--text); }
 .am-badge { font-size: 11px; font-weight: 800; fill: #fff; pointer-events: none; }
 .am-iname { font-weight: 650; fill: #eaf3ff; paint-order: stroke; stroke: rgb(4 18 34 / .85); stroke-width: 3.5px; stroke-linejoin: round; pointer-events: none; }
 .am-leader { stroke: rgb(232 238 245 / .4); stroke-width: 1; pointer-events: none; }
+.am-iname.quiet { font-weight: 550; fill: rgb(222 233 245 / .82); }
 @media (prefers-reduced-motion: no-preference) {
   .am-off.pulse { transform-box: fill-box; transform-origin: center; animation: am-ring 1.9s ease-out infinite; }
   @keyframes am-ring { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
@@ -862,6 +857,5 @@ option { background: #0c2a44; color: var(--text); }
 .am-legend i.quiet { width: 6px; height: 6px; background: rgb(205 216 228 / .62); }
 .am-legend .btn { margin-left: auto; }
 @media (max-width: 1100px) {
-  .islands-split { grid-template-columns: 1fr; }
-  .islands-map { position: relative; top: auto; height: 72vh; min-height: 420px; }
+  .islands-map { height: calc(100vh - 210px); min-height: 460px; }
 }

@@ -120,9 +120,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     const R = small ? 9 : 11;
     const marks = placedIslands.map((i) => ({ i, x: gx(i.lon), y: gy(i.lat), tone: islandTone(i), off: !!i.power_off }));
     const rad = (m) => (m.tone ? R : m.off ? 6 : 4);
-    const big = (m) => m.tone || m.off || focus === m.i.atoll_code;
     for (const m of marks) {
-      if (!big(m)) continue;
       const e = rad(m) + (m.off ? 6 : 2);
       placed.push({ x0: m.x - e, x1: m.x + e, y0: m.y - e, y1: m.y + e });
     }
@@ -136,7 +134,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
       const sm = summary(placedIslands.filter((i) => i.atoll_code === s.a.code));
       const sub = sm.parts.map((p) => p[0]).join(' · ');
       // Bold capitals run wide: the code's width is estimated generously.
-      const head = s.a.code.length * 19 * 0.7 + (small ? 0 : textW(s.a.name, 18, true) * 1.08) + 22;
+      const head = s.a.code.length * 19 * 0.66 + (small ? 0 : textW(s.a.name, 18, true)) + 22;
       const lw = (small ? head : Math.max(head, textW(sub, 13.5))) + 6, lh = small ? 24 : 42;
       const others = [...placed, ...rimPts.filter((p) => p.atoll !== s.a.code)];
       let best = null;
@@ -161,9 +159,9 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     // with a leader line.
     const names = [];
     const leaders = [];
-    const named = marks.filter((m) => big(m) && (!small || m.tone === 'over' || m.off || focus === m.i.atoll_code)).sort((p, q) => (q.tone === 'over') - (p.tone === 'over') || q.off - p.off || n(q.i.open_work) - n(p.i.open_work));
+    const named = marks.slice().sort((p, q) => (q.tone === 'over') - (p.tone === 'over') || q.off - p.off || n(q.i.open_work) - n(p.i.open_work));
     for (const m of named) {
-      const fs = small ? 11 : m.tone || m.off ? 13 : 12;
+      const fs = small ? (m.tone || m.off ? 10.5 : 9.5) : m.tone || m.off ? 13 : 11.5;
       const tw = textW(m.i.name, fs) + 4;
       const off = rad(m) + (m.off ? 9 : 5);
       const blockers = [...placed, ...rimPts.filter((p) => p.atoll !== m.i.atoll_code)];
@@ -177,10 +175,10 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
         const b = at(x, y, anchor);
         if (b) { placed.push(b); names.push({ m, x, y, anchor, fs }); done = true; break; }
       }
-      if (!done && (m.tone || m.off)) {
-        search: for (const dist of [2.2, 3.2, 4.4]) {
-          for (const deg of [0, 180, -35, 35, 145, -145]) {
-            const rr = (deg * Math.PI) / 180, ex = m.x + Math.cos(rr) * dist * 14, ey = m.y + Math.sin(rr) * dist * 14;
+      if (!done) {
+        search: for (const dist of [1.8, 2.6, 3.4, 4.4, 5.6, 7]) {
+          for (const deg of [0, 180, -30, 30, 150, -150, -60, 60, 120, -120, -90, 90]) {
+            const rr = (deg * Math.PI) / 180, ex = m.x + Math.cos(rr) * dist * (small ? 10 : 13), ey = m.y + Math.sin(rr) * dist * (small ? 10 : 13);
             const anchor = Math.cos(rr) > 0.3 ? 'start' : Math.cos(rr) < -0.3 ? 'end' : 'middle';
             const tx = ex + (anchor === 'start' ? 4 : anchor === 'end' ? -4 : 0);
             const b = at(tx, ey + fs * 0.35, anchor);
@@ -188,11 +186,14 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
               placed.push(b);
               names.push({ m, x: tx, y: ey + fs * 0.35, anchor, fs });
               leaders.push({ id: m.i.id, x1: m.x + Math.cos(rr) * (rad(m) + 2), y1: m.y + Math.sin(rr) * (rad(m) + 2), x2: ex, y2: ey });
+              done = true;
               break search;
             }
           }
         }
       }
+      // Every island is named: with no clear spot, beside its dot anyway.
+      if (!done) names.push({ m, x: m.x + off, y: m.y + fs * 0.35, anchor: m.x + off + tw < w - 2 ? 'start' : 'end', fs });
     }
 
     const open = (i) => navigate(`/islands/${i.id}`);
@@ -258,7 +259,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
           <circle cx={m.x} cy={m.y} r={14} fill="transparent" />
         </g>;
       })}
-      {names.map((t) => <text key={t.m.i.id} x={t.x} y={t.y} textAnchor={t.anchor} className="am-iname" fontSize={t.fs}
+      {names.map((t) => <text key={t.m.i.id} x={t.x} y={t.y} textAnchor={t.anchor} className={`am-iname${t.m.tone || t.m.off ? '' : ' quiet'}`} fontSize={t.fs}
         opacity={dimA(t.m.i.atoll_code) ? 0.3 : 1}>{t.m.i.name}</text>)}
     </svg>;
   }
