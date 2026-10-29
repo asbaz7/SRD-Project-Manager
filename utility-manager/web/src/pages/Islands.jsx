@@ -31,9 +31,14 @@ export default function Islands() {
         <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter('atoll', code || '')} />
         {/* The total, floating over the map as on the TV board. */}
         <div className="glass am-total" aria-live="polite">
-          <strong>{num(islands.length)}</strong>
-          <span>island{islands.length === 1 ? '' : 's'} in {num(atollCount)} atoll{atollCount === 1 ? '' : 's'}</span>
-          {focused && <small>{num(focused.length)} in {name || filters.atoll}</small>}
+          {focused ? <>
+            <strong>{num(focused.length)}</strong>
+            <span>island{focused.length === 1 ? '' : 's'} in {name || filters.atoll}</span>
+            <small>of {num(islands.length)} in {num(atollCount)} atolls</small>
+          </> : <>
+            <strong>{num(islands.length)}</strong>
+            <span>island{islands.length === 1 ? '' : 's'} in {num(atollCount)} atoll{atollCount === 1 ? '' : 's'}</span>
+          </>}
         </div>
       </section>;
     }}</Async>
