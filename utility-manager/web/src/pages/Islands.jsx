@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import AtollMap from '../components/AtollMap.jsx';
+import { num } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 // The islands page is the map: every island of the department where it is,
@@ -22,9 +23,20 @@ export default function Islands() {
     </>} />
     {modal === 'atoll' && <AtollForm onClose={() => setModal(null)} onSaved={() => { setModal(null); atolls.reload(); }} />}
     {modal === 'island' && <IslandForm atolls={atolls.data || []} onClose={() => setModal(null)} onSaved={() => { setModal(null); state.reload(); }} />}
-    <Async state={state}>{(islands) => <section className="glass islands-map" aria-label="Map of the islands">
-      <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter('atoll', code || '')} />
-    </section>}</Async>
+    <Async state={state}>{(islands) => {
+      const atollCount = new Set(islands.map((i) => i.atoll_code)).size;
+      const focused = filters.atoll && islands.filter((i) => i.atoll_code === filters.atoll);
+      const name = (atolls.data || []).find((a) => a.code === filters.atoll)?.name;
+      return <section className="glass islands-map" aria-label="Map of the islands">
+        <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter('atoll', code || '')} />
+        {/* The total, floating over the map as on the TV board. */}
+        <div className="glass am-total" aria-live="polite">
+          <strong>{num(islands.length)}</strong>
+          <span>island{islands.length === 1 ? '' : 's'} in {num(atollCount)} atoll{atollCount === 1 ? '' : 's'}</span>
+          {focused && <small>{num(focused.length)} in {name || filters.atoll}</small>}
+        </div>
+      </section>;
+    }}</Async>
   </>;
 }
 

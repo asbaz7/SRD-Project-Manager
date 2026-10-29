@@ -35,7 +35,8 @@ function fit(codes, islands, w, h, focused) {
   if (!pts.length || w < 50) return null;
   const lons = pts.map((p) => p[0]), lats = pts.map((p) => p[1]);
   const lon = [Math.min(...lons), Math.max(...lons)], lat = [Math.min(...lats), Math.max(...lats)];
-  const room = w < 520 ? 44 : Math.min(170, w * 0.24), top = w < 520 ? 22 : 34;
+  // Phones leave room at the top for the islands card over the map.
+  const room = w < 520 ? 44 : Math.min(170, w * 0.24), top = w < 520 ? 74 : 34;
   const k = Math.min((w - room * 2) / Math.max(lon[1] - lon[0], 0.15), (h - top * 2) / Math.max(lat[1] - lat[0], 0.15)) * (focused ? 0.8 : 1);
   return { cx: (lon[0] + lon[1]) / 2, cy: (lat[0] + lat[1]) / 2, k };
 }
@@ -139,7 +140,10 @@ export default function AtollMap({ islands, atolls, focus, onAtoll }) {
     const k = view.k * pz.z;
     const gx = (lon) => w / 2 + pz.dx + (lon - view.cx) * k;
     const gy = (lat) => h / 2 + pz.dy - (lat - view.cy) * k;
-    const placed = [];
+    // The islands card floats top left and the zoom buttons at the side
+    // (top right on phones, bottom right otherwise): labels keep clear.
+    const placed = [{ x0: 0, y0: 0, x1: w < 520 ? 210 : 236, y1: w < 520 ? 66 : 92 },
+      w < 520 ? { x0: w - 54, y0: 0, x1: w, y1: 130 } : { x0: w - 64, y0: h - 150, x1: w, y1: h }];
     const rimPts = [];
     const shapes = atolls.filter((a) => ATOLL_SHAPES[a.code]).map((a) => {
       const rings = ATOLL_SHAPES[a.code].map((ring) => ring.map(([lon, lat]) => [gx(lon), gy(lat)]));
