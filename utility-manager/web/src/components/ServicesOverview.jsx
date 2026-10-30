@@ -70,7 +70,6 @@ function ServiceCard({ svc, plants, off, many, onIsland, atollId }) {
         <span className="muted">{Number(f.assets) ? `${f.running}/${f.assets}` : '—'}{f.report_month ? ` · ${month(f.report_month)}` : ''}</span>
         {Number(f.down) > 0 && <span className="bad"><Mark name="cross" /> {f.down}</span>}
       </li>)}</ul>}
-      {many && <nav className="svc-lists">{LISTS[svc].map(([k, l]) => <Link key={k} to={`/systems/${svc}/${k}${qs({ atoll_id: atollId })}`}>{l}</Link>)}</nav>}
     </>}
   </section>;
 }
