@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom';
 import { api, csvUrl, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, Card, EngineState, Empty, ErrorBox, Flags, Modal, PageHead, Select } from '../components/ui.jsx';
-import { date, month, num } from '../format.js';
-import { useApi, useFilters, useRowLink, useSubmit } from '../hooks.js';
+import { month, num } from '../format.js';
+import { useApi, useFilters, useSubmit } from '../hooks.js';
 import { Icon } from '../components/icons.jsx';
 
 const CHIPS = [
@@ -25,11 +25,6 @@ const CHIPS = [
 export default function Engines({ embedded }) {
   const [filters, setFilter] = useFilters({ sort: 'island' });
   const atolls = useApi('/atolls');
-  const rowLink = useRowLink();
-  const rowProps = (e) => {
-    const p = rowLink(`/assets/${e.id}`);
-    return { ...p, className: `${p.className}${e.condition === 'not_running' || e.condition === 'major_fault' ? ' attention' : ''}` };
-  };
   const params = { atoll_id: filters.atoll_id, condition: filters.condition, flag: filters.flag, q: filters.q, sort: filters.sort };
   const state = useApi(`/engines${qs(params)}`);
   const summary = useApi(`/engines${qs({ atoll_id: filters.atoll_id })}`); // counts for the chips, unfiltered
@@ -56,38 +51,46 @@ export default function Engines({ embedded }) {
       <a className="btn ghost" href={csvUrl('/engines', params)}>Export CSV</a>
     </div>
     <Intervals onSaved={() => { state.reload(); summary.reload(); }} />
-    <Async state={state}>{(d) => (
-      <Card>
-        {d.engines.length === 0 ? <Empty>No engines match.</Empty> :
-          <div className="table-scroll">
-            <table>
-              <thead><tr>
-                <th>Engine</th><th>Condition</th><th className="hide-sm">Fault / notes</th>
-                <th className="num">Since overhaul</th><th className="num hide-sm">Total hours</th>
-                <th className="hide-sm">Last overhaul</th><th className="hide-sm">Alternator serviced</th><th className="hide-sm">Report</th>
-              </tr></thead>
-              <tbody>{d.engines.map((e) => <tr key={e.id} {...rowProps(e)}>
-                <td className="wrap">
-                  <Link to={`/assets/${e.id}`}><strong>{e.atoll_code} · {e.island_name}{e.shared_island ? ` · ${e.facility_name}` : ''} · G{e.tag}</strong></Link><br />
-                  <small className="muted">{e.make_model || '—'}{e.rated_capacity ? ` · ${num(e.rated_capacity)} kW` : ''}</small>
-                  <div><Flags e={e} /></div>
-                </td>
-                <td><EngineState e={e} /></td>
-                <td className="wrap hide-sm small">{(['down', 'maintenance'].includes(e.status) ? e.status_note || e.fault : e.fault) || <span className="muted">—</span>}
-                  {['down', 'maintenance'].includes(e.status) && e.status_note && e.fault && <><br /><span className="muted">Fault: {e.fault}</span></>}</td>
-                <td className="num">{e.hours_since_overhaul != null ? `${num(e.hours_since_overhaul)} h` : '—'}
-                  {e.hours_to_overhaul != null && <><br /><small className={e.hours_to_overhaul <= 0 ? 'bad' : 'muted'}>{e.hours_to_overhaul <= 0 ? `${num(-e.hours_to_overhaul)} h over` : `${num(e.hours_to_overhaul)} h to go`}</small></>}</td>
-                <td className="num hide-sm">{e.total_hours != null ? num(e.total_hours) : '—'}</td>
-                <td className="hide-sm small nowrap">{date(e.last_overhaul_on)}</td>
-                <td className="hide-sm small nowrap">{date(e.last_alt_service_on)}</td>
-                <td className={`hide-sm small nowrap ${e.report_stale ? 'bad' : 'muted'}`}>{month(e.report_month)}</td>
-              </tr>)}</tbody>
-            </table>
-          </div>}
-        <p className="muted small">{d.engines.length} engine{d.engines.length === 1 ? '' : 's'} · condition and hours from the latest monthly report</p>
-      </Card>
-    )}</Async>
+    <Async state={state}>{(d) => d.engines.length === 0 ? <Card><Empty>No engines match.</Empty></Card> : <>
+      <IslandGroups items={d.engines} name={(e) => `${e.atoll_code}. ${e.island_name}${e.shared_island ? ` · ${e.facility_name}` : ''}`}
+        key2={(e) => `${e.island_id}:${e.shared_island ? e.facility_id : ''}`}
+        tile={(e) => <EngineTile key={e.id} e={e} />}
+        count={(list) => `${list.filter((e) => e.status === 'running').length} of ${list.length} running`} />
+      <p className="muted small">{d.engines.length} engine{d.engines.length === 1 ? '' : 's'} · condition and hours from the latest monthly update</p>
+    </>}</Async>
   </>;
+}
+
+// The engines (or any assets) as a card per island, in the order given.
+export function IslandGroups({ items, name, key2, tile, count }) {
+  const groups = [];
+  const at = new Map();
+  for (const x of items) {
+    const k = key2(x);
+    if (!at.has(k)) { at.set(k, groups.length); groups.push({ k, name: name(x), list: [] }); }
+    groups[at.get(k)].list.push(x);
+  }
+  return <div className="asset-board">{groups.map((g) => <section key={g.k} className="area-card">
+    <div className="area-card-head"><strong>{g.name}</strong><span>{count(g.list)}</span></div>
+    <div className="asset-tiles">{g.list.map(tile)}</div>
+  </section>)}</div>;
+}
+
+const CONDITION_TONE = { ok: 'done', minor_fault: 'hold', major_fault: 'serious', not_running: 'over' };
+
+// One genset: its number and size, its state, hours since overhaul, its fault and flags.
+function EngineTile({ e }) {
+  const note = ['down', 'maintenance'].includes(e.status) ? e.status_note || e.fault : e.fault;
+  return <Link to={`/assets/${e.id}`} className={`asset-tile t-${CONDITION_TONE[e.condition] || (e.status === 'standby' ? 'prog' : 'none')}`}>
+    <span className="at-head"><strong>G{e.tag}</strong>{e.rated_capacity ? <em>{num(e.rated_capacity)} kW</em> : null}</span>
+    <span className="at-model">{e.make_model || '—'}</span>
+    <span className="at-state"><EngineState e={e} compact /></span>
+    {e.hours_since_overhaul != null && <span className="at-hours">{num(e.hours_since_overhaul)} h since overhaul
+      {e.hours_to_overhaul != null && <b className={e.hours_to_overhaul <= 0 ? 'bad' : ''}> · {e.hours_to_overhaul <= 0 ? `${num(-e.hours_to_overhaul)} h over` : `${num(e.hours_to_overhaul)} h to go`}</b>}</span>}
+    {note && <span className="at-note">{note}</span>}
+    <Flags e={e} />
+    {e.report_month && <span className={`at-report${e.report_stale ? ' bad' : ''}`}>Updated {month(e.report_month)}</span>}
+  </Link>;
 }
 
 // When overhauls and alternator services fall due by rule: one line, with

@@ -950,3 +950,31 @@ option { background: #0c2a44; color: var(--text); }
 .svc-tabs a.svc-tab { text-decoration: none; }
 .svc-tabs a.svc-tab .count { max-width: 60%; text-align: left; font-weight: 500; }
 @media (max-width: 860px) { .svc-tabs a.svc-tab .count { display: none; } }
+
+/* Assets as cards: a card per island (or plant), a tile per genset or asset. */
+.asset-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; margin-bottom: 12px; }
+.asset-board .area-card { background: var(--glass); border-color: var(--glass-border); box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow); -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); }
+.asset-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.asset-tile { display: grid; gap: 3px; align-content: start; padding: 10px 12px; border-radius: 10px; background: rgb(255 255 255 / .06); box-shadow: inset 3px 0 0 var(--c, #7c8ba0);
+  color: var(--text); text-decoration: none; font-size: .84rem; min-width: 0; }
+.asset-tile:hover { background: rgb(255 255 255 / .11); text-decoration: none; }
+.asset-tile.t-done { --c: var(--t-done); } .asset-tile.t-prog { --c: var(--t-prog); } .asset-tile.t-hold { --c: var(--t-hold); }
+.asset-tile.t-serious { --c: var(--serious-fill); } .asset-tile.t-over { --c: var(--t-over); }
+.at-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.at-head strong { font-size: 1rem; }
+.at-head em { font-style: normal; color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.at-model { color: var(--muted); font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-hours { color: var(--text-2); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.at-hours b { font-weight: 600; color: var(--muted); } .at-hours b.bad { color: var(--bad); }
+.at-note { font-size: .78rem; font-style: italic; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.at-report { font-size: .74rem; color: var(--muted); } .at-report.bad { color: var(--bad); }
+.asset-tile .flags { display: flex; flex-wrap: wrap; gap: 4px; }
+.asset-tile .flag { font-size: .7rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) { .asset-board { grid-template-columns: 1fr; } .asset-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.asset-tile { overflow: hidden; }
+.asset-tile > * { min-width: 0; }
+.asset-tile .flags { display: grid; gap: 3px; min-width: 0; margin: 0; }
+.asset-tile .flag { display: block; min-width: 0; }
+.at-head { flex-wrap: wrap; row-gap: 0; }
+.asset-board .area-card-head { align-items: flex-start; }
+.asset-board .area-card-head span { white-space: nowrap; }

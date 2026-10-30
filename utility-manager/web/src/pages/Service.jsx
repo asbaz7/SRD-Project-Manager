@@ -10,7 +10,7 @@ import { AssetStatus, Async, Card, Condition, ConditionMeter, Empty, PageHead, P
 import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, licenceSummary, month, num, power, since, withUnit } from '../format.js';
 import { useApi, useFilters } from '../hooks.js';
 import GensetUpdates from './GensetUpdates.jsx';
-import Engines from './Engines.jsx';
+import Engines, { IslandGroups } from './Engines.jsx';
 
 const TABS = {
   electricity: [['engines', 'Engines'], ['reports', 'Monthly updates'], ['plants', 'Powerhouses']],
@@ -97,7 +97,7 @@ function Plants({ svc }) {
 
 function ServiceAssets({ svc }) {
   const [filters, setFilter] = useFilters();
-  const params = { service: svc, status: filters.status, atoll_id: filters.atoll_id, q: filters.q, offset: filters.offset };
+  const params = { service: svc, status: filters.status, atoll_id: filters.atoll_id, q: filters.q, offset: filters.offset, limit: 500 };
   const state = useApi(`/assets${qs(params)}`);
   return <>
     <div className="chips">
@@ -110,21 +110,25 @@ function ServiceAssets({ svc }) {
       <input type="search" placeholder="Search island, tag, model…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
       <a className="btn ghost" href={csvUrl('/assets', { ...params, offset: undefined })}>Export CSV</a>
     </div>
-    <Async state={state}>{(page) => (
-      <Card>
-        {page.items.length === 0 ? <Empty>No {SERVICES[svc].label.toLowerCase()} assets{filters.status ? ' with this status' : ' recorded yet'}. Assets are added from an island's page.</Empty> :
-          <table>
-            <thead><tr><th>Asset</th><th>Status</th><th className="hide-sm">Plant</th><th className="num">Capacity</th></tr></thead>
-            <tbody>{page.items.map((a) => <tr key={a.id}>
-              <td className="wrap"><Link to={`/assets/${a.id}`}><strong>{a.atoll_code} · {a.island_name} · {assetLabel(a)}</strong></Link><br /><small className="muted">{a.make_model || '—'}</small></td>
-              <td className="wrap"><AssetStatus status={a.status} />{a.status_note && <><br /><small className="muted">{a.status_note}</small></>}
-                {a.status_at && <><br /><small className="muted">{date(a.status_at)}</small></>}</td>
-              <td className="hide-sm">{a.facility_name}</td>
-              <td className="num">{withUnit(a.rated_capacity, a.capacity_unit || '')}</td>
-            </tr>)}</tbody>
-          </table>}
+    <Async state={state}>{(page) => page.items.length === 0
+      ? <Card><Empty>No {SERVICES[svc].label.toLowerCase()} assets{filters.status ? ' with this status' : ' recorded yet'}. Assets are added from an island on the Islands map.</Empty></Card>
+      : <>
+        <IslandGroups items={page.items} name={(a) => `${a.atoll_code}. ${a.island_name} · ${a.facility_name}`} key2={(a) => a.facility_id}
+          tile={(a) => <AssetTile key={a.id} a={a} />} count={(list) => `${list.filter((a) => a.status === 'running').length} of ${list.length} running`} />
         <Pager page={page} onOffset={(o) => setFilter('offset', o)} />
-      </Card>
-    )}</Async>
+      </>}</Async>
   </>;
+}
+
+const STATUS_TONE = { running: 'done', standby: 'prog', down: 'over', maintenance: 'hold' };
+
+// One water or sewerage asset: tag and kind, model, capacity and status.
+function AssetTile({ a }) {
+  return <Link to={`/assets/${a.id}`} className={`asset-tile t-${STATUS_TONE[a.status] || 'none'}`}>
+    <span className="at-head"><strong>{assetLabel(a)}</strong>{a.rated_capacity ? <em>{withUnit(a.rated_capacity, a.capacity_unit || '')}</em> : null}</span>
+    <span className="at-model">{a.make_model || '—'}</span>
+    <span className="at-state"><AssetStatus status={a.status} /></span>
+    {a.status_note && <span className="at-note">{a.status_note}</span>}
+    {a.status_at && <span className="at-report">{date(a.status_at)}</span>}
+  </Link>;
 }
