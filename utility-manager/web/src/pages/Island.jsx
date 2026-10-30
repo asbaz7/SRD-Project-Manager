@@ -49,7 +49,7 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
         {island.can_edit && island.technical && <Link className="btn small" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
         {manage && island.technical && <button className="btn small" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
       </div>
-      <AreaTiles work={area.work} outages={area.outages} />
+      <AreaTiles work={area.work} outages={area.outages} services={island.services.length ? island.services : ['electricity']} />
       <IslandWorkCards work={area.work && area.work.filter((w) => !only || w.service === only)} islands={[{ id: island.id, name: island.name }]} />
       {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <button type="button" className="link" onClick={onShowAll}>Show everything on {island.name}</button></p>}
       {island.technical && <h3 className="ip-section">Plants and assets{island.genset_count > 0 && <span> · {island.running_count} of {island.genset_count} gensets running · {withUnit(island.installed_kw, 'kW')}</span>}</h3>}

@@ -11,16 +11,19 @@ const DAY = 86400000;
 const DONE = ['completed', 'cancelled'];
 const tone = (w) => (DONE.includes(w.status) ? (w.status === 'completed' ? 'done' : 'none') : w.overdue ? 'over' : HELD.includes(w.status) ? 'hold' : 'prog');
 
-// Open work and open power outages for { atoll_id } or { island_id }.
+// Open work and open supply outages (any service) for { atoll_id } or { island_id }.
 export function useAreaWork(where) {
   const work = useApi(`/work${qs({ ...where, status: 'open', limit: 200 })}`);
-  const power = useApi(`/incidents${qs({ ...where, status: 'open', service: 'electricity', category: 'outage', limit: 200 })}`);
+  const power = useApi(`/incidents${qs({ ...where, status: 'open', category: 'outage', limit: 200 })}`);
   return { work: work.data?.items || null, outages: power.data ? power.data.items : power.error ? [] : null };
 }
 
-export function AreaTiles({ work, outages }) {
+// A supply tile per service the place has: OK, or how many islands have an
+// open outage reported for it (an interruption of the kind "outage").
+const SUPPLY = { electricity: 'Power supply', water: 'Water supply', sewerage: 'Sewerage' };
+export function AreaTiles({ work, outages, services = ['electricity'] }) {
   const list = work || [];
-  const off = outages ? new Set(outages.map((o) => o.island_id)).size : null;
+  const off = (svc) => (outages ? new Set(outages.filter((o) => o.service === svc).map((o) => o.island_id)).size : null);
   const tiles = [
     [list.filter((w) => !HELD.includes(w.status)).length, 'Ongoing', 'prog'],
     [list.filter((w) => HELD.includes(w.status)).length, 'On hold', 'hold'],
@@ -28,7 +31,8 @@ export function AreaTiles({ work, outages }) {
   ];
   return <div className="area-tiles">
     {tiles.map(([n, label, t]) => <div key={label} className={`area-tile t-${n ? t : 'none'}`}><b>{work ? num(n) : '–'}</b><span>{label}</span></div>)}
-    <div className={`area-tile t-${off ? 'over' : 'ok'}`}><b>{off == null ? '–' : off ? `${off} off` : 'OK'}</b><span>Power supply</span></div>
+    {Object.keys(SUPPLY).filter((k) => services.includes(k)).map((k) => { const n = off(k);
+      return <div key={k} className={`area-tile t-${n ? 'over' : 'ok'}`} title="From open outage interruptions"><b>{n == null ? '–' : n ? `${n} off` : 'OK'}</b><span>{SUPPLY[k]}</span></div>; })}
   </div>;
 }
 

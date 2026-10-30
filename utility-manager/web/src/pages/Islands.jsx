@@ -76,7 +76,7 @@ function AtollDetail({ atoll, islands, onClose, onIsland }) {
       </div>
       <button type="button" className="btn ghost" onClick={onClose}>Close</button>
     </header>
-    <AreaTiles work={area.work} outages={area.outages} />
+    <AreaTiles work={area.work} outages={area.outages} services={[...new Set(islands.flatMap((i) => i.services))]} />
     <IslandWorkCards work={area.work} islands={islands} onIsland={onIsland} />
   </>;
 }
