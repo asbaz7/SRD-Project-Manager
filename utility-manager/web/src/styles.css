@@ -1012,3 +1012,9 @@ option { background: #0c2a44; color: var(--text); }
 .shell.slim .nav-foot { width: 100%; align-items: center; }
 .shell.slim .who { padding: 8px 0; justify-content: center; }
 @media (max-width: 860px) { .nav-fold { display: none; } }
+
+.ia-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ia-row .ia-tabs { margin: 0; }
+.ia-count { margin-left: auto; color: var(--text-2); font-size: .92rem; }
+.ia-count strong { color: var(--text); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 860px) { .ia-count { margin-left: 0; } }

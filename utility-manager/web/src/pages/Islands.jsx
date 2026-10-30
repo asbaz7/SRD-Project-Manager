@@ -25,13 +25,16 @@ export default function Islands() {
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />
-    <IslandsTabs />
+    <div className="ia-row">
+      <IslandsTabs />
+      {state.data && (() => {
+        const atollCount = new Set(state.data.map((i) => i.atoll_code)).size;
+        return <span className="ia-count"><strong>{num(state.data.length)}</strong> islands · <strong>{num(atollCount)}</strong> atolls</span>;
+      })()}
+    </div>
     {modal === 'atoll' && <AtollForm onClose={() => setModal(null)} onSaved={() => { setModal(null); atolls.reload(); }} />}
     {modal === 'island' && <IslandForm atolls={atolls.data || []} onClose={() => setModal(null)} onSaved={() => { setModal(null); state.reload(); }} />}
     <Async state={state}>{(islands) => {
-      const atollCount = new Set(islands.map((i) => i.atoll_code)).size;
-      const focused = filters.atoll && islands.filter((i) => i.atoll_code === filters.atoll);
-      const name = (atolls.data || []).find((a) => a.code === filters.atoll)?.name;
       return <section className={`glass islands-map${filters.island ? ' with-island' : ''}`} aria-label="Map of the islands">
         <EscClose on={!!(filters.island || filters.atoll)} close={() => setFilter(filters.island ? { island: '', service: '' } : { atoll: '' })} />
         <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter({ atoll: code || '', island: '' })}
@@ -46,16 +49,6 @@ export default function Islands() {
           <AtollDetail key={filters.atoll} atoll={(atolls.data || []).find((a) => a.code === filters.atoll)} islands={islands.filter((i) => i.atoll_code === filters.atoll)}
             onClose={() => setFilter({ atoll: '', island: '' })} onIsland={(i) => setFilter('island', i.id)} />
         </aside>}
-        {!filters.island && !filters.atoll && <div className="glass am-total" aria-live="polite">
-          {focused ? <>
-            <strong>{num(focused.length)}</strong>
-            <span>island{focused.length === 1 ? '' : 's'} in {name || filters.atoll}</span>
-            <small>of {num(islands.length)} in {num(atollCount)} atolls</small>
-          </> : <>
-            <strong>{num(islands.length)}</strong>
-            <span>island{islands.length === 1 ? '' : 's'} in {num(atollCount)} atoll{atollCount === 1 ? '' : 's'}</span>
-          </>}
-        </div>}
       </section>;
     }}</Async>
   </>;
