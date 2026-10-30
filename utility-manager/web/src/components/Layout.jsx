@@ -9,13 +9,12 @@ import { Icon } from './icons.jsx';
 
 // The region (Overview, Islands) and then the three service sections:
 // everything else hangs off an island.
-const ISLANDS = { to: '/islands', label: 'Islands', icon: 'island' };
-// One Assets page for gensets, plants and equipment, by service (Oct 2026).
-const ASSETS = { to: '/systems', label: 'Assets', icon: 'engine' };
+// Islands & assets: the map and each service's gensets and plants, one
+// page (Oct 2026); its service tabs live at /systems.
+const ISLANDS = { to: '/islands', label: 'Islands & assets', short: 'Islands', icon: 'island', also: '/systems' };
 const MAIN = [
   { to: '/', label: 'Overview', icon: 'home', end: true },
   ISLANDS,
-  ASSETS,
 ];
 const MORE = [
   { to: '/takeover', label: 'Takeover', icon: 'takeover' },
@@ -42,7 +41,8 @@ function Brand() {
 }
 
 const Link = ({ item, onClick }) => (
-  <NavLink to={item.to} end={item.end} onClick={onClick} className={`nav-link ${item.svc ? `svc-${item.svc}` : ''}`}>
+  <NavLink to={item.to} end={item.end} onClick={onClick}
+    className={({ isActive }) => `nav-link${isActive || (item.also && window.location.pathname.startsWith(item.also)) ? ' active' : ''}`}>
     <Icon name={item.icon} /> {item.label}
   </NavLink>
 );
@@ -62,7 +62,7 @@ export default function Layout() {
   // Phones: four tabs, Work always among them (logging and following work
   // is the main job in the field); the rest, Islands included, under More.
   const WORK = MORE.find((n) => n.to === '/work');
-  const tabs = technical ? [MAIN[0], WORK, ISLANDS, ASSETS] : main.filter((n) => n !== ISLANDS).slice(0, 4);
+  const tabs = technical ? [MAIN[0], WORK, ISLANDS] : main.filter((n) => n !== ISLANDS).slice(0, 4);
 
   return (
     <div className="shell">
@@ -88,8 +88,8 @@ export default function Layout() {
       <main className={`page${location.pathname === '/takeover' ? ' page-full' : ''}`}><CrashGuard resetKey={location.pathname}><Suspense fallback={<Loading />}><Outlet /></Suspense></CrashGuard></main>
       <nav className="bottom-bar" aria-label="Main">
         {tabs.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>
-            <Icon name={n.icon} size={22} />{n.label}
+          <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive || (n.also && location.pathname.startsWith(n.also)) ? 'active' : '')}>
+            <Icon name={n.icon} size={22} />{n.short || n.label}
           </NavLink>
         ))}
         <button onClick={() => setSheet(!sheet)} aria-expanded={sheet}><Icon name="more" size={22} />More</button>

@@ -820,7 +820,7 @@ option { background: #0c2a44; color: var(--text); }
 .flag .icon, .flag .mark { vertical-align: 0; }
 
 /* Islands page: the atolls map beside the list (Oct 2026), drawn as on the TV board. */
-.islands-map { position: relative; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 118px); min-height: 560px;
+.islands-map { position: relative; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 176px); min-height: 520px;
   background: radial-gradient(90% 80% at 50% 40%, rgb(14 44 70 / .55), rgb(4 16 30 / .55)); }
 .atoll-map { display: flex; flex-direction: column; height: 100%; }
 .am-total { position: absolute; left: 14px; top: 14px; z-index: 1; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 2px 10px; padding: 12px 16px; border-radius: 16px; pointer-events: none; }
@@ -861,7 +861,7 @@ option { background: #0c2a44; color: var(--text); }
 .am-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .am-legend .btn { margin-left: auto; }
 @media (max-width: 1100px) {
-  .islands-map { height: calc(100dvh - 300px); min-height: 380px; }
+  .islands-map { height: calc(100dvh - 350px); min-height: 380px; }
   .am-zoom { top: 10px; right: 10px; bottom: auto; }
   .am-zoom button { width: 36px; height: 36px; }
 }
@@ -983,3 +983,12 @@ option { background: #0c2a44; color: var(--text); }
 .pu-state { font-weight: 650; font-size: .88rem; } .pu-state.up_to_date { color: var(--good); } .pu-state.missing, .pu-state.never { color: var(--warn); }
 .plant-update .btn { justify-self: start; }
 .pu-table td { vertical-align: top; } .pu-table input, .pu-table select { width: 100%; min-width: 110px; }
+
+/* Islands & assets: Map · Electricity · Water · Sewerage. */
+.ia-tabs { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px; border-radius: 14px; background: rgb(0 0 0 / .2); border: 1px solid rgb(255 255 255 / .1); flex-wrap: wrap; }
+.ia-tab { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 10px; color: var(--text-2); font-weight: 650; text-decoration: none; }
+.ia-tab:hover { background: rgb(255 255 255 / .08); text-decoration: none; }
+.ia-tab.on { background: rgb(255 255 255 / .15); color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / .22); }
+.ia-tab.electricity.on .icon { color: var(--electricity); } .ia-tab.water.on .icon { color: var(--water); } .ia-tab.sewerage.on .icon { color: var(--sewerage); }
+@media (max-width: 860px) { .ia-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; } .ia-tab { white-space: nowrap; padding: 8px 12px; } }
+.ia-tabs + .tabs { display: flex; width: fit-content; max-width: 100%; margin-top: 0; }

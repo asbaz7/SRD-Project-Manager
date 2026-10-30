@@ -12,6 +12,7 @@ import { useApi, useFilters } from '../hooks.js';
 import GensetUpdates from './GensetUpdates.jsx';
 import Engines, { IslandGroups } from './Engines.jsx';
 import PlantUpdates from './PlantUpdates.jsx';
+import IslandsTabs from '../components/IslandsTabs.jsx';
 
 const TABS = {
   electricity: [['engines', 'Engines'], ['reports', 'Monthly updates'], ['plants', 'Powerhouses']],
@@ -33,16 +34,13 @@ export default function Service() {
   const { technical } = useAuth();
   if (!SERVICES[svc]) return <Navigate replace to="/systems/electricity/engines" />;
   if (!technical) return <>
-    <PageHead title="Assets" icon="engine" />
+    <PageHead title="Islands & assets" icon="island" />
     <Card><p>This section holds technical information (engines, monthly updates, assets and plants) and is available to technical staff.</p>
       <p className="muted small">You can follow <Link to="/work">work</Link>, <Link to="/interruptions">interruptions</Link> and <Link to="/projects">projects</Link>.</p></Card>
   </>;
   return <>
-    <PageHead title="Assets" subtitle="Gensets, plants and their equipment, one service at a time" icon="engine" />
-    <nav className="svc-tabs" aria-label="Service">
-      {Object.entries(SERVICES).map(([k, s]) => <NavLink key={k} to={`/systems/${k}/${DEFAULT_TAB[k]}`} className={`svc-tab ${k}${svc === k ? ' on' : ''}`}>
-        <span className={`svc-badge ${k}`}><Icon name={k} size={15} /></span>{s.label}<span className="count">{SUBTITLE[k]}</span></NavLink>)}
-    </nav>
+    <PageHead title="Islands & assets" subtitle={SUBTITLE[svc]} icon="island" />
+    <IslandsTabs />
     <nav className="tabs glass" aria-label={`${SERVICES[svc].label} sections`}>
       {TABS[svc].map(([key, label]) => (
         <NavLink key={key} to={`/systems/${svc}/${key}`} className={`tab${tab === key ? ' active' : ''}`}>{label}</NavLink>

@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import AtollMap from '../components/AtollMap.jsx';
+import IslandsTabs from '../components/IslandsTabs.jsx';
 import { IslandDetail } from './Island.jsx';
 import { useAreaWork, AreaTiles, IslandWorkCards } from '../components/AreaWork.jsx';
 import { Icon } from '../components/icons.jsx';
@@ -20,10 +21,11 @@ export default function Islands() {
   const state = useApi('/islands');
 
   return <>
-    <PageHead title="Islands" subtitle="Every island of the department. Drag to move, scroll or pinch to zoom; tap an atoll to zoom in on it, an island to open it." icon="island" actions={can('admin') && <>
+    <PageHead title="Islands & assets" subtitle="Every island of the department. Drag to move, scroll or pinch to zoom; tap an atoll or an island to open it." icon="island" actions={can('admin') && <>
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />
+    <IslandsTabs />
     {modal === 'atoll' && <AtollForm onClose={() => setModal(null)} onSaved={() => { setModal(null); atolls.reload(); }} />}
     {modal === 'island' && <IslandForm atolls={atolls.data || []} onClose={() => setModal(null)} onSaved={() => { setModal(null); state.reload(); }} />}
     <Async state={state}>{(islands) => {
