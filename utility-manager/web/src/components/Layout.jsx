@@ -41,7 +41,7 @@ function Brand() {
 }
 
 const Link = ({ item, onClick }) => (
-  <NavLink to={item.to} end={item.end} onClick={onClick}
+  <NavLink to={item.to} end={item.end} onClick={onClick} title={item.label}
     className={({ isActive }) => `nav-link${isActive || (item.also && window.location.pathname.startsWith(item.also)) ? ' active' : ''}`}>
     <Icon name={item.icon} /> {item.label}
   </NavLink>
@@ -50,6 +50,9 @@ const Link = ({ item, onClick }) => (
 export default function Layout() {
   const { user, logout, can, technical } = useAuth();
   const [sheet, setSheet] = useState(false);
+  // The sidebar folds to icons only, to give the page more room; remembered.
+  const [slim, setSlim] = useState(() => localStorage.getItem('nav-slim') === '1');
+  const toggleSlim = () => setSlim((v) => { localStorage.setItem('nav-slim', v ? '0' : '1'); return !v; });
   const location = useLocation();
   useFreshVersion();
   const [lastPath, setLastPath] = useState(location.pathname);
@@ -65,18 +68,20 @@ export default function Layout() {
   const tabs = technical ? [MAIN[0], WORK, ISLANDS] : main.filter((n) => n !== ISLANDS).slice(0, 4);
 
   return (
-    <div className="shell">
+    <div className={`shell${slim ? ' slim' : ''}`}>
       <nav className="sidebar" aria-label="Main">
+        <button type="button" className="nav-fold" onClick={toggleSlim} aria-label={slim ? 'Show the menu labels' : 'Fold the menu to icons'}
+          title={slim ? 'Expand' : 'Collapse'}><Icon name={slim ? 'arrow' : 'back'} size={16} /></button>
         <Brand />
         {main.map((n) => <Link key={n.to} item={n} />)}
         {more.length > 0 && <><div className="nav-section">Activity</div>{more.map((n) => <Link key={n.to} item={n} />)}</>}
         {admin.length > 0 && <><div className="nav-section">Administration</div>{admin.map((n) => <Link key={n.to} item={n} />)}</>}
         <div className="nav-foot">
-          <NavLink to="/account" className="who">
+          <NavLink to="/account" className="who" title={user.fullName}>
             <span className="avatar" aria-hidden="true">{initials(user.fullName)}</span>
             <span><span className="who-name">{user.fullName}</span><small>{ROLES[user.role]}{user.role !== 'admin' && ` · ${technical ? 'Technical' : 'Non-technical'}`}</small></span>
           </NavLink>
-          <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
+          <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }} title="Sign out"><Icon name="logout" /> <span className="nav-text">Sign out</span></button>
         </div>
       </nav>
 

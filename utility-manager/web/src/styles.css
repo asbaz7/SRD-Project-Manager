@@ -992,3 +992,23 @@ option { background: #0c2a44; color: var(--text); }
 .ia-tab.electricity.on .icon { color: var(--electricity); } .ia-tab.water.on .icon { color: var(--water); } .ia-tab.sewerage.on .icon { color: var(--sewerage); }
 @media (max-width: 860px) { .ia-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; } .ia-tab { white-space: nowrap; padding: 8px 12px; } }
 .ia-tabs + .tabs { display: flex; width: fit-content; max-width: 100%; margin-top: 0; }
+
+/* Folding sidebar: icons only, with a round toggle on its edge (desktop). */
+.shell { transition: grid-template-columns .25s var(--ease); }
+.sidebar { position: sticky; overflow: visible; }
+.nav-fold { position: absolute; top: 22px; right: -15px; z-index: 5; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; padding: 0;
+  border: 1px solid var(--glass-border); background: rgb(16 44 70 / .95); color: var(--text); cursor: pointer; box-shadow: 0 4px 14px rgb(0 8 20 / .4); }
+.nav-fold:hover { background: rgb(40 80 120 / .95); }
+.nav-fold .icon { vertical-align: 0; }
+.shell.slim { grid-template-columns: 88px minmax(0, 1fr); }
+.shell.slim .sidebar { padding: 16px 10px; align-items: center; }
+.shell.slim .brand { padding: 4px 0 14px; justify-content: center; }
+.shell.slim .brand-name, .shell.slim .nav-section, .shell.slim .who > span:last-child { display: none; }
+.shell.slim .nav-link { justify-content: center; padding: 11px; width: 52px; font-size: 0; gap: 0; }
+.shell.slim .nav-link .icon { margin: 0; }
+.shell.slim .nav-link .nav-text { display: none; }
+.shell.slim .nav-badge { position: absolute; transform: translate(14px, -12px); font-size: .62rem; }
+.shell.slim .nav-section + * { margin-top: 8px; }
+.shell.slim .nav-foot { width: 100%; align-items: center; }
+.shell.slim .who { padding: 8px 0; justify-content: center; }
+@media (max-width: 860px) { .nav-fold { display: none; } }
