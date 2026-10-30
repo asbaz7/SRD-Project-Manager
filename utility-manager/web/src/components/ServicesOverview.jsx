@@ -18,9 +18,7 @@ export default function ServicesOverview({ atollId, islandId, services, onIsland
     sewerage: useApi(has('sewerage') ? `/services/sewerage${qs({ atoll_id: atollId })}` : null),
   };
   const outages = useApi(`/incidents${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, status: 'open', category: 'outage', limit: 200 })}`);
-  // One service shown: its work only.
-  const svcOnly = services.length === 1 ? services[0] : undefined;
-  const work = useApi(`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, service: svcOnly, status: 'open', limit: 1 })}`);
+  const work = useApi(`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, status: 'open', limit: 1 })}`);
   const shown = KEYS.filter(has);
   if (!shown.length) return <p className="muted small">No services recorded.</p>;
   return <>
@@ -30,7 +28,7 @@ export default function ServicesOverview({ atollId, islandId, services, onIsland
       const off = (outages.data?.items || []).filter((o) => o.service === k);
       return <ServiceCard key={k} svc={k} plants={plants} off={off} many={!islandId} onIsland={onIsland} />;
     })}</div>
-    {work.data && <Link className="svc-work-link" to={`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, service: svcOnly })}`}>
+    {work.data && <Link className="svc-work-link" to={`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId })}`}>
       <Icon name="work" size={15} /> {work.data.counts?.open ? `${num(work.data.counts.open)} open work${work.data.counts.overdue ? ` · ${num(work.data.counts.overdue)} overdue` : ''}` : 'No open work'} <Icon name="arrow" size={14} />
     </Link>}
   </>;
