@@ -881,7 +881,7 @@ option { background: #0c2a44; color: var(--text); }
   @keyframes ip-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 }
 @media (max-width: 900px) {
-  .island-panel { top: 14%; left: 10px; right: 10px; bottom: 10px; width: auto; padding: 14px; }
+  .island-panel { top: 42%; left: 10px; right: 10px; bottom: 10px; width: auto; padding: 14px; }
   .ip-head h2 { font-size: 1.5rem; }
   @media (prefers-reduced-motion: no-preference) { @keyframes ip-in { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } } }
 }
@@ -899,3 +899,31 @@ option { background: #0c2a44; color: var(--text); }
 .ip-count { margin: 4px 0 0; color: var(--text-2); font-size: .9rem; }
 .ip-count strong { color: var(--text); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .ip-count span { color: var(--muted); }
+
+/* The TV board's detail view: figure tiles, island cards with their jobs. */
+.ip-sub { margin: 2px 0 0; color: var(--text-2); }
+.area-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 6px 0 14px; }
+.area-tile { padding: 10px 12px; border-radius: 12px; background: rgb(255 255 255 / .06); border: 1px solid var(--hairline); box-shadow: inset 3px 0 0 var(--c, #6b7a90); display: grid; gap: 2px; }
+.area-tile b { font-size: 1.6rem; font-weight: 750; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.area-tile span { font-size: .8rem; color: var(--text-2); }
+.area-tile.t-prog { --c: var(--t-prog); } .area-tile.t-hold { --c: var(--t-hold); } .area-tile.t-over { --c: var(--t-over); } .area-tile.t-ok { --c: var(--t-done); }
+.area-tile.t-over b { color: var(--bad); } .area-tile.t-ok b { color: var(--good); }
+.area-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; align-items: start; margin-bottom: 14px; }
+.area-card { border-radius: 14px; padding: 12px; background: rgb(255 255 255 / .05); border: 1px solid var(--hairline); display: grid; gap: 8px; }
+.area-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.area-card-head strong { font-size: 1.02rem; }
+.area-card-head button.link strong { color: var(--text); }
+.area-card-head span { font-size: .8rem; color: var(--muted); }
+.area-task { display: grid; gap: 3px; padding: 10px 12px; border-radius: 10px; background: rgb(255 255 255 / .06); box-shadow: inset 3px 0 0 var(--c); color: var(--text); text-decoration: none; }
+.area-task:hover { background: rgb(255 255 255 / .11); text-decoration: none; }
+.area-task.t-prog { --c: var(--t-prog); } .area-task.t-hold { --c: var(--t-hold); } .area-task.t-over { --c: var(--t-over); }
+.area-task .st { display: flex; justify-content: space-between; font-size: .76rem; font-weight: 700; color: color-mix(in srgb, var(--c) 70%, #fff); }
+.area-task .st em { font-style: normal; font-weight: 600; color: var(--muted); }
+.area-task strong { font-weight: 650; line-height: 1.3; }
+.area-task .unit, .area-task .due { font-size: .8rem; color: var(--muted); }
+.area-task .note { font-size: .82rem; font-style: italic; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.area-quiet { color: var(--muted); margin: 0 0 14px; }
+.ip-section { font-size: .95rem; font-weight: 650; color: var(--text); margin: 6px 0 10px; }
+.ip-section span { font-weight: 500; color: var(--muted); }
+.am-tip { position: absolute; z-index: 3; transform: translate(-50%, calc(-100% - 16px)); pointer-events: none; display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px;
+  background: rgb(8 24 42 / .94); border: 1px solid var(--glass-border); box-shadow: 0 12px 30px rgb(0 0 0 / .4); font-size: .86rem; white-space: nowrap; }

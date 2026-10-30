@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
-import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, Service, Stat, WorkState } from '../components/ui.jsx';
-import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
+import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, Service } from '../components/ui.jsx';
+import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { GensetUpdateForm } from './GensetUpdates.jsx';
 import { useApi, useRowLink } from '../hooks.js';
 import { Icon } from '../components/icons.jsx';
+import { AreaTiles, IslandWorkCards, useAreaWork } from '../components/AreaWork.jsx';
 
 // There is no separate island page: an island opens beside the map on the
 // Islands page. Old links (/islands/:id) land there with the island open.
@@ -22,6 +23,7 @@ export default function Island() {
 // (opened from that service's page). onAtoll: back to the island's atoll.
 export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = [] }) {
   const state = useApi(`/islands/${id}`);
+  const area = useAreaWork({ island_id: id });
   const rowLink = useRowLink();
   const { can, allowed } = useAuth();
   const [modal, setModal] = useState(null);
@@ -30,19 +32,15 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
   return <Async state={state}>{(island) => {
     const manage = can('manager') && island.can_edit;
     const facilities = island.facilities.filter((f) => !only || f.service === only);
-    const openWork = island.open_work.filter((w) => !only || w.service === only);
     return <>
       <header className="ip-head">
         <div>
           <button type="button" className="ip-atoll" onClick={() => onAtoll(island.atoll_code)}><Icon name="back" size={14} /> {island.atoll_name} atoll</button>
           <h2>{island.name}</h2>
-          {islands.length > 0 && (() => {
-            // The islands count, merged into the island's card.
+          <p className="ip-sub">{island.atoll_name} atoll{islands.length > 0 && (() => {
             const here = islands.filter((x) => x.atoll_code === island.atoll_code).length;
-            const atolls = new Set(islands.map((x) => x.atoll_code)).size;
-            return <p className="ip-count"><strong>{num(here)}</strong> island{here === 1 ? '' : 's'} in {island.atoll_name}
-              <span> · {num(islands.length)} in {num(atolls)} atolls</span></p>;
-          })()}
+            return ` · one of ${num(here)} islands`;
+          })()}</p>
         </div>
         <button type="button" className="btn ghost" onClick={onClose}>Close</button>
       </header>
@@ -51,39 +49,10 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
         {island.can_edit && island.technical && <Link className="btn small" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
         {manage && island.technical && <button className="btn small" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
       </div>
+      <AreaTiles work={area.work} outages={area.outages} />
+      <IslandWorkCards work={area.work && area.work.filter((w) => !only || w.service === only)} islands={[{ id: island.id, name: island.name }]} />
       {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <button type="button" className="link" onClick={onShowAll}>Show everything on {island.name}</button></p>}
-      <div className="stats">
-        {island.technical && (!only || only === 'electricity') && <>
-          <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} sub={island.disconnected_count > 0 ? `${island.disconnected_count} disconnected` : ''} />
-          <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
-          <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
-        </>}
-        {island.technical && (only === 'water' || only === 'sewerage') && (() => {
-          const systems = facilities.flatMap((f) => f.assets.filter((x) => x.active && x.status !== 'decommissioned'));
-          const sum = (pred) => systems.filter(pred).reduce((n, x) => n + Number(x.rated_capacity || 0), 0);
-          const unset = systems.filter((x) => x.status === 'unknown').length;
-          return <>
-            {only === 'water' ? <>
-              <Stat label="RO capacity" value={withUnit(sum((x) => x.kind === 'ro_unit'), 't/day')} sub={`${systems.filter((x) => x.kind === 'ro_unit').length} RO units`} />
-              <Stat label="Storage" value={withUnit(sum((x) => x.kind === 'tank' && x.tag.startsWith('ST-')), 'm3')} />
-            </> : <Stat label="Pump stations" value={systems.filter((x) => x.kind === 'pump').length} />}
-            <Stat label="Systems in service" value={unset === systems.length ? 'Not set' : `${systems.filter((x) => x.status === 'running').length} of ${systems.length}`}
-              sub={unset ? `${unset} status not set` : ''} />
-          </>;
-        })()}
-        <Stat label="Open interruptions" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/interruptions?island_id=${island.id}&status=open`} />
-        <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
-      </div>
-
-      {openWork.length > 0 && <Card title={`Ongoing work (${openWork.length})`}>
-        <table><tbody>{openWork.map((w) => <tr key={w.id}>
-          <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
-            <small className="muted">{w.ref} · {WORK_KINDS[w.kind]}{w.asset_tag && ` · ${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`}{w.target_on && ` · target ${date(w.target_on)}`}</small>
-            {w.last_update && <div className="small">{w.last_update}</div>}</td>
-          <td><WorkState value={w.status} /></td>
-        </tr>)}</tbody></table>
-      </Card>}
-
+      {island.technical && <h3 className="ip-section">Plants and assets{island.genset_count > 0 && <span> · {island.running_count} of {island.genset_count} gensets running · {withUnit(island.installed_kw, 'kW')}</span>}</h3>}
       {island.technical && facilities.length === 0 && <Empty>No {only ? `${SERVICES[only].label.toLowerCase()} ` : ''}facilities recorded for this island yet.</Empty>}
       {facilities.map((f) => (
         <Card key={f.id} className={f.active ? '' : 'inactive'}

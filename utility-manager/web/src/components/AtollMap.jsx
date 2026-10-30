@@ -39,12 +39,12 @@ function fit(codes, islands, w, h, focused) {
   const lons = pts.map((p) => p[0]), lats = pts.map((p) => p[1]);
   const lon = [Math.min(...lons), Math.max(...lons)], lat = [Math.min(...lats), Math.max(...lats)];
   // Phones leave room at the top for the islands card over the map.
-  const room = w < 520 ? 44 : Math.min(170, w * 0.24), top = w < 520 ? 74 : 34;
+  const room = w < 520 ? 44 : Math.min(170, w * 0.24), top = w < 520 ? (h < 320 ? 14 : 74) : 34;
   const k = Math.min((w - room * 2) / Math.max(lon[1] - lon[0], 0.15), (h - top * 2) / Math.max(lat[1] - lat[0], 0.15)) * (focused ? 0.8 : 1);
   return { cx: (lon[0] + lon[1]) / 2, cy: (lat[0] + lat[1]) / 2, k };
 }
 
-export default function AtollMap({ islands, atolls, focus, onAtoll, selected, onIsland }) {
+export default function AtollMap({ islands, atolls, focus, onAtoll, selected, onIsland, panel = false }) {
   const box = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -57,9 +57,15 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
 
   const placedIslands = islands.filter((i) => i.lat != null && i.lon != null);
   const codes = atolls.map((a) => a.code).filter((c) => ATOLL_SHAPES[c]);
-  const target = useMemo(() => fit(focus ? [focus] : codes, focus ? placedIslands.filter((i) => i.atoll_code === focus) : placedIslands, size.w, size.h, !!focus),
+  // With a panel open, the map works in the part it leaves free: left of it
+  // on desktop, above it (a sheet) below 900px.
+  const sheet = size.w < 900;
+  const freeFor = (p) => (!p ? { w: size.w, h: size.h } : sheet ? { w: size.w, h: size.h * 0.42 } : { w: size.w - panelW(size.w) - 14, h: size.h });
+  const free = freeFor(panel);
+  const center = { x: free.w / 2, y: free.h / 2 };
+  const target = useMemo(() => fit(focus ? [focus] : codes, focus ? placedIslands.filter((i) => i.atoll_code === focus) : placedIslands, free.w, free.h, !!focus),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [focus, size.w, size.h, codes.join(), placedIslands.length]);
+    [focus, free.w, free.h, codes.join(), placedIslands.length]);
 
   // The signature move: the map eases onto the chosen atoll and back.
   const [view, setView] = useState(null);
@@ -93,8 +99,8 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
   }, [focus]);
   const zoomAt = (f, sx, sy) => setPz((p) => {
     const z = Math.min(12, Math.max(0.6, p.z * f)), q = z / p.z;
-    const cx = sx ?? size.w / 2, cy = sy ?? size.h / 2;
-    return { z, dx: cx - size.w / 2 - (cx - size.w / 2 - p.dx) * q, dy: cy - size.h / 2 - (cy - size.h / 2 - p.dy) * q };
+    const cx = sx ?? center.x, cy = sy ?? center.y;
+    return { z, dx: cx - center.x - (cx - center.x - p.dx) * q, dy: cy - center.y - (cy - center.y - p.dy) * q };
   });
   // Wheel zoom (a listener of our own: React's is passive and can't stop the page scrolling).
   useEffect(() => {
@@ -158,6 +164,7 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
     try { sessionStorage.setItem(`am-view:${focus || ''}`, JSON.stringify(pz)); } catch { /* private mode */ }
   }, [pz, focus, going]);
   const fly = useRef(0);
+  const [hover, setHover] = useState(null);
   const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const goTo = (i) => {
     onIsland(i);
@@ -165,12 +172,11 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
     if (!view || reduced()) return;
     const from = pz, k0 = view.k;
     const ox = (i.lon - view.cx) * k0, oy = (i.lat - view.cy) * k0;
-    const x0 = from.dx + ox * from.z, y0 = from.dy - oy * from.z;      // where it sits now, from the centre
-    // Centred in the part of the map the panel leaves free (left of it on
-    // desktop, above it on phones).
-    // Below 900px the panel is a sheet over the lower map: the island goes above it.
-    const sheet = size.w < 900;
-    const cxOff = sheet ? 0 : -panelW(size.w) / 2, cyOff = sheet ? -size.h * 0.42 : 0;
+    // Where it sits now, from the centre the map will have with the panel open.
+    const nf = freeFor(true), sx = center.x - nf.w / 2, sy = center.y - nf.h / 2;
+    const x0 = from.dx + ox * from.z + sx, y0 = from.dy - oy * from.z + sy;
+    // To the centre of the free part of the map (the panel opens with it).
+    const cxOff = 0, cyOff = 0;
     const zt = Math.min(12, Math.max(from.z * 2, 3));
     setGoing(i.id);
     cancelAnimationFrame(fly.current);
@@ -190,14 +196,14 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
   let svg = null;
   if (view && w > 50) {
     const k = view.k * pz.z;
-    const gx = (lon) => w / 2 + pz.dx + (lon - view.cx) * k;
-    const gy = (lat) => h / 2 + pz.dy - (lat - view.cy) * k;
+    const gx = (lon) => center.x + pz.dx + (lon - view.cx) * k;
+    const gy = (lat) => center.y + pz.dy - (lat - view.cy) * k;
     // The islands card floats top left and the zoom buttons at the side
     // (top right on phones, bottom right otherwise): labels keep clear.
-    const placed = [selected ? { x0: 0, y0: 0, x1: 0, y1: 0 } : { x0: 0, y0: 0, x1: w < 520 ? 210 : 236, y1: w < 520 ? 66 : 92 },
+    const placed = [panel ? { x0: 0, y0: 0, x1: 0, y1: 0 } : { x0: 0, y0: 0, x1: w < 520 ? 210 : 236, y1: w < 520 ? 66 : 92 },
       w < 520 ? { x0: w - 54, y0: 0, x1: w, y1: 130 } : { x0: w - 64, y0: h - 150, x1: w, y1: h }];
     // An island's panel takes the right side (the bottom on phones).
-    if (selected) placed.push(w < 900 ? { x0: 0, y0: h * 0.14, x1: w, y1: h } : { x0: w - panelW(w) - 14, y0: 0, x1: w, y1: h });
+    if (panel) placed.push(sheet ? { x0: 0, y0: h * 0.42, x1: w, y1: h } : { x0: w - panelW(w) - 14, y0: 0, x1: w, y1: h });
     const rimPts = [];
     const shapes = atolls.filter((a) => ATOLL_SHAPES[a.code]).map((a) => {
       const rings = ATOLL_SHAPES[a.code].map((ring) => ring.map(([lon, lat]) => [gx(lon), gy(lat)]));
@@ -347,10 +353,11 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
       {leaders.map((ld) => <line key={ld.id} className="am-leader" x1={ld.x1} y1={ld.y1} x2={ld.x2} y2={ld.y2} />)}
       {marks.map((m) => {
         const dim = dimA(m.i.atoll_code);
-        const label = `${m.i.atoll_code}. ${m.i.name}`;
+        const open = Number(m.i.open_work || 0);
+        const label = `${m.i.atoll_code}. ${m.i.name}: ${open ? `${open} open work` : 'no open work'}`;
         return <g key={m.i.id} className={`am-island${selected === m.i.id ? ' on' : ''}`} opacity={dim ? 0.3 : 1} role="link"
-          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); if (tapped() && !going) goTo(nearest(e) || m.i); }} onKeyDown={(e) => { if (e.key === 'Enter' && !going) goTo(m.i); }}>
-          <title>{label}</title>
+          tabIndex={dim ? -1 : 0} aria-label={label} onClick={(e) => { e.stopPropagation(); if (tapped() && !going) goTo(nearest(e) || m.i); }} onKeyDown={(e) => { if (e.key === 'Enter' && !going) goTo(m.i); }}
+          onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHover({ i: m.i, x: m.x, y: m.y }); }} onPointerLeave={() => setHover(null)}>
           {selected === m.i.id && <circle cx={m.x} cy={m.y} r={rad(m) + 7} className="am-going" />}
           <circle cx={m.x} cy={m.y} r={rad(m)} className="am-dot" />
           <circle cx={m.x} cy={m.y} r={small ? 12 : 9} fill="transparent" />
@@ -362,19 +369,20 @@ export default function AtollMap({ islands, atolls, focus, onAtoll, selected, on
   }
 
   return <div className="atoll-map">
-    <div className={`am-canvas${selected ? ' with-panel' : ''}`} ref={box}
+    <div className={`am-canvas${panel ? ' with-panel' : ''}`} ref={box}
       onClick={() => { if (!tapped()) return; if (selected) onIsland(null); else if (focus) onAtoll(null); }}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onPointerLeave={onPointerUp}>
       {svg}
+      {hover && !going && <div className="am-tip" style={{ left: hover.x, top: hover.y }}>
+        <strong>{hover.i.atoll_code}. {hover.i.name}</strong>
+        <span>{Number(hover.i.open_work || 0) ? `${hover.i.open_work} open work` : 'No open work'}</span>
+        <span className="muted">Tap to open</span>
+      </div>}
       <div className="am-zoom glass" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
         <button type="button" onClick={() => zoomAt(1.5)} aria-label="Zoom in"><Icon name="plus" size={18} /></button>
         <button type="button" onClick={() => zoomAt(1 / 1.5)} aria-label="Zoom out"><Icon name="minus" size={18} /></button>
         <button type="button" onClick={() => setPz({ z: 1, dx: 0, dy: 0 })} aria-label="Show the whole map"><Icon name="home" size={18} /></button>
       </div>
     </div>
-    {focus && <div className="am-legend small">
-      <span>{atolls.find((a) => a.code === focus)?.name || focus}</span>
-      <button type="button" className="btn small ghost" onClick={() => onAtoll(null)}>All atolls</button>
-    </div>}
   </div>;
 }

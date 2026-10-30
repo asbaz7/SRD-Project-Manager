@@ -4,6 +4,8 @@ import { useAuth } from '../auth.jsx';
 import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import AtollMap from '../components/AtollMap.jsx';
 import { IslandDetail } from './Island.jsx';
+import { useAreaWork, AreaTiles, IslandWorkCards } from '../components/AreaWork.jsx';
+import { Icon } from '../components/icons.jsx';
 import { num } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
@@ -29,16 +31,20 @@ export default function Islands() {
       const focused = filters.atoll && islands.filter((i) => i.atoll_code === filters.atoll);
       const name = (atolls.data || []).find((a) => a.code === filters.atoll)?.name;
       return <section className={`glass islands-map${filters.island ? ' with-island' : ''}`} aria-label="Map of the islands">
-        <EscClose on={!!filters.island} close={() => setFilter({ island: '', service: '' })} />
+        <EscClose on={!!(filters.island || filters.atoll)} close={() => setFilter(filters.island ? { island: '', service: '' } : { atoll: '' })} />
         <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter({ atoll: code || '', island: '' })}
-          selected={filters.island || null} onIsland={(i) => setFilter('island', i?.id || '')} />
+          selected={filters.island || null} onIsland={(i) => setFilter('island', i?.id || '')} panel={!!(filters.island || filters.atoll)} />
         {filters.island && <aside className="glass island-panel" aria-label="Island">
           <IslandDetail key={filters.island} id={filters.island} only={filters.service || null} islands={islands}
-            onClose={() => setFilter({ island: '', service: '' })} onAtoll={(code) => setFilter({ island: '', service: '', atoll: code })}
+            onClose={() => setFilter({ island: '', service: '', atoll: '' })} onAtoll={(code) => setFilter({ island: '', service: '', atoll: code })}
             onShowAll={() => setFilter('service', '')} />
         </aside>}
         {/* The total, floating over the map as on the TV board. */}
-        {!filters.island && <div className="glass am-total" aria-live="polite">
+        {filters.atoll && !filters.island && <aside className="glass island-panel" aria-label="Atoll">
+          <AtollDetail key={filters.atoll} atoll={(atolls.data || []).find((a) => a.code === filters.atoll)} islands={islands.filter((i) => i.atoll_code === filters.atoll)}
+            onClose={() => setFilter({ atoll: '', island: '' })} onIsland={(i) => setFilter('island', i.id)} />
+        </aside>}
+        {!filters.island && !filters.atoll && <div className="glass am-total" aria-live="polite">
           {focused ? <>
             <strong>{num(focused.length)}</strong>
             <span>island{focused.length === 1 ? '' : 's'} in {name || filters.atoll}</span>
@@ -50,6 +56,26 @@ export default function Islands() {
         </div>}
       </section>;
     }}</Async>
+  </>;
+}
+
+// An atoll beside the map, as on the TV board: its figures, a card for each
+// island with open work, and the islands with none.
+function AtollDetail({ atoll, islands, onClose, onIsland }) {
+  const area = useAreaWork({ atoll_id: atoll?.id });
+  if (!atoll) return null;
+  const withWork = area.work ? new Set(area.work.map((w) => w.island_id)).size : null;
+  return <>
+    <header className="ip-head">
+      <div>
+        <button type="button" className="ip-atoll" onClick={onClose}><Icon name="back" size={14} /> Overview</button>
+        <h2>{atoll.name} atoll</h2>
+        <p className="ip-sub">{atoll.code} · {num(islands.length)} islands{withWork != null && `, ${num(withWork)} with open work`}</p>
+      </div>
+      <button type="button" className="btn ghost" onClick={onClose}>Close</button>
+    </header>
+    <AreaTiles work={area.work} outages={area.outages} />
+    <IslandWorkCards work={area.work} islands={islands} onIsland={onIsland} />
   </>;
 }
 
