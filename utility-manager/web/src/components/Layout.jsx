@@ -11,7 +11,7 @@ import { Icon } from './icons.jsx';
 // everything else hangs off an island.
 // Islands & assets: the map and each service's gensets and plants, one
 // page (Oct 2026); its service tabs live at /systems.
-const ISLANDS = { to: '/islands', label: 'Islands & assets', short: 'Islands', icon: 'island', also: '/systems' };
+const ISLANDS = { to: '/islands', label: 'Services', short: 'Services', icon: 'island', also: '/systems' };
 const MAIN = [
   { to: '/', label: 'Overview', icon: 'home', end: true },
   ISLANDS,

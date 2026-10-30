@@ -5,7 +5,7 @@ import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/u
 import AtollMap from '../components/AtollMap.jsx';
 import IslandsTabs from '../components/IslandsTabs.jsx';
 import { IslandDetail } from './Island.jsx';
-import { useAreaWork, AreaTiles, IslandWorkCards } from '../components/AreaWork.jsx';
+import ServicesOverview from '../components/ServicesOverview.jsx';
 import { Icon } from '../components/icons.jsx';
 import { num } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
@@ -21,7 +21,7 @@ export default function Islands() {
   const state = useApi('/islands');
 
   return <>
-    <PageHead title="Islands & assets" subtitle="Every island of the department. Drag to move, scroll or pinch to zoom; tap an atoll or an island to open it." icon="island" actions={can('admin') && <>
+    <PageHead title="Services" subtitle="Electricity, water and sewerage on every island. Drag to move, scroll or pinch to zoom; tap an atoll or an island to see its services." icon="island" actions={can('admin') && <>
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />
@@ -57,20 +57,17 @@ export default function Islands() {
 // An atoll beside the map, as on the TV board: its figures, a card for each
 // island with open work, and the islands with none.
 function AtollDetail({ atoll, islands, onClose, onIsland }) {
-  const area = useAreaWork({ atoll_id: atoll?.id });
   if (!atoll) return null;
-  const withWork = area.work ? new Set(area.work.map((w) => w.island_id)).size : null;
   return <>
     <header className="ip-head">
       <div>
         <button type="button" className="ip-atoll" onClick={onClose}><Icon name="back" size={14} /> Overview</button>
         <h2>{atoll.name} atoll</h2>
-        <p className="ip-sub">{atoll.code} · {num(islands.length)} islands{withWork != null && `, ${num(withWork)} with open work`}</p>
+        <p className="ip-sub">{atoll.code} · {num(islands.length)} islands</p>
       </div>
       <button type="button" className="btn ghost" onClick={onClose}>Close</button>
     </header>
-    <AreaTiles work={area.work} outages={area.outages} services={[...new Set(islands.flatMap((i) => i.services))]} />
-    <IslandWorkCards work={area.work} islands={islands} onIsland={onIsland} />
+    <ServicesOverview atollId={atoll.id} services={[...new Set(islands.flatMap((i) => i.services))]} onIsland={onIsland} />
   </>;
 }
 

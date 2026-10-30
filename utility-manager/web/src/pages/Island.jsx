@@ -7,7 +7,7 @@ import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, assetLabel, date,
 import { GensetUpdateForm } from './GensetUpdates.jsx';
 import { useApi, useRowLink } from '../hooks.js';
 import { Icon } from '../components/icons.jsx';
-import { AreaTiles, IslandWorkCards, useAreaWork } from '../components/AreaWork.jsx';
+import ServicesOverview from '../components/ServicesOverview.jsx';
 
 // There is no separate island page: an island opens beside the map on the
 // Islands page. Old links (/islands/:id) land there with the island open.
@@ -23,7 +23,6 @@ export default function Island() {
 // (opened from that service's page). onAtoll: back to the island's atoll.
 export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = [] }) {
   const state = useApi(`/islands/${id}`);
-  const area = useAreaWork({ island_id: id });
   const rowLink = useRowLink();
   const { can, allowed } = useAuth();
   const [modal, setModal] = useState(null);
@@ -49,10 +48,9 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
         {island.can_edit && island.technical && <Link className="btn small" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
         {manage && island.technical && <button className="btn small" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
       </div>
-      <AreaTiles work={area.work} outages={area.outages} services={island.services.length ? island.services : ['electricity']} />
-      <IslandWorkCards work={area.work && area.work.filter((w) => !only || w.service === only)} islands={[{ id: island.id, name: island.name }]} />
+      <ServicesOverview atollId={island.atoll_id} islandId={island.id} services={only ? [only] : island.services} />
       {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <button type="button" className="link" onClick={onShowAll}>Show everything on {island.name}</button></p>}
-      {island.technical && <h3 className="ip-section">Plants and assets{island.genset_count > 0 && <span> · {island.running_count} of {island.genset_count} gensets running · {withUnit(island.installed_kw, 'kW')}</span>}</h3>}
+      {island.technical && <h3 className="ip-section">Plants and equipment{island.genset_count > 0 && <span> · {island.running_count} of {island.genset_count} gensets running · {withUnit(island.installed_kw, 'kW')}</span>}</h3>}
       {island.technical && facilities.length === 0 && <Empty>No {only ? `${SERVICES[only].label.toLowerCase()} ` : ''}facilities recorded for this island yet.</Empty>}
       {facilities.map((f) => (
         <Card key={f.id} className={f.active ? '' : 'inactive'}

@@ -13,7 +13,7 @@ export default function IslandsTabs() {
   const { pathname } = useLocation();
   if (!technical) return null;
   const on = (svc) => (svc ? pathname.startsWith(`/systems/${svc}`) : pathname.startsWith('/islands'));
-  return <nav className="ia-tabs" aria-label="Islands and assets">
+  return <nav className="ia-tabs" aria-label="Services">
     <NavLink to="/islands" className={`ia-tab${on(null) ? ' on' : ''}`}><Icon name="island" size={17} />Map</NavLink>
     {Object.entries(SERVICES).map(([k, s]) => <NavLink key={k} to={`/systems/${k}/${FIRST[k]}`} className={`ia-tab ${k}${on(k) ? ' on' : ''}`}>
       <Icon name={k} size={17} />{s.label}</NavLink>)}

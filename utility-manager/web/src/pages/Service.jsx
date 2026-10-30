@@ -34,12 +34,12 @@ export default function Service() {
   const { technical } = useAuth();
   if (!SERVICES[svc]) return <Navigate replace to="/systems/electricity/engines" />;
   if (!technical) return <>
-    <PageHead title="Islands & assets" icon="island" />
+    <PageHead title="Services" icon="island" />
     <Card><p>This section holds technical information (engines, monthly updates, assets and plants) and is available to technical staff.</p>
       <p className="muted small">You can follow <Link to="/work">work</Link>, <Link to="/interruptions">interruptions</Link> and <Link to="/projects">projects</Link>.</p></Card>
   </>;
   return <>
-    <PageHead title="Islands & assets" subtitle={SUBTITLE[svc]} icon="island" />
+    <PageHead title="Services" subtitle={SUBTITLE[svc]} icon="island" />
     <IslandsTabs />
     <nav className="tabs glass" aria-label={`${SERVICES[svc].label} sections`}>
       {TABS[svc].map(([key, label]) => (

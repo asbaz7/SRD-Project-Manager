@@ -1018,3 +1018,21 @@ option { background: #0c2a44; color: var(--text); }
 .ia-count { margin-left: auto; color: var(--text-2); font-size: .92rem; }
 .ia-count strong { color: var(--text); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 @media (max-width: 860px) { .ia-count { margin-left: 0; } }
+
+/* Services overview in the atoll and island panels. */
+.svc-overview { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin: 6px 0 12px; align-items: start; }
+.svc-card { border-radius: 14px; padding: 12px 14px; background: rgb(255 255 255 / .05); border: 1px solid var(--hairline); box-shadow: inset 3px 0 0 var(--svc-c); display: grid; gap: 8px; }
+.svc-card.electricity { --svc-c: var(--electricity); } .svc-card.water { --svc-c: var(--water); } .svc-card.sewerage { --svc-c: var(--sewerage); }
+.svc-card.alert { border-color: color-mix(in srgb, var(--t-over) 45%, transparent); }
+.svc-card header { display: flex; align-items: center; gap: 8px; } .svc-card header .muted { margin-left: auto; }
+.svc-card .svc-badge { width: 24px; height: 24px; }
+.svc-out { margin: 0; color: var(--bad); font-weight: 600; font-size: .86rem; }
+.svc-figs { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 4px 18px; }
+.svc-figs span { display: grid; font-size: .76rem; color: var(--muted); }
+.svc-figs b { font-size: 1.25rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.svc-figs .bad b { color: var(--bad); } .svc-figs .warn b { color: var(--warn); }
+.svc-card p { margin: 0; }
+.svc-plants { list-style: none; margin: 0; padding: 6px 0 0; border-top: 1px solid var(--hairline); display: grid; gap: 4px; font-size: .84rem; }
+.svc-plants li { display: flex; gap: 8px; align-items: baseline; } .svc-plants li > :first-child { flex: 1; min-width: 0; }
+.svc-plants button.link { color: var(--link); text-align: left; }
+.svc-work-link { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; font-weight: 600; }
