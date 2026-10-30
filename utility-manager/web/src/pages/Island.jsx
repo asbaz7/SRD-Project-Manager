@@ -5,6 +5,7 @@ import { AssetForm, FacilityForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, Service } from '../components/ui.jsx';
 import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { GensetUpdateForm } from './GensetUpdates.jsx';
+import { PlantUpdateForm } from './PlantUpdates.jsx';
 import { useApi, useRowLink } from '../hooks.js';
 import { Icon } from '../components/icons.jsx';
 import ServicesOverview from '../components/ServicesOverview.jsx';
@@ -57,6 +58,7 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
           title={<><Service value={f.service} short /> {f.name} <span className="muted small">· {FACILITY_KINDS[f.kind]}{!f.active && ' · not in use'}</span></>}
           actions={<>
             {manage && island.technical && f.active && f.kind === 'powerhouse' && f.service === 'electricity' && <button className="btn small" onClick={() => setModal({ type: 'update', facilityId: f.id })}>Monthly update</button>}
+            {manage && island.technical && f.active && f.service !== 'electricity' && f.assets.some((x) => x.active) && <button className="btn small" onClick={() => setModal({ type: 'plant-update', facilityId: f.id })}>Monthly update</button>}
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'asset', facilityId: f.id })}>Add asset</button>}
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'facility', facility: f })}>Edit</button>}
           </>}>
@@ -113,6 +115,7 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
       {island.notes && <Card title="Notes"><p className="pre">{island.notes}</p></Card>}
 
       {modal?.type === 'update' && <GensetUpdateForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
+      {modal?.type === 'plant-update' && <PlantUpdateForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.type === 'facility' && <FacilityForm islandId={island.id} facility={modal.facility} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.type === 'asset' && <AssetForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
     </>;

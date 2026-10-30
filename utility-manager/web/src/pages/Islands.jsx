@@ -3,7 +3,6 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import AtollMap from '../components/AtollMap.jsx';
-import IslandsTabs from '../components/IslandsTabs.jsx';
 import { IslandDetail } from './Island.jsx';
 import ServicesOverview from '../components/ServicesOverview.jsx';
 import { Icon } from '../components/icons.jsx';
@@ -21,17 +20,13 @@ export default function Islands() {
   const state = useApi('/islands');
 
   return <>
-    <PageHead title="Services" subtitle="Electricity, water and sewerage on every island. Drag to move, scroll or pinch to zoom; tap an atoll or an island to see its services." icon="island" actions={can('admin') && <>
-      <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
-      <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
+    <PageHead title="Services" subtitle="Tap an atoll or an island to see its electricity, water and sewerage. Drag to move, scroll or pinch to zoom." icon="island" actions={<>
+      {state.data && <span className="ia-count"><strong>{num(state.data.length)}</strong> islands · <strong>{num(new Set(state.data.map((i) => i.atoll_code)).size)}</strong> atolls</span>}
+      {can('admin') && <>
+        <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
+        <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
+      </>}
     </>} />
-    <div className="ia-row">
-      <IslandsTabs />
-      {state.data && (() => {
-        const atollCount = new Set(state.data.map((i) => i.atoll_code)).size;
-        return <span className="ia-count"><strong>{num(state.data.length)}</strong> islands · <strong>{num(atollCount)}</strong> atolls</span>;
-      })()}
-    </div>
     {modal === 'atoll' && <AtollForm onClose={() => setModal(null)} onSaved={() => { setModal(null); atolls.reload(); }} />}
     {modal === 'island' && <IslandForm atolls={atolls.data || []} onClose={() => setModal(null)} onSaved={() => { setModal(null); state.reload(); }} />}
     <Async state={state}>{(islands) => {

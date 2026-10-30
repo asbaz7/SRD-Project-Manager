@@ -26,7 +26,7 @@ export default function ServicesOverview({ atollId, islandId, services, onIsland
       const all = data[k].data?.facilities;
       const plants = all ? all.filter((f) => !islandId || f.island_id === islandId) : null;
       const off = (outages.data?.items || []).filter((o) => o.service === k);
-      return <ServiceCard key={k} svc={k} plants={plants} off={off} many={!islandId} onIsland={onIsland} />;
+      return <ServiceCard key={k} svc={k} plants={plants} off={off} many={!islandId} onIsland={onIsland} atollId={atollId} />;
     })}</div>
     {work.data && <Link className="svc-work-link" to={`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId })}`}>
       <Icon name="work" size={15} /> {work.data.counts?.open ? `${num(work.data.counts.open)} open work${work.data.counts.overdue ? ` · ${num(work.data.counts.overdue)} overdue` : ''}` : 'No open work'} <Icon name="arrow" size={14} />
@@ -34,7 +34,14 @@ export default function ServicesOverview({ atollId, islandId, services, onIsland
   </>;
 }
 
-function ServiceCard({ svc, plants, off, many, onIsland }) {
+// The service's full lists for the atoll (all gensets, monthly updates, plants).
+const LISTS = {
+  electricity: [['engines', 'Gensets'], ['reports', 'Monthly updates'], ['plants', 'Powerhouses']],
+  water: [['assets', 'Assets'], ['updates', 'Monthly updates'], ['plants', 'Plants']],
+  sewerage: [['assets', 'Assets'], ['updates', 'Monthly updates'], ['plants', 'Plants']],
+};
+
+function ServiceCard({ svc, plants, off, many, onIsland, atollId }) {
   const sum = (k) => (plants || []).reduce((n, f) => n + Number(f[k] || 0), 0);
   const assets = sum('assets'), running = sum('running'), down = sum('down');
   const faults = sum('serious') + sum('minor');
@@ -63,6 +70,7 @@ function ServiceCard({ svc, plants, off, many, onIsland }) {
         <span className="muted">{Number(f.assets) ? `${f.running}/${f.assets}` : '—'}{f.report_month ? ` · ${month(f.report_month)}` : ''}</span>
         {Number(f.down) > 0 && <span className="bad"><Mark name="cross" /> {f.down}</span>}
       </li>)}</ul>}
+      {many && <nav className="svc-lists">{LISTS[svc].map(([k, l]) => <Link key={k} to={`/systems/${svc}/${k}${qs({ atoll_id: atollId })}`}>{l}</Link>)}</nav>}
     </>}
   </section>;
 }
