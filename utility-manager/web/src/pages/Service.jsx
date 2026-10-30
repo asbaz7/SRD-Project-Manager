@@ -113,8 +113,9 @@ function ServiceAssets({ svc }) {
     <Async state={state}>{(page) => page.items.length === 0
       ? <Card><Empty>No {SERVICES[svc].label.toLowerCase()} assets{filters.status ? ' with this status' : ' recorded yet'}. Assets are added from an island on the Islands map.</Empty></Card>
       : <>
-        <IslandGroups items={page.items} name={(a) => `${a.atoll_code}. ${a.island_name} · ${a.facility_name}`} key2={(a) => a.facility_id}
-          tile={(a) => <AssetTile key={a.id} a={a} />} count={(list) => `${list.filter((a) => a.status === 'running').length} of ${list.length} running`} />
+        <IslandGroups items={page.items} name={(a) => `${a.atoll_code}. ${a.island_name}`} key2={(a) => a.facility_id}
+          tile={(a) => <AssetTile key={a.id} a={a} />} tone={(a) => STATUS_TONE[a.status] || 'none'}
+          count={(list) => `${list.filter((a) => a.status === 'running').length}/${list.length} running`} />
         <Pager page={page} onOffset={(o) => setFilter('offset', o)} />
       </>}</Async>
   </>;

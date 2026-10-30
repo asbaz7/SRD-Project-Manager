@@ -1036,3 +1036,28 @@ option { background: #0c2a44; color: var(--text); }
 .svc-plants li { display: flex; gap: 8px; align-items: baseline; } .svc-plants li > :first-child { flex: 1; min-width: 0; }
 .svc-plants button.link { color: var(--link); text-align: left; }
 .svc-work-link { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; font-weight: 600; }
+
+/* Atoll boxes holding every island as a chip; an island opens its gensets. */
+.atoll-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; align-items: start; margin-bottom: 12px; }
+.atoll-box { border-radius: 16px; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border); box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow); }
+.atoll-box header { display: flex; justify-content: space-between; align-items: baseline; margin: 0 2px 8px; }
+.atoll-box header strong { font-size: 1.1rem; } .atoll-box header span { font-size: .8rem; color: var(--muted); }
+.isl-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.isl-chip { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; text-align: left; padding: 7px 9px; border-radius: 10px; border: 1px solid transparent;
+  background: rgb(255 255 255 / .06); color: var(--text); font: inherit; cursor: pointer; box-shadow: inset 3px 0 0 var(--c, transparent); }
+.isl-chip:hover { background: rgb(255 255 255 / .12); }
+.isl-chip.w-over { --c: var(--t-over); } .isl-chip.w-serious { --c: var(--serious-fill); } .isl-chip.w-hold { --c: var(--t-hold); }
+.isl-chip .nm { font-weight: 650; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.isl-chip .ct { grid-column: 1 / -1; font-size: .72rem; color: var(--muted); }
+.isl-chip .dots { display: flex; gap: 3px; align-items: center; justify-self: end; }
+.isl-chip .dots i { width: 7px; height: 7px; border-radius: 50%; background: #7c8ba0; }
+.isl-chip .dots i.t-done { background: var(--t-done); } .isl-chip .dots i.t-prog { background: var(--t-prog); } .isl-chip .dots i.t-hold { background: var(--t-hold); }
+.isl-chip .dots i.t-serious { background: var(--serious-fill); } .isl-chip .dots i.t-over { background: var(--t-over); }
+.asset-tiles.wide { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+@media (max-width: 860px) { .atoll-boxes { grid-template-columns: 1fr; } .isl-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) {
+  .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  .chips .chip { white-space: nowrap; flex: none; }
+  .ia-tabs + .tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .ia-tabs + .tabs .tab { white-space: nowrap; }
+}

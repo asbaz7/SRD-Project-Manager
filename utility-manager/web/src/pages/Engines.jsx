@@ -54,26 +54,51 @@ export default function Engines({ embedded }) {
     <Async state={state}>{(d) => d.engines.length === 0 ? <Card><Empty>No engines match.</Empty></Card> : <>
       <IslandGroups items={d.engines} name={(e) => `${e.atoll_code}. ${e.island_name}${e.shared_island ? ` · ${e.facility_name}` : ''}`}
         key2={(e) => `${e.island_id}:${e.shared_island ? e.facility_id : ''}`}
-        tile={(e) => <EngineTile key={e.id} e={e} />}
-        count={(list) => `${list.filter((e) => e.status === 'running').length} of ${list.length} running`} />
+        tile={(e) => <EngineTile key={e.id} e={e} />} tone={(e) => CONDITION_TONE[e.condition] || (e.status === 'standby' ? 'prog' : 'none')}
+        count={(list) => `${list.filter((e) => e.status === 'running').length}/${list.length} running`} />
       <p className="muted small">{d.engines.length} engine{d.engines.length === 1 ? '' : 's'} · condition and hours from the latest monthly update</p>
     </>}</Async>
   </>;
 }
 
-// The engines (or any assets) as a card per island, in the order given.
-export function IslandGroups({ items, name, key2, tile, count }) {
-  const groups = [];
+// The engines (or any assets) at a glance: a box per atoll holding every
+// island as a compact chip (running count, a dot per genset or system,
+// anything wrong). Pressing an island opens its gensets or systems.
+export function IslandGroups({ items, name, key2, tile, count, tone = () => 'none', atoll = (x) => x.atoll_code }) {
+  const [open, setOpen] = useState(null);
+  const atolls = [];
   const at = new Map();
   for (const x of items) {
+    const a = atoll(x);
+    if (!at.has(a)) { at.set(a, { code: a, islands: new Map() }); atolls.push(at.get(a)); }
+    const isl = at.get(a).islands;
     const k = key2(x);
-    if (!at.has(k)) { at.set(k, groups.length); groups.push({ k, name: name(x), list: [] }); }
-    groups[at.get(k)].list.push(x);
+    if (!isl.has(k)) isl.set(k, { k, name: name(x), list: [] });
+    isl.get(k).list.push(x);
   }
-  return <div className="asset-board">{groups.map((g) => <section key={g.k} className="area-card">
-    <div className="area-card-head"><strong>{g.name}</strong><span>{count(g.list)}</span></div>
-    <div className="asset-tiles">{g.list.map(tile)}</div>
-  </section>)}</div>;
+  const picked = open && atolls.flatMap((a) => [...a.islands.values()]).find((g) => g.k === open);
+  return <>
+    <div className="atoll-boxes">{atolls.map((a) => {
+      const groups = [...a.islands.values()];
+      const all = groups.flatMap((g) => g.list);
+      return <section key={a.code} className="atoll-box">
+        <header><strong>{a.code}</strong><span>{groups.length} island{groups.length === 1 ? '' : 's'} · {count(all)}</span></header>
+        <div className="isl-chips">{groups.map((g) => {
+          const tones = g.list.map(tone);
+          const worst = ['over', 'serious', 'hold'].find((t) => tones.includes(t));
+          return <button key={g.k} type="button" className={`isl-chip${worst ? ` w-${worst}` : ''}`} onClick={() => setOpen(g.k)}>
+            <span className="nm">{g.name.replace(/^[A-Za-z]+\.\s*/, '')}</span>
+            <span className="dots" aria-hidden="true">{tones.map((t, i) => <i key={i} className={`t-${t}`} />)}</span>
+            <span className="ct">{count(g.list)}</span>
+          </button>;
+        })}</div>
+      </section>;
+    })}</div>
+    {picked && <Modal title={picked.name} onClose={() => setOpen(null)}>
+      <p className="muted small">{count(picked.list)}</p>
+      <div className="asset-tiles wide">{picked.list.map(tile)}</div>
+    </Modal>}
+  </>;
 }
 
 const CONDITION_TONE = { ok: 'done', minor_fault: 'hold', major_fault: 'serious', not_running: 'over' };
@@ -102,7 +127,7 @@ function Intervals({ onSaved }) {
   const r = state.data?.region;
   if (!r) return null;
   const models = state.data.models;
-  return <p className="muted small">
+  return <p className="muted small hide-sm">
     Due by rule: overhaul every {r.overhaul_hours ? `${num(r.overhaul_hours)} running hours` : '— (not set)'} · alternator service every {r.alt_service_months ? `${r.alt_service_months} months` : '— (not set)'}
     {models.length > 0 && ` · ${models.length} model${models.length === 1 ? '' : 's'} with their own`}. A date set on a genset, or the island's tick on its report, counts too.
     {can('manager') && technical && <> <button className="link" onClick={() => setEditing(true)}>Change</button></>}
