@@ -38,8 +38,6 @@ export default function Asset() {
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
           {isEngine && <button className="btn" onClick={() => setModal('event')}>Add maintenance record</button>}
-          {!a.work.some((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status))
-            && <Link className="btn ghost" to={`/work/new?kind=relocation&asset_id=${a.id}`}>Move</Link>}
           <button className="btn ghost" onClick={() => setModal('edit')}>Edit details</button>
           {technical && <button className="btn ghost" onClick={() => setModal('merge')}>Merge a duplicate…</button>}
         </>}>
