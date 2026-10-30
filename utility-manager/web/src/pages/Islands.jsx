@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
 import AtollMap from '../components/AtollMap.jsx';
@@ -7,7 +6,8 @@ import IslandsTabs from '../components/IslandsTabs.jsx';
 import { IslandDetail } from './Island.jsx';
 import ServicesOverview from '../components/ServicesOverview.jsx';
 import { Icon } from '../components/icons.jsx';
-import { num } from '../format.js';
+import { SERVICES, num } from '../format.js';
+import { api, qs } from '../api.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
 // The islands page is the map: every island of the department where it is,
@@ -25,38 +25,36 @@ export default function Islands() {
       <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
       <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />
-    <div className="ia-row">
-      <IslandsTabs />
-      {state.data && (() => {
-        const atollCount = new Set(state.data.map((i) => i.atoll_code)).size;
-        return <span className="ia-count"><strong>{num(state.data.length)}</strong> islands · <strong>{num(atollCount)}</strong> atolls</span>;
-      })()}
-    </div>
+    <IslandsTabs />
     {modal === 'atoll' && <AtollForm onClose={() => setModal(null)} onSaved={() => { setModal(null); atolls.reload(); }} />}
     {modal === 'island' && <IslandForm atolls={atolls.data || []} onClose={() => setModal(null)} onSaved={() => { setModal(null); state.reload(); }} />}
-    <Async state={state}>{(islands) => {
-      return <section className={`glass islands-map${filters.island ? ' with-island' : ''}`} aria-label="Map of the islands">
-        <EscClose on={!!(filters.island || filters.atoll)} close={() => setFilter(filters.island ? { island: '', service: '' } : { atoll: '' })} />
+    <Async state={state}>{(all) => {
+      // A service tab shows only that service: its islands, its figures.
+      const svc = filters.service || null;
+      const islands = svc ? all.filter((i) => i.services.includes(svc)) : all;
+      return <>
+      <SummaryCard svc={svc} islands={islands} all={all} atoll={(atolls.data || []).find((a) => a.code === filters.atoll)} />
+      <section className={`glass islands-map${filters.island ? ' with-island' : ''}`} aria-label="Map of the islands">
+        <EscClose on={!!(filters.island || filters.atoll)} close={() => setFilter(filters.island ? { island: '' } : { atoll: '' })} />
         <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter({ atoll: code || '', island: '' })}
           selected={filters.island || null} onIsland={(i) => setFilter('island', i?.id || '')} panel={!!(filters.island || filters.atoll)} />
         {filters.island && <aside className="glass island-panel" aria-label="Island">
           <IslandDetail key={filters.island} id={filters.island} only={filters.service || null} islands={islands}
-            onClose={() => setFilter({ island: '', service: '', atoll: '' })} onAtoll={(code) => setFilter({ island: '', service: '', atoll: code })}
+            onClose={() => setFilter({ island: '', atoll: '' })} onAtoll={(code) => setFilter({ island: '', atoll: code })}
             onShowAll={() => setFilter('service', '')} />
         </aside>}
-        {/* The total, floating over the map as on the TV board. */}
         {filters.atoll && !filters.island && <aside className="glass island-panel" aria-label="Atoll">
-          <AtollDetail key={filters.atoll} atoll={(atolls.data || []).find((a) => a.code === filters.atoll)} islands={islands.filter((i) => i.atoll_code === filters.atoll)}
+          <AtollDetail key={filters.atoll} svc={svc} atoll={(atolls.data || []).find((a) => a.code === filters.atoll)} islands={islands.filter((i) => i.atoll_code === filters.atoll)}
             onClose={() => setFilter({ atoll: '', island: '' })} onIsland={(i) => setFilter('island', i.id)} />
         </aside>}
-      </section>;
+      </section></>;
     }}</Async>
   </>;
 }
 
 // An atoll beside the map, as on the TV board: its figures, a card for each
 // island with open work, and the islands with none.
-function AtollDetail({ atoll, islands, onClose, onIsland }) {
+function AtollDetail({ atoll, islands, svc, onClose, onIsland }) {
   if (!atoll) return null;
   return <>
     <header className="ip-head">
@@ -67,8 +65,38 @@ function AtollDetail({ atoll, islands, onClose, onIsland }) {
       </div>
       <button type="button" className="btn ghost" onClick={onClose}>Close</button>
     </header>
-    <ServicesOverview atollId={atoll.id} services={[...new Set(islands.flatMap((i) => i.services))]} onIsland={onIsland} />
+    <ServicesOverview atollId={atoll.id} services={svc ? [svc] : [...new Set(islands.flatMap((i) => i.services))]} onIsland={onIsland} />
   </>;
+}
+
+// The figures for the tab: all services, or one, for the region or the
+// chosen atoll.
+function SummaryCard({ svc, islands, all, atoll }) {
+  const here = atoll ? islands.filter((i) => i.atoll_code === atoll.code) : islands;
+  const facs = useApi(svc ? `/services/${svc}${qs({ atoll_id: atoll?.id })}` : null);
+  const outs = useApi(`/incidents${qs({ status: 'open', category: 'outage', service: svc || undefined, atoll_id: atoll?.id, limit: 200 })}`);
+  const offIslands = new Set((outs.data?.items || []).map((o) => o.island_id)).size;
+  const where = atoll ? `${atoll.name} atoll` : 'All atolls';
+  let tiles;
+  if (!svc) {
+    const pool = atoll ? all.filter((i) => i.atoll_code === atoll.code) : all;
+    tiles = [[num(pool.length), 'Islands'], [num(new Set(pool.map((i) => i.atoll_code)).size), 'Atolls'],
+      ...Object.entries(SERVICES).map(([k, s]) => [num(pool.filter((i) => i.services.includes(k)).length), `with ${s.label.toLowerCase()}`, k])];
+  } else {
+    const f = facs.data?.facilities || [];
+    const sum = (k) => f.reduce((n, x) => n + Number(x[k] || 0), 0);
+    const due = f.filter((x) => x.report_state === 'missing' || x.report_state === 'never').length;
+    tiles = [[num(here.length), 'Islands'], [num(f.length), svc === 'electricity' ? 'Powerhouses' : 'Plants'],
+      [facs.data ? `${num(sum('running'))} / ${num(sum('assets'))}` : '–', svc === 'electricity' ? 'Gensets running' : 'Systems running'],
+      [num(sum('down')), 'Down', sum('down') ? 'bad' : ''], [num(sum('serious') + sum('minor')), 'With faults', sum('serious') + sum('minor') ? 'warn' : ''],
+      ...(svc === 'water' && sum('ro_tpd') ? [[num(sum('ro_tpd')), 't/day RO']] : []),
+      ...(due ? [[num(due), 'Updates due', 'warn']] : [])];
+  }
+  if (offIslands) tiles.push([num(offIslands), `Island${offIslands === 1 ? '' : 's'} with supply interrupted`, 'bad']);
+  return <section className={`glass sum-card${svc ? ` ${svc}` : ''}`} aria-label="Summary">
+    <header><strong>{svc ? SERVICES[svc].label : 'All services'}</strong><span>{where}</span></header>
+    <div className="sum-tiles">{tiles.map(([v, l, t]) => <div key={l} className={`sum-tile ${t || ''}`}><b>{v}</b><span>{l}</span></div>)}</div>
+  </section>;
 }
 
 // Esc closes the island panel.

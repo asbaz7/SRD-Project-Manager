@@ -820,7 +820,7 @@ option { background: #0c2a44; color: var(--text); }
 .flag .icon, .flag .mark { vertical-align: 0; }
 
 /* Islands page: the atolls map beside the list (Oct 2026), drawn as on the TV board. */
-.islands-map { position: relative; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 176px); min-height: 520px;
+.islands-map { position: relative; border-radius: var(--radius); padding: 0; overflow: hidden; height: calc(100vh - 250px); min-height: 480px;
   background: radial-gradient(90% 80% at 50% 40%, rgb(14 44 70 / .55), rgb(4 16 30 / .55)); }
 .atoll-map { display: flex; flex-direction: column; height: 100%; }
 .am-total { position: absolute; left: 14px; top: 14px; z-index: 1; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 2px 10px; padding: 12px 16px; border-radius: 16px; pointer-events: none; }
@@ -1036,3 +1036,17 @@ option { background: #0c2a44; color: var(--text); }
 .svc-plants li { display: flex; gap: 8px; align-items: baseline; } .svc-plants li > :first-child { flex: 1; min-width: 0; }
 .svc-plants button.link { color: var(--link); text-align: left; }
 .svc-work-link { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; font-weight: 600; }
+
+/* Services tabs and the summary card above the map. */
+.ia-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ia-nav .ia-tabs, .ia-nav .tabs { margin: 0; }
+.sum-card { border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; box-shadow: inset 3px 0 0 var(--svc-c, var(--accent)), var(--shadow); }
+.sum-card.electricity { --svc-c: var(--electricity); } .sum-card.water { --svc-c: var(--water); } .sum-card.sewerage { --svc-c: var(--sewerage); }
+.sum-card header { display: grid; min-width: 140px; } .sum-card header span { color: var(--muted); font-size: .82rem; }
+.sum-tiles { display: flex; flex-wrap: wrap; gap: 6px 26px; }
+.sum-tile { display: grid; } .sum-tile b { font-size: 1.4rem; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.sum-tile span { font-size: .78rem; color: var(--muted); }
+.sum-tile.bad b { color: var(--bad); } .sum-tile.warn b { color: var(--warn); }
+.sum-tile.electricity b { color: var(--electricity); } .sum-tile.water b { color: var(--water); } .sum-tile.sewerage b { color: var(--sewerage); }
+.ia-tabs + .tabs { margin-top: 0; }
+@media (max-width: 860px) { .sum-tiles { gap: 6px 18px; } .sum-tile b { font-size: 1.15rem; } }

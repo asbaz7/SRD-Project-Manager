@@ -41,11 +41,6 @@ export default function Service() {
   return <>
     <PageHead title="Services" subtitle={SUBTITLE[svc]} icon="island" />
     <IslandsTabs />
-    <nav className="tabs glass" aria-label={`${SERVICES[svc].label} sections`}>
-      {TABS[svc].map(([key, label]) => (
-        <NavLink key={key} to={`/systems/${svc}/${key}`} className={`tab${tab === key ? ' active' : ''}`}>{label}</NavLink>
-      ))}
-    </nav>
     {tab === 'engines' && svc === 'electricity' && <Engines embedded />}
     {tab === 'reports' && svc === 'electricity' && <GensetUpdates />}
     {tab === 'assets' && <ServiceAssets svc={svc} />}
