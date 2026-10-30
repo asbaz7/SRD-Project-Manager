@@ -29,7 +29,7 @@ export const DEFAULT_TAB = { electricity: 'engines', water: 'assets', sewerage: 
 export default function Service() {
   const { svc = 'electricity', tab: asked } = useParams();
   const tab = TABS[svc]?.some(([k]) => k === asked) ? asked : DEFAULT_TAB[svc];
-  const { can, allowed, technical } = useAuth();
+  const { technical } = useAuth();
   if (!SERVICES[svc]) return <Navigate replace to="/systems/electricity/engines" />;
   if (!technical) return <>
     <PageHead title="Assets" icon="engine" />
@@ -37,11 +37,7 @@ export default function Service() {
       <p className="muted small">You can follow <Link to="/work">work</Link>, <Link to="/interruptions">interruptions</Link> and <Link to="/projects">projects</Link>.</p></Card>
   </>;
   return <>
-    <PageHead title="Assets" subtitle="Gensets, plants and their equipment, one service at a time" icon="engine"
-      actions={<>
-        {can('manager') && <Link className="btn" to={`/work/new?service=${svc}`}>Log work</Link>}
-        {allowed('incidents') && <Link className="btn" to={`/interruptions/new?service=${svc}`}>Report interruption</Link>}
-      </>} />
+    <PageHead title="Assets" subtitle="Gensets, plants and their equipment, one service at a time" icon="engine" />
     <nav className="svc-tabs" aria-label="Service">
       {Object.entries(SERVICES).map(([k, s]) => <NavLink key={k} to={`/systems/${k}/${DEFAULT_TAB[k]}`} className={`svc-tab ${k}${svc === k ? ' on' : ''}`}>
         <span className={`svc-badge ${k}`}><Icon name={k} size={15} /></span>{s.label}<span className="count">{SUBTITLE[k]}</span></NavLink>)}
