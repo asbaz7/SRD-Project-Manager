@@ -231,12 +231,13 @@ export default async function workRoutes(app) {
   app.get('/work', async (req, reply) => {
     const q = parse(listQuery, req.query);
     const vis = workVisible(req.user, 1);
-    const w = new Where(vis.values).raw(vis.sql)
+    const filters = (svc) => new Where(vis.values).raw(vis.sql)
       .add('(w.island_id = ? or df.island_id = ?)', q.island_id).add('i.atoll_id = ?', q.atoll_id).add('w.asset_id = ?', q.asset_id)
-      .add('w.kind = ?', q.kind).add('w.service = ?', q.service)
+      .add('w.kind = ?', q.kind).add('w.service = ?', svc)
       .add('(w.title ilike ? or w.description ilike ? or i.name ilike ? or w.assigned_to ilike ? or au.full_name ilike ?)', q.q && `%${q.q}%`)
       .add('w.assigned_user_id = ?', q.assignee === 'me' ? req.user.id : q.assignee)
       .add(q.unit === 'mine' ? 'w.unit_id = (select unit_id from users where id = ?)' : 'w.unit_id = ?', q.unit === 'mine' ? req.user.id : q.unit);
+    const w = filters(q.service);
     // How many in each tab of the list, with the other filters applied.
     const FROM = SELECT.slice(SELECT.indexOf('    from work_orders w'));
     const counts = q.format === 'csv' ? null : (await db.query(`
@@ -246,6 +247,11 @@ export default async function workRoutes(app) {
              count(*) filter (where w.status = 'completed')::int as completed,
              count(*)::int as "all"
         ${FROM} ${w.sql}`, w.values)).rows[0];
+    // Open work per service, for the service tabs (the other filters applied).
+    if (counts) {
+      const all = filters(undefined);
+      counts.by_service = Object.fromEntries((await db.query(`select w.service, count(*)::int as n ${FROM} ${all.sql} and ${OPEN} group by w.service`, all.values)).rows.map((x) => [x.service, x.n]));
+    }
     if (q.status === 'open') w.raw(OPEN);
     else if (q.status === 'overdue') w.raw(`(w.target_on < current_date and ${OPEN})`);
     else if (q.status !== 'all') w.add('w.status = ?', q.status);
