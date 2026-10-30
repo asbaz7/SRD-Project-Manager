@@ -18,19 +18,19 @@ export default function ServicesOverview({ atollId, islandId, services, onIsland
     sewerage: useApi(has('sewerage') ? `/services/sewerage${qs({ atoll_id: atollId })}` : null),
   };
   const outages = useApi(`/incidents${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, status: 'open', category: 'outage', limit: 200 })}`);
-  const work = useApi(`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, status: 'open', limit: 1 })}`);
+  const svcOnly = services.length === 1 ? services[0] : undefined;
+  const work = useApi(`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, status: 'open', limit: 200 })}`);
   const shown = KEYS.filter(has);
   if (!shown.length) return <p className="muted small">No services recorded.</p>;
   return <>
-    <div className="svc-overview">{shown.map((k) => {
+    <div className="svc-overview">
+    {work.data && <WorkSummary items={work.data.items} to={`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId, service: svcOnly })}`} />}
+    {shown.map((k) => {
       const all = data[k].data?.facilities;
       const plants = all ? all.filter((f) => !islandId || f.island_id === islandId) : null;
       const off = (outages.data?.items || []).filter((o) => o.service === k);
       return <ServiceCard key={k} svc={k} plants={plants} off={off} many={!islandId} onIsland={onIsland} atollId={atollId} />;
     })}</div>
-    {work.data && <Link className="svc-work-link" to={`/work${qs({ atoll_id: islandId ? undefined : atollId, island_id: islandId })}`}>
-      <Icon name="work" size={15} /> {work.data.counts?.open ? `${num(work.data.counts.open)} open work${work.data.counts.overdue ? ` · ${num(work.data.counts.overdue)} overdue` : ''}` : 'No open work'} <Icon name="arrow" size={14} />
-    </Link>}
   </>;
 }
 
@@ -40,6 +40,28 @@ const LISTS = {
   water: [['assets', 'Assets'], ['updates', 'Monthly updates'], ['plants', 'Plants']],
   sewerage: [['assets', 'Assets'], ['updates', 'Monthly updates'], ['plants', 'Plants']],
 };
+
+// The open work of the atoll or island, summed up, with the way to the list.
+const HELD = ['on_hold', 'awaiting_parts'];
+function WorkSummary({ items, to }) {
+  const now = Date.now();
+  const n = (f) => items.filter(f).length;
+  const tiles = [
+    [n((w) => !HELD.includes(w.status)), 'Ongoing', 'prog'],
+    [n((w) => HELD.includes(w.status)), 'On hold', 'hold'],
+    [n((w) => w.overdue), 'Overdue', 'over'],
+    [n((w) => !w.overdue && w.target_on && new Date(`${w.target_on}T23:59:59`) - now <= 7 * 86400000), 'Due in 7 days', 'hold'],
+  ];
+  const next = items.filter((w) => w.overdue).concat(items.filter((w) => !w.overdue)).slice(0, 3);
+  return <section className="svc-card work">
+    <header><span className="svc-badge work"><Icon name="work" size={15} /></span><strong>Work</strong>
+      <span className="muted small">{num(items.length)} open</span></header>
+    <div className="svc-figs">{tiles.map(([v, l, t]) => <span key={l} className={v ? t : ''}><b>{num(v)}</b>{l}</span>)}</div>
+    {next.length > 0 && <ul className="svc-plants">{next.map((w) => <li key={w.id}>
+      <Link to={`/work/${w.id}`}>{w.title}</Link><span className={w.overdue ? 'bad' : 'muted'}>{w.overdue ? 'Overdue' : w.island_name}</span></li>)}</ul>}
+    <Link className="svc-work-link" to={to}>{items.length ? 'All open work' : 'Work'} <Icon name="arrow" size={14} /></Link>
+  </section>;
+}
 
 function ServiceCard({ svc, plants, off, many, onIsland, atollId }) {
   const sum = (k) => (plants || []).reduce((n, f) => n + Number(f[k] || 0), 0);

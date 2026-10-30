@@ -1091,3 +1091,19 @@ option { background: #0c2a44; color: var(--text); }
 .svc-lists { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .82rem; font-weight: 600; padding-top: 6px; border-top: 1px solid var(--hairline); }
 .svc-bar .back-btn { padding: 7px 14px 7px 10px; }
 .page-title .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .page-title .actions .ia-count { margin: 0 8px 0 0; }
+.svc-card.work { --svc-c: var(--accent); }
+.svc-card.work .svc-figs { grid-template-columns: repeat(4, auto); gap: 4px 14px; }
+.svc-badge.work { background: var(--accent); }
+.svc-card.work .svc-figs { grid-template-columns: repeat(4, auto); }
+.svc-card.work .svc-figs .prog b { color: var(--info); } .svc-card.work .svc-figs .hold b { color: var(--warn); } .svc-card.work .svc-figs .over b { color: var(--bad); }
+.svc-card.work .svc-plants a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-card.work .svc-work-link { margin: 0; }
+.svc-card { min-width: 0; overflow: hidden; }
+.svc-overview { grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
+.svc-card .svc-plants li > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-card .svc-plants li > span { flex: none; }
+.svc-card.work .svc-figs { grid-template-columns: repeat(4, minmax(0, auto)); }
+.svc-card.work .svc-figs { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.svc-card header { min-width: 0; } .svc-card header .muted { white-space: nowrap; }
+.svc-card .svc-plants li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+.svc-card header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
