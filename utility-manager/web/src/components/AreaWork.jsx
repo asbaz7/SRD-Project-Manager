@@ -18,8 +18,8 @@ export function useAreaWork(where) {
   return { work: work.data?.items || null, outages: power.data ? power.data.items : power.error ? [] : null };
 }
 
-// A supply tile per service the place has: OK, or how many islands have an
-// open outage reported for it (an interruption of the kind "outage").
+// A supply tile, only for a service with an open outage reported (an
+// interruption of the kind "outage"): how many islands are off.
 const SUPPLY = { electricity: 'Power supply', water: 'Water supply', sewerage: 'Sewerage' };
 export function AreaTiles({ work, outages, services = ['electricity'] }) {
   const list = work || [];
@@ -31,8 +31,9 @@ export function AreaTiles({ work, outages, services = ['electricity'] }) {
   ];
   return <div className="area-tiles">
     {tiles.map(([n, label, t]) => <div key={label} className={`area-tile t-${n ? t : 'none'}`}><b>{work ? num(n) : '–'}</b><span>{label}</span></div>)}
-    {Object.keys(SUPPLY).filter((k) => services.includes(k)).map((k) => { const n = off(k);
-      return <div key={k} className={`area-tile t-${n ? 'over' : 'ok'}`} title="From open outage interruptions"><b>{n == null ? '–' : n ? `${n} off` : 'OK'}</b><span>{SUPPLY[k]}</span></div>; })}
+    {/* A supply tile only while an outage is open for that service. */}
+    {Object.keys(SUPPLY).filter((k) => services.includes(k) && off(k) > 0).map((k) => <div key={k} className="area-tile t-over" title="Open outage interruptions">
+      <b>{off(k) === 1 && outages.filter((o) => o.service === k).length === 1 ? 'Off' : `${off(k)} off`}</b><span>{SUPPLY[k]} interrupted</span></div>)}
   </div>;
 }
 
