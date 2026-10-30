@@ -11,11 +11,12 @@ import { ASSET_KINDS, ASSET_STATUS, FACILITY_KINDS, INCIDENT_CATEGORIES, LICENCE
 import { useApi, useFilters } from '../hooks.js';
 import GensetUpdates from './GensetUpdates.jsx';
 import Engines, { IslandGroups } from './Engines.jsx';
+import PlantUpdates from './PlantUpdates.jsx';
 
 const TABS = {
   electricity: [['engines', 'Engines'], ['reports', 'Monthly updates'], ['plants', 'Powerhouses']],
-  water: [['assets', 'Assets'], ['plants', 'Plants']],
-  sewerage: [['assets', 'Assets'], ['plants', 'Plants']],
+  water: [['assets', 'Assets'], ['updates', 'Monthly updates'], ['plants', 'Plants']],
+  sewerage: [['assets', 'Assets'], ['updates', 'Monthly updates'], ['plants', 'Plants']],
 };
 const SUBTITLE = {
   electricity: 'Powerhouses, gensets and their condition',
@@ -50,6 +51,7 @@ export default function Service() {
     {tab === 'engines' && svc === 'electricity' && <Engines embedded />}
     {tab === 'reports' && svc === 'electricity' && <GensetUpdates />}
     {tab === 'assets' && <ServiceAssets svc={svc} />}
+    {tab === 'updates' && svc !== 'electricity' && <PlantUpdates svc={svc} />}
     {tab === 'plants' && <Plants svc={svc} />}
   </>;
 }

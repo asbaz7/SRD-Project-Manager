@@ -488,6 +488,25 @@ test('water and sewerage plants keep their operating licence and handover date',
   assert.equal(water.licence_type, 'T');
 });
 
+test('water plants have a monthly update: status, running hours, faults and water produced', async () => {
+  const f = (await call('POST', '/facilities', T.admin, { island_id: maafushi.id, service: 'water', kind: 'water_plant', name: 'Maafushi RO Plant' })).body;
+  const ro = (await call('POST', '/assets', T.admin, { facility_id: f.id, kind: 'ro_unit', tag: 'RO-1', rated_capacity: 100, capacity_unit: 'm3/day' })).body;
+  assert.ok(ro.id, JSON.stringify(ro));
+  let list = (await call('GET', '/services/water/updates', T.admin)).body;
+  assert.equal(list.plants.find((p) => p.facility_id === f.id).state, 'never');
+  const form = (await call('GET', `/facilities/${f.id}/plant-update`, T.admin)).body;
+  assert.deepEqual(form.assets.map((a) => a.tag), ['RO-1']);
+  const sent = await call('POST', `/facilities/${f.id}/plant-update`, T.admin, { produced_m3: 2950, items: [{ asset_id: ro.id, status: 'down', running_hours: 12345, fault: 'HP pump seal' }] });
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.equal((await db.query('select status from assets where id = $1', [ro.id])).rows[0].status, 'down');
+  list = (await call('GET', '/services/water/updates', T.admin)).body;
+  const p = list.plants.find((x) => x.facility_id === f.id);
+  assert.equal(Number(p.produced_m3), 2950);
+  assert.equal(p.state, 'up_to_date');
+  assert.equal((await call('GET', '/services/water/updates', T.office)).status, 403, 'technical only');
+  assert.equal((await call('POST', `/facilities/${f.id}/plant-update`, T.admin, { items: [{ asset_id: maafushi.id }] })).status, 400);
+});
+
 test('the author of an update can correct it for 8 hours; nobody else can', async () => {
   const w = (await call('POST', '/work', T.admin, { island_id: maafushi.id, service: 'electricity', kind: 'repair', title: 'Edit test' })).body;
   const u = (await call('POST', `/work/${w.id}/updates`, T.tech, { body: 'shutoff vlave replaced' })).body;

@@ -24,6 +24,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import auditRoutes from './routes/audit.js';
 import conditionReportRoutes from './routes/conditionReports.js';
 import gensetUpdateRoutes from './routes/gensetUpdates.js';
+import plantUpdateRoutes from './routes/plantUpdates.js';
 import engineRoutes from './routes/engines.js';
 import workRoutes from './routes/work.js';
 import serviceRoutes from './routes/services.js';
@@ -225,7 +226,7 @@ export async function buildApp({ db, config, logger = true }) {
     await db.query('select 1');
     return { ok: true };
   });
-  for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes, gensetUpdateRoutes,
+  for (const routes of [authRoutes, userRoutes, locationRoutes, assetRoutes, engineRoutes, conditionReportRoutes, gensetUpdateRoutes, plantUpdateRoutes,
     workRoutes, serviceRoutes, incidentRoutes, projectRoutes, dashboardRoutes, auditRoutes, telegramRoutes, documentRoutes, surveyRoutes, takeoverRoutes]) {
     await routes(api);
   }

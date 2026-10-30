@@ -49,7 +49,7 @@ const DEFAULT_TAB = { electricity: 'engines', water: 'assets', sewerage: 'assets
 function ServiceMoved({ svc }) {
   const { tab } = useParams();
   const { search } = useLocation();
-  const map = { '': DEFAULT_TAB[svc], engines: 'engines', reports: 'reports', plants: 'plants', assets: 'assets' };
+  const map = { '': DEFAULT_TAB[svc], engines: 'engines', reports: 'reports', plants: 'plants', assets: 'assets', updates: 'updates' };
   return <Navigate to={`/systems/${svc}/${map[tab || ''] || DEFAULT_TAB[svc]}${search}`} replace />;
 }
 
