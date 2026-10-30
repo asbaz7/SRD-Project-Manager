@@ -1,6 +1,6 @@
 import { StrictMode, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth.jsx';
 import { CrashGuard } from './components/Crash.jsx';
 import Layout from './components/Layout.jsx';
@@ -43,6 +43,16 @@ function Moved({ to }) {
   return <Navigate to={`${to}${search}`} replace />;
 }
 
+// The service pages became one Assets page (Oct 2026): old addresses land on
+// the same section there, filters kept.
+const DEFAULT_TAB = { electricity: 'engines', water: 'assets', sewerage: 'assets' };
+function ServiceMoved({ svc }) {
+  const { tab } = useParams();
+  const { search } = useLocation();
+  const map = { '': DEFAULT_TAB[svc], engines: 'engines', reports: 'reports', plants: 'plants', assets: 'assets' };
+  return <Navigate to={`/systems/${svc}/${map[tab || ''] || DEFAULT_TAB[svc]}${search}`} replace />;
+}
+
 function NotFound() {
   return <><h1>Page not found</h1><p className="muted">Check the address, or use the menu.</p></>;
 }
@@ -57,9 +67,12 @@ createRoot(document.getElementById('root')).render(
             <Route element={<RequireAuth><Layout /></RequireAuth>}>
               <Route index element={<Dashboard />} />
               <Route path="account" element={<Account />} />
+              <Route path="systems" element={<Navigate replace to="/systems/electricity/engines" />} />
+              <Route path="systems/:svc" element={<Service />} />
+              <Route path="systems/:svc/:tab" element={<Service />} />
               {['electricity', 'water', 'sewerage'].map((svc) => [
-                <Route key={svc} path={svc} element={<Service svc={svc} />} />,
-                <Route key={`${svc}-tab`} path={`${svc}/:tab`} element={<Service svc={svc} />} />,
+                <Route key={svc} path={svc} element={<ServiceMoved svc={svc} />} />,
+                <Route key={`${svc}-tab`} path={`${svc}/:tab`} element={<ServiceMoved svc={svc} />} />,
               ])}
               <Route path="engines" element={<Moved to="/electricity/engines" />} />
               <Route path="reports" element={<Moved to="/electricity/reports" />} />

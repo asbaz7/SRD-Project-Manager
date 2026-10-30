@@ -10,12 +10,12 @@ import { Icon } from './icons.jsx';
 // The region (Overview, Islands) and then the three service sections:
 // everything else hangs off an island.
 const ISLANDS = { to: '/islands', label: 'Islands', icon: 'island' };
+// One Assets page for gensets, plants and equipment, by service (Oct 2026).
+const ASSETS = { to: '/systems', label: 'Assets', icon: 'engine' };
 const MAIN = [
   { to: '/', label: 'Overview', icon: 'home', end: true },
   ISLANDS,
-  { to: '/electricity', label: 'Electricity', icon: 'electricity', svc: 'electricity' },
-  { to: '/water', label: 'Water', icon: 'water', svc: 'water' },
-  { to: '/sewerage', label: 'Sewerage', icon: 'sewerage', svc: 'sewerage' },
+  ASSETS,
 ];
 const MORE = [
   { to: '/takeover', label: 'Takeover', icon: 'takeover' },
@@ -62,7 +62,7 @@ export default function Layout() {
   // Phones: four tabs, Work always among them (logging and following work
   // is the main job in the field); the rest, Islands included, under More.
   const WORK = MORE.find((n) => n.to === '/work');
-  const tabs = technical ? [MAIN[0], WORK, MAIN[2], MAIN[3]] : main.filter((n) => n !== ISLANDS).slice(0, 4);
+  const tabs = technical ? [MAIN[0], WORK, ISLANDS, ASSETS] : main.filter((n) => n !== ISLANDS).slice(0, 4);
 
   return (
     <div className="shell">

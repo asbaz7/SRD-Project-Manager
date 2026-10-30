@@ -947,3 +947,6 @@ option { background: #0c2a44; color: var(--text); }
   .svc-tab .count { margin-left: 0; }
   .work-board { padding: 10px; }
 }
+.svc-tabs a.svc-tab { text-decoration: none; }
+.svc-tabs a.svc-tab .count { max-width: 60%; text-align: left; font-weight: 500; }
+@media (max-width: 860px) { .svc-tabs a.svc-tab .count { display: none; } }
