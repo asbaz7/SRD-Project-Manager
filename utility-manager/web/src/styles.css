@@ -134,7 +134,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .who-name { color: var(--text); font-weight: 600; line-height: 1.2; }
 .who small { display: block; color: var(--muted); font-size: .75rem; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .85rem; color: #fff; background: linear-gradient(135deg, var(--electricity), var(--sewerage)); flex: none; }
-.page { padding: 24px 28px 64px; max-width: 1280px; width: 100%; }
+.page { padding: 24px 28px 64px; max-width: 1920px; width: 100%; }
 .topbar, .menu-btn, .bottom-bar, .sheet-backdrop { display: none; }
 
 /* Page structure ---------------------------------------------------------- */
