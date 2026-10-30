@@ -39,13 +39,15 @@ export default function Service() {
       <p className="muted small">You can follow <Link to="/work">work</Link>, <Link to="/interruptions">interruptions</Link> and <Link to="/projects">projects</Link>.</p></Card>
   </>;
   return <>
-    <PageHead title="Services" subtitle={SUBTITLE[svc]} icon="island" />
-    <IslandsTabs />
-    <nav className="tabs glass" aria-label={`${SERVICES[svc].label} sections`}>
-      {TABS[svc].map(([key, label]) => (
-        <NavLink key={key} to={`/systems/${svc}/${key}`} className={`tab${tab === key ? ' active' : ''}`}>{label}</NavLink>
-      ))}
-    </nav>
+    <PageHead title="Services" icon="island" />
+    <div className="svc-bar">
+      <IslandsTabs />
+      <nav className="tabs glass" aria-label={`${SERVICES[svc].label} sections`}>
+        {TABS[svc].map(([key, label]) => (
+          <NavLink key={key} to={`/systems/${svc}/${key}`} className={`tab${tab === key ? ' active' : ''}`}>{label}</NavLink>
+        ))}
+      </nav>
+    </div>
     {tab === 'engines' && svc === 'electricity' && <Engines embedded />}
     {tab === 'reports' && svc === 'electricity' && <GensetUpdates />}
     {tab === 'assets' && <ServiceAssets svc={svc} />}
@@ -100,22 +102,19 @@ function ServiceAssets({ svc }) {
   const params = { service: svc, status: filters.status, atoll_id: filters.atoll_id, q: filters.q, offset: filters.offset, limit: 500 };
   const state = useApi(`/assets${qs(params)}`);
   return <>
-    <div className="chips">
-      {[['', 'All'], ...Object.entries(ASSET_STATUS).filter(([k]) => k !== 'decommissioned').map(([k, s]) => [k, s.label])].map(([k, l]) => (
-        <button key={k} className={`chip ${(filters.status || '') === k ? 'on' : ''}`} onClick={() => setFilter('status', k)}>{l}</button>
-      ))}
-    </div>
-    <div className="filters">
+    <div className="filters compact-bar">
+      <Select value={filters.status || ''} onChange={(v) => setFilter('status', v)} aria-label="Status"
+        options={[['', 'Show: all'], ...Object.entries(ASSET_STATUS).filter(([k]) => k !== 'decommissioned').map(([k, st]) => [k, st.label])]} />
       <AtollFilter filters={filters} setFilter={setFilter} />
       <input type="search" placeholder="Search island, tag, model…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
-      <a className="btn ghost" href={csvUrl('/assets', { ...params, offset: undefined })}>Export CSV</a>
+      <a className="btn ghost small" href={csvUrl('/assets', { ...params, offset: undefined })}>CSV</a>
     </div>
     <Async state={state}>{(page) => page.items.length === 0
       ? <Card><Empty>No {SERVICES[svc].label.toLowerCase()} assets{filters.status ? ' with this status' : ' recorded yet'}. Assets are added from an island on the Islands map.</Empty></Card>
       : <>
         <IslandGroups items={page.items} name={(a) => `${a.atoll_code}. ${a.island_name}`} key2={(a) => a.facility_id}
           tile={(a) => <AssetTile key={a.id} a={a} />} tone={(a) => STATUS_TONE[a.status] || 'none'}
-          count={(list) => `${list.filter((a) => a.status === 'running').length}/${list.length} running`} />
+          count={(list) => `${list.filter((a) => a.status === 'running').length}/${list.length}`} />
         <Pager page={page} onOffset={(o) => setFilter('offset', o)} />
       </>}</Async>
   </>;

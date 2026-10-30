@@ -34,28 +34,27 @@ export default function Engines({ embedded }) {
 
   return <>
     {!embedded && <PageHead title="Engines" icon="electricity" tone="electricity" />}
-    <div className="chips">
-      {CHIPS.map(([key, value, lab, countKey]) => {
-        const n = countKey && summary.data?.summary[countKey];
-        return <button key={lab} className={`chip ${active(key, value) ? 'on' : ''}`} onClick={() => pick(key, value)}>
-          {lab}{n != null && <strong>{n}</strong>}
-        </button>;
-      })}
-    </div>
-    <div className="filters">
+    {/* One compact bar, so the atolls fit on the screen below it. */}
+    <div className="filters compact-bar">
+      <Select value={filters.condition ? `condition:${filters.condition}` : filters.flag ? `flag:${filters.flag}` : ''} aria-label="Show"
+        onChange={(v) => { const [k, val] = v ? v.split(':') : ['', '']; pick(k, val); }}
+        options={CHIPS.map(([key, value, lab, countKey]) => {
+          const n = countKey && summary.data?.summary[countKey];
+          return [key ? `${key}:${value}` : '', `${key ? '' : 'Show: '}${lab}${n != null ? ` (${n})` : ''}`];
+        })} />
       <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
         options={(atolls.data || []).map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />
       <Select value={filters.sort} onChange={(v) => setFilter('sort', v)} aria-label="Sort"
         options={{ island: 'Sort: island', condition: 'Sort: worst condition first', hours_since_overhaul: 'Sort: most hours since overhaul', total_hours: 'Sort: most running hours', last_overhaul: 'Sort: oldest overhaul first', last_alt_service: 'Sort: oldest alternator service first', next_service: 'Sort: next service soonest' }} />
       <input type="search" placeholder="Search island, model, serial, fault…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
-      <a className="btn ghost" href={csvUrl('/engines', params)}>Export CSV</a>
+      <Intervals onSaved={() => { state.reload(); summary.reload(); }} />
+      <a className="btn ghost small" href={csvUrl('/engines', params)}>CSV</a>
     </div>
-    <Intervals onSaved={() => { state.reload(); summary.reload(); }} />
     <Async state={state}>{(d) => d.engines.length === 0 ? <Card><Empty>No engines match.</Empty></Card> : <>
       <IslandGroups items={d.engines} name={(e) => `${e.atoll_code}. ${e.island_name}${e.shared_island ? ` · ${e.facility_name}` : ''}`}
         key2={(e) => `${e.island_id}:${e.shared_island ? e.facility_id : ''}`}
         tile={(e) => <EngineTile key={e.id} e={e} />} tone={(e) => CONDITION_TONE[e.condition] || (e.status === 'standby' ? 'prog' : 'none')}
-        count={(list) => `${list.filter((e) => e.status === 'running').length}/${list.length} running`} />
+        count={(list) => `${list.filter((e) => e.status === 'running').length}/${list.length}`} />
       <p className="muted small">{d.engines.length} engine{d.engines.length === 1 ? '' : 's'} · condition and hours from the latest monthly update</p>
     </>}</Async>
   </>;
@@ -82,7 +81,7 @@ export function IslandGroups({ items, name, key2, tile, count, tone = () => 'non
       const groups = [...a.islands.values()];
       const all = groups.flatMap((g) => g.list);
       return <section key={a.code} className="atoll-box">
-        <header><strong>{a.code}</strong><span>{groups.length} island{groups.length === 1 ? '' : 's'} · {count(all)}</span></header>
+        <header><strong>{a.code}</strong><span>{groups.length} island{groups.length === 1 ? '' : 's'} · {count(all)} running</span></header>
         <div className="isl-chips">{groups.map((g) => {
           const tones = g.list.map(tone);
           const worst = ['over', 'serious', 'hold'].find((t) => tones.includes(t));
@@ -95,7 +94,7 @@ export function IslandGroups({ items, name, key2, tile, count, tone = () => 'non
       </section>;
     })}</div>
     {picked && <Modal title={picked.name} onClose={() => setOpen(null)}>
-      <p className="muted small">{count(picked.list)}</p>
+      <p className="muted small">{count(picked.list)} running</p>
       <div className="asset-tiles wide">{picked.list.map(tile)}</div>
     </Modal>}
   </>;
@@ -127,12 +126,11 @@ function Intervals({ onSaved }) {
   const r = state.data?.region;
   if (!r) return null;
   const models = state.data.models;
-  return <p className="muted small hide-sm">
-    Due by rule: overhaul every {r.overhaul_hours ? `${num(r.overhaul_hours)} running hours` : '— (not set)'} · alternator service every {r.alt_service_months ? `${r.alt_service_months} months` : '— (not set)'}
-    {models.length > 0 && ` · ${models.length} model${models.length === 1 ? '' : 's'} with their own`}. A date set on a genset, or the island's tick on its report, counts too.
-    {can('manager') && technical && <> <button className="link" onClick={() => setEditing(true)}>Change</button></>}
+  const text = `Due by rule: overhaul every ${r.overhaul_hours ? `${num(r.overhaul_hours)} running hours` : '— (not set)'} · alternator service every ${r.alt_service_months ? `${r.alt_service_months} months` : '— (not set)'}${models.length ? ` · ${models.length} model${models.length === 1 ? '' : 's'} with their own` : ''}. A date set on a genset, or the island's tick on its report, counts too.`;
+  return <>
+    <button type="button" className="btn ghost small" title={text} onClick={() => can('manager') && technical ? setEditing(true) : alert(text)}>Service rules</button>
     {editing && <IntervalForm data={state.data} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); state.reload(); onSaved(); }} />}
-  </p>;
+  </>;
 }
 
 function IntervalForm({ data, onClose, onSaved }) {
