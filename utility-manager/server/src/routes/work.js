@@ -80,7 +80,6 @@ const SELECT = `
          (w.target_on < current_date and ${OPEN}) as overdue,
          (select u.body from work_updates u where u.work_id = w.id order by u.created_at desc limit 1) as last_update,
          (select max(u.created_at) from work_updates u where u.work_id = w.id) as last_update_at,
-         (select uu.full_name from work_updates u join users uu on uu.id = u.created_by where u.work_id = w.id order by u.created_at desc limit 1) as last_update_by,
          count(*) over () as total_count
     from work_orders w
     join islands i on i.id = w.island_id
@@ -109,7 +108,7 @@ export function workVisible(user, n) {
 }
 
 const listQuery = paging.extend({
-  status: z.enum(['open', 'overdue', 'all', ...WORK_STATES]).default('open'),
+  status: z.enum(['open', 'all', ...WORK_STATES]).default('open'),
   island_id: id.optional(),
   atoll_id: id.optional(),
   asset_id: id.optional(),
@@ -231,29 +230,13 @@ export default async function workRoutes(app) {
   app.get('/work', async (req, reply) => {
     const q = parse(listQuery, req.query);
     const vis = workVisible(req.user, 1);
-    const filters = (svc) => new Where(vis.values).raw(vis.sql)
+    const w = new Where(vis.values).raw(vis.sql)
       .add('(w.island_id = ? or df.island_id = ?)', q.island_id).add('i.atoll_id = ?', q.atoll_id).add('w.asset_id = ?', q.asset_id)
-      .add('w.kind = ?', q.kind).add('w.service = ?', svc)
+      .add('w.kind = ?', q.kind).add('w.service = ?', q.service)
       .add('(w.title ilike ? or w.description ilike ? or i.name ilike ? or w.assigned_to ilike ? or au.full_name ilike ?)', q.q && `%${q.q}%`)
       .add('w.assigned_user_id = ?', q.assignee === 'me' ? req.user.id : q.assignee)
       .add(q.unit === 'mine' ? 'w.unit_id = (select unit_id from users where id = ?)' : 'w.unit_id = ?', q.unit === 'mine' ? req.user.id : q.unit);
-    const w = filters(q.service);
-    // How many in each tab of the list, with the other filters applied.
-    const FROM = SELECT.slice(SELECT.indexOf('    from work_orders w'));
-    const counts = q.format === 'csv' ? null : (await db.query(`
-      select count(*) filter (where ${OPEN})::int as open,
-             count(*) filter (where w.target_on < current_date and ${OPEN})::int as overdue,
-             count(*) filter (where w.status = 'awaiting_parts')::int as awaiting_parts,
-             count(*) filter (where w.status = 'completed')::int as completed,
-             count(*)::int as "all"
-        ${FROM} ${w.sql}`, w.values)).rows[0];
-    // Open work per service, for the service tabs (the other filters applied).
-    if (counts) {
-      const all = filters(undefined);
-      counts.by_service = Object.fromEntries((await db.query(`select w.service, count(*)::int as n ${FROM} ${all.sql} and ${OPEN} group by w.service`, all.values)).rows.map((x) => [x.service, x.n]));
-    }
     if (q.status === 'open') w.raw(OPEN);
-    else if (q.status === 'overdue') w.raw(`(w.target_on < current_date and ${OPEN})`);
     else if (q.status !== 'all') w.add('w.status = ?', q.status);
     const csv = q.format === 'csv';
     const { rows } = await db.query(`${SELECT} ${w.sql}
@@ -268,7 +251,7 @@ export default async function workRoutes(app) {
         ['Started', 'started_on'], ['Target', 'target_on'], ['Completed', 'completed_on'], ['Latest update', 'last_update'],
       ]);
     }
-    return { ...pageOf(rows, q), counts };
+    return pageOf(rows, q);
   });
 
   app.get('/work/:id', async (req) => {

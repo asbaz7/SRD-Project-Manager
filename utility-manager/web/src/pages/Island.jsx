@@ -1,28 +1,17 @@
 import { useState } from 'react';
-import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { AssetForm, FacilityForm } from '../components/forms.jsx';
-import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, Service } from '../components/ui.jsx';
-import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
+import { AssetStatus, Async, Card, Condition, EngineState, Empty, Flags, PageHead, Service, Stat, WorkState } from '../components/ui.jsx';
+import { ASSET_KINDS, FACILITY_KINDS, LICENCE_TYPES, SERVICES, WORK_KINDS, assetLabel, date, licenceState, month, num, peakLoad, withUnit } from '../format.js';
 import { GensetUpdateForm } from './GensetUpdates.jsx';
-import { PlantUpdateForm } from './PlantUpdates.jsx';
 import { useApi, useRowLink } from '../hooks.js';
-import { Icon } from '../components/icons.jsx';
-import ServicesOverview from '../components/ServicesOverview.jsx';
 
-// There is no separate island page: an island opens beside the map on the
-// Islands page. Old links (/islands/:id) land there with the island open.
 export default function Island() {
   const { id } = useParams();
+  // Opened from a service page (Water, Sewerage...): only that service's plants and work.
   const [params] = useSearchParams();
-  const svc = SERVICES[params.get('service')] ? `&service=${params.get('service')}` : '';
-  return <Navigate replace to={`/islands?island=${id}${svc}`} />;
-}
-
-// One island in full, in the panel beside the map: what is running, ongoing
-// work, every plant with its assets. only: one service's plants and work
-// (opened from that service's page). onAtoll: back to the island's atoll.
-export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = [] }) {
+  const only = SERVICES[params.get('service')] ? params.get('service') : null;
   const state = useApi(`/islands/${id}`);
   const rowLink = useRowLink();
   const { can, allowed } = useAuth();
@@ -32,33 +21,54 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
   return <Async state={state}>{(island) => {
     const manage = can('manager') && island.can_edit;
     const facilities = island.facilities.filter((f) => !only || f.service === only);
+    const openWork = island.open_work.filter((w) => !only || w.service === only);
     return <>
-      <header className="ip-head">
-        <div>
-          <button type="button" className="ip-atoll" onClick={() => onAtoll(island.atoll_code)}><Icon name="back" size={14} /> {island.atoll_name} atoll</button>
-          <h2>{island.name}</h2>
-          <p className="ip-sub">{island.atoll_name} atoll{islands.length > 0 && (() => {
-            const here = islands.filter((x) => x.atoll_code === island.atoll_code).length;
-            return ` · one of ${num(here)} islands`;
-          })()}</p>
-        </div>
-        <button type="button" className="btn ghost" onClick={onClose}>Close</button>
-      </header>
-      <div className="ip-actions">
-        {allowed('incidents') && <Link className="btn small" to={`/interruptions/new?island_id=${island.id}`}>Report interruption</Link>}
-        {island.can_edit && island.technical && <Link className="btn small" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
-        {manage && island.technical && <button className="btn small" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
+      <PageHead title={island.name}
+        crumbs={[{ to: '/islands', label: 'Islands' }, { to: `/islands?atoll_id=${island.atoll_id}`, label: `${island.atoll_code} · ${island.atoll_name}` }, { label: island.name }]}
+        actions={<>
+          {allowed('incidents') && <Link className="btn" to={`/interruptions/new?island_id=${island.id}`}>Report interruption</Link>}
+          {island.can_edit && island.technical && <Link className="btn" to={`/work/new?island_id=${island.id}`}>Log work</Link>}
+          {manage && island.technical && <button className="btn" onClick={() => setModal({ type: 'facility' })}>Add facility</button>}
+        </>} />
+      {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <Link to={`/islands/${island.id}`}>Show everything on {island.name}</Link></p>}
+      <div className="stats">
+        {island.technical && (!only || only === 'electricity') && <>
+          <Stat label="Gensets running" value={`${island.running_count} of ${island.genset_count}`} sub={island.disconnected_count > 0 ? `${island.disconnected_count} disconnected` : ''} />
+          <Stat label="Down / maintenance" value={island.down_count} tone={island.down_count ? 'alert' : ''} />
+          <Stat label="Installed generation" value={withUnit(island.installed_kw, 'kW')} />
+        </>}
+        {island.technical && (only === 'water' || only === 'sewerage') && (() => {
+          const systems = facilities.flatMap((f) => f.assets.filter((x) => x.active && x.status !== 'decommissioned'));
+          const sum = (pred) => systems.filter(pred).reduce((n, x) => n + Number(x.rated_capacity || 0), 0);
+          const unset = systems.filter((x) => x.status === 'unknown').length;
+          return <>
+            {only === 'water' ? <>
+              <Stat label="RO capacity" value={withUnit(sum((x) => x.kind === 'ro_unit'), 't/day')} sub={`${systems.filter((x) => x.kind === 'ro_unit').length} RO units`} />
+              <Stat label="Storage" value={withUnit(sum((x) => x.kind === 'tank' && x.tag.startsWith('ST-')), 'm3')} />
+            </> : <Stat label="Pump stations" value={systems.filter((x) => x.kind === 'pump').length} />}
+            <Stat label="Systems in service" value={unset === systems.length ? 'Not set' : `${systems.filter((x) => x.status === 'running').length} of ${systems.length}`}
+              sub={unset ? `${unset} status not set` : ''} />
+          </>;
+        })()}
+        <Stat label="Open interruptions" value={island.open_incidents} tone={island.open_incidents ? 'alert' : ''} to={`/interruptions?island_id=${island.id}&status=open`} />
+        <Stat label="Active projects" value={island.active_projects} to={`/projects?island_id=${island.id}&status=active`} />
       </div>
-      <ServicesOverview atollId={island.atoll_id} islandId={island.id} services={only ? [only] : island.services} />
-      {only && <p className="small muted">Showing {SERVICES[only].label.toLowerCase()} only · <button type="button" className="link" onClick={onShowAll}>Show everything on {island.name}</button></p>}
-      {island.technical && <h3 className="ip-section">Plants and equipment{island.genset_count > 0 && <span> · {island.running_count} of {island.genset_count} gensets running · {withUnit(island.installed_kw, 'kW')}</span>}</h3>}
+
+      {openWork.length > 0 && <Card title={`Ongoing work (${openWork.length})`}>
+        <table><tbody>{openWork.map((w) => <tr key={w.id}>
+          <td className="wrap"><Link to={`/work/${w.id}`}><strong>{w.title}</strong></Link><br />
+            <small className="muted">{w.ref} · {WORK_KINDS[w.kind]}{w.asset_tag && ` · ${assetLabel({ kind: w.asset_kind, tag: w.asset_tag, make_model: w.asset_model })}`}{w.target_on && ` · target ${date(w.target_on)}`}</small>
+            {w.last_update && <div className="small">{w.last_update}</div>}</td>
+          <td><WorkState value={w.status} /></td>
+        </tr>)}</tbody></table>
+      </Card>}
+
       {island.technical && facilities.length === 0 && <Empty>No {only ? `${SERVICES[only].label.toLowerCase()} ` : ''}facilities recorded for this island yet.</Empty>}
       {facilities.map((f) => (
         <Card key={f.id} className={f.active ? '' : 'inactive'}
           title={<><Service value={f.service} short /> {f.name} <span className="muted small">· {FACILITY_KINDS[f.kind]}{!f.active && ' · not in use'}</span></>}
           actions={<>
             {manage && island.technical && f.active && f.kind === 'powerhouse' && f.service === 'electricity' && <button className="btn small" onClick={() => setModal({ type: 'update', facilityId: f.id })}>Monthly update</button>}
-            {manage && island.technical && f.active && f.service !== 'electricity' && f.assets.some((x) => x.active) && <button className="btn small" onClick={() => setModal({ type: 'plant-update', facilityId: f.id })}>Monthly update</button>}
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'asset', facilityId: f.id })}>Add asset</button>}
             {manage && <button className="btn small ghost" onClick={() => setModal({ type: 'facility', facility: f })}>Edit</button>}
           </>}>
@@ -101,7 +111,7 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
               </tr>)}</tbody>
             </table>}
           {f.moved_away?.length > 0 && <p className="small">{f.moved_away.map((m, i) => <span key={m.id}>{i > 0 && <br />}
-            {ASSET_KINDS[m.kind]} {m.from_tag} moved to <Link to={`/assets/${m.asset_id}`}>{m.to_atoll}. {m.to_island} · {ASSET_KINDS[m.kind]} {m.to_tag}</Link>
+            🚚 {ASSET_KINDS[m.kind]} {m.from_tag} moved to <Link to={`/assets/${m.asset_id}`}>{m.to_atoll}. {m.to_island} · {ASSET_KINDS[m.kind]} {m.to_tag}</Link>
             <span className="muted"> on {date(m.moved_on)}{m.source === 'merge' ? ' (records merged)' : ''}</span></span>)}</p>}
           {retired.length > 0 && <details className="small">
             <summary className="muted">Retired or not in use ({retired.length})</summary>
@@ -115,7 +125,6 @@ export function IslandDetail({ id, only, onClose, onAtoll, onShowAll, islands = 
       {island.notes && <Card title="Notes"><p className="pre">{island.notes}</p></Card>}
 
       {modal?.type === 'update' && <GensetUpdateForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
-      {modal?.type === 'plant-update' && <PlantUpdateForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.type === 'facility' && <FacilityForm islandId={island.id} facility={modal.facility} onClose={() => setModal(null)} onSaved={saved} />}
       {modal?.type === 'asset' && <AssetForm facilityId={modal.facilityId} onClose={() => setModal(null)} onSaved={saved} />}
     </>;

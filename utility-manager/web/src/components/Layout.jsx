@@ -9,12 +9,13 @@ import { Icon } from './icons.jsx';
 
 // The region (Overview, Islands) and then the three service sections:
 // everything else hangs off an island.
-// Islands & assets: the map and each service's gensets and plants, one
-// page (Oct 2026); its service tabs live at /systems.
-const ISLANDS = { to: '/islands', label: 'Services', short: 'Services', icon: 'island', also: '/systems' };
+const ISLANDS = { to: '/islands', label: 'Islands', icon: 'island' };
 const MAIN = [
   { to: '/', label: 'Overview', icon: 'home', end: true },
   ISLANDS,
+  { to: '/electricity', label: 'Electricity', icon: 'electricity', svc: 'electricity' },
+  { to: '/water', label: 'Water', icon: 'water', svc: 'water' },
+  { to: '/sewerage', label: 'Sewerage', icon: 'sewerage', svc: 'sewerage' },
 ];
 const MORE = [
   { to: '/takeover', label: 'Takeover', icon: 'takeover' },
@@ -41,8 +42,7 @@ function Brand() {
 }
 
 const Link = ({ item, onClick }) => (
-  <NavLink to={item.to} end={item.end} onClick={onClick} title={item.label}
-    className={({ isActive }) => `nav-link${isActive || (item.also && window.location.pathname.startsWith(item.also)) ? ' active' : ''}`}>
+  <NavLink to={item.to} end={item.end} onClick={onClick} className={`nav-link ${item.svc ? `svc-${item.svc}` : ''}`}>
     <Icon name={item.icon} /> {item.label}
   </NavLink>
 );
@@ -50,9 +50,6 @@ const Link = ({ item, onClick }) => (
 export default function Layout() {
   const { user, logout, can, technical } = useAuth();
   const [sheet, setSheet] = useState(false);
-  // The sidebar folds to icons only, to give the page more room; remembered.
-  const [slim, setSlim] = useState(() => localStorage.getItem('nav-slim') === '1');
-  const toggleSlim = () => setSlim((v) => { localStorage.setItem('nav-slim', v ? '0' : '1'); return !v; });
   const location = useLocation();
   useFreshVersion();
   const [lastPath, setLastPath] = useState(location.pathname);
@@ -62,26 +59,23 @@ export default function Layout() {
   // plants); work, interruptions and projects move up instead.
   const main = technical ? MAIN : [MAIN[0], ISLANDS, ...MORE];
   const more = technical ? MORE : [];
-  // Phones: four tabs, Work always among them (logging and following work
-  // is the main job in the field); the rest, Islands included, under More.
-  const WORK = MORE.find((n) => n.to === '/work');
-  const tabs = technical ? [MAIN[0], WORK, ISLANDS] : main.filter((n) => n !== ISLANDS).slice(0, 4);
+  // Phones: four tabs (Overview and the services, or the main lists); the
+  // rest, Islands included, sit under More.
+  const tabs = main.filter((n) => n !== ISLANDS).slice(0, 4);
 
   return (
-    <div className={`shell${slim ? ' slim' : ''}`}>
+    <div className="shell">
       <nav className="sidebar" aria-label="Main">
-        <button type="button" className="nav-fold" onClick={toggleSlim} aria-label={slim ? 'Show the menu labels' : 'Fold the menu to icons'}
-          title={slim ? 'Expand' : 'Collapse'}><Icon name={slim ? 'arrow' : 'back'} size={16} /></button>
         <Brand />
         {main.map((n) => <Link key={n.to} item={n} />)}
         {more.length > 0 && <><div className="nav-section">Activity</div>{more.map((n) => <Link key={n.to} item={n} />)}</>}
         {admin.length > 0 && <><div className="nav-section">Administration</div>{admin.map((n) => <Link key={n.to} item={n} />)}</>}
         <div className="nav-foot">
-          <NavLink to="/account" className="who" title={user.fullName}>
+          <NavLink to="/account" className="who">
             <span className="avatar" aria-hidden="true">{initials(user.fullName)}</span>
             <span><span className="who-name">{user.fullName}</span><small>{ROLES[user.role]}{user.role !== 'admin' && ` · ${technical ? 'Technical' : 'Non-technical'}`}</small></span>
           </NavLink>
-          <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }} title="Sign out"><Icon name="logout" /> <span className="nav-text">Sign out</span></button>
+          <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
       </nav>
 
@@ -93,8 +87,8 @@ export default function Layout() {
       <main className={`page${location.pathname === '/takeover' ? ' page-full' : ''}`}><CrashGuard resetKey={location.pathname}><Suspense fallback={<Loading />}><Outlet /></Suspense></CrashGuard></main>
       <nav className="bottom-bar" aria-label="Main">
         {tabs.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive || (n.also && location.pathname.startsWith(n.also)) ? 'active' : '')}>
-            <Icon name={n.icon} size={22} />{n.short || n.label}
+          <NavLink key={n.to} to={n.to} end={n.end} className={n.svc ? `svc-${n.svc}` : ''}>
+            <Icon name={n.icon} size={22} />{n.label}
           </NavLink>
         ))}
         <button onClick={() => setSheet(!sheet)} aria-expanded={sheet}><Icon name="more" size={22} />More</button>
@@ -102,7 +96,7 @@ export default function Layout() {
       {sheet && <>
         <div className="sheet-backdrop" onClick={() => setSheet(false)} />
         <div className="sheet" role="menu">
-          {[...main, ...more].filter((n) => !tabs.includes(n)).concat(admin).map((n) => <Link key={n.to} item={n} />)}
+          {[...main.filter((n) => !tabs.includes(n)), ...more, ...admin].map((n) => <Link key={n.to} item={n} />)}
           <button className="nav-link link" onClick={logout} style={{ textAlign: 'left' }}><Icon name="logout" /> Sign out</button>
         </div>
       </>}

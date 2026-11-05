@@ -9,7 +9,6 @@ import { AssetForm } from '../components/forms.jsx';
 import { AssetStatus, Async, Card, Condition, Empty, ErrorBox, Fault, Field, Modal, PageHead, Select, Service, Severity, WorkState } from '../components/ui.jsx';
 import { ASSET_KINDS, ASSET_STATUS, EVENT_KINDS, INCIDENT_CATEGORIES, SERVICES, WORK_KINDS, assetLabel, date, dateTime, localDate, month, num, withUnit } from '../format.js';
 import { useApi, useSubmit } from '../hooks.js';
-import { Icon } from '../components/icons.jsx';
 
 const ago = (iso) => {
   if (!iso) return '';
@@ -38,6 +37,8 @@ export default function Asset() {
           <button className="btn" onClick={() => setModal('status')}>Update status</button>
           <Link className="btn" to={`/work/new?asset_id=${a.id}`}>Log work</Link>
           {isEngine && <button className="btn" onClick={() => setModal('event')}>Add maintenance record</button>}
+          {!a.work.some((w) => w.kind === 'relocation' && !['completed', 'cancelled'].includes(w.status))
+            && <Link className="btn ghost" to={`/work/new?kind=relocation&asset_id=${a.id}`}>Move</Link>}
           <button className="btn ghost" onClick={() => setModal('edit')}>Edit details</button>
           {technical && <button className="btn ghost" onClick={() => setModal('merge')}>Merge a duplicate…</button>}
         </>}>
@@ -297,7 +298,7 @@ function DeleteEvent({ id, onDone }) {
     await api(`/maintenance/${id}`, { method: 'DELETE' });
     onDone();
   });
-  return <button className="btn ghost small" disabled={busy} onClick={submit} aria-label="Remove record"><Icon name="close" size={16} /></button>;
+  return <button className="btn ghost small" disabled={busy} onClick={submit} aria-label="Remove record">✕</button>;
 }
 
 // Clear a genset's faults once fixed: one (fault), or all of them. They stay

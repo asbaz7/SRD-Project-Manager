@@ -1,80 +1,116 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api, qs } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { Async, ErrorBox, Field, Modal, PageHead, Select } from '../components/ui.jsx';
-import AtollMap from '../components/AtollMap.jsx';
-import { IslandDetail } from './Island.jsx';
-import ServicesOverview from '../components/ServicesOverview.jsx';
+import { Async, Card, Empty, ErrorBox, Field, Modal, PageHead, Select, Stat } from '../components/ui.jsx';
 import { Icon } from '../components/icons.jsx';
-import { num } from '../format.js';
+import { ASSET_STATUS, SERVICES, num, power } from '../format.js';
 import { useApi, useFilters, useSubmit } from '../hooks.js';
 
-// The islands page is the map: every island of the department where it is,
-// named. Tap an atoll to ease onto it, an
-// island to open it. Gensets, plants and work have their own pages.
 export default function Islands() {
-  const { can } = useAuth();
+  const { technical, can } = useAuth();
   const [modal, setModal] = useState(null);
   const [filters, setFilter] = useFilters();
   const atolls = useApi('/atolls');
-  const state = useApi('/islands');
+  const state = useApi(`/islands${qs({ atoll_id: filters.atoll_id, q: filters.q })}`);
 
   return <>
-    <PageHead title="Services" subtitle="Tap an atoll or an island to see its electricity, water and sewerage. Drag to move, scroll or pinch to zoom." icon="island" actions={<>
-      {state.data && <span className="ia-count"><strong>{num(state.data.length)}</strong> islands · <strong>{num(new Set(state.data.map((i) => i.atoll_code)).size)}</strong> atolls</span>}
-      {can('admin') && <>
-        <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
-        <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
-      </>}
+    <PageHead title={technical ? 'Islands & assets' : 'Islands'} icon="island" actions={can('admin') && <>
+      <button className="btn ghost" onClick={() => setModal('atoll')}>Add atoll</button>
+      <button className="btn primary" onClick={() => setModal('island')}>Add island</button>
     </>} />
     {modal === 'atoll' && <AtollForm onClose={() => setModal(null)} onSaved={() => { setModal(null); atolls.reload(); }} />}
     {modal === 'island' && <IslandForm atolls={atolls.data || []} onClose={() => setModal(null)} onSaved={() => { setModal(null); state.reload(); }} />}
-    <Async state={state}>{(islands) => {
-      return <section className={`glass islands-map${filters.island ? ' with-island' : ''}`} aria-label="Map of the islands">
-        <EscClose on={!!(filters.island || filters.atoll)} close={() => setFilter(filters.island ? { island: '', service: '' } : { atoll: '' })} />
-        <AtollMap islands={islands} atolls={atolls.data || []} focus={filters.atoll || null} onAtoll={(code) => setFilter({ atoll: code || '', island: '' })}
-          selected={filters.island || null} onIsland={(i) => setFilter('island', i?.id || '')} panel={!!(filters.island || filters.atoll)} />
-        {filters.island && <aside className="glass island-panel" aria-label="Island">
-          <IslandDetail key={filters.island} id={filters.island} only={filters.service || null} islands={islands}
-            onClose={() => setFilter({ island: '', service: '', atoll: '' })} onAtoll={(code) => setFilter({ island: '', service: '', atoll: code })}
-            onShowAll={() => setFilter('service', '')} />
-        </aside>}
-        {/* The total, floating over the map as on the TV board. */}
-        {filters.atoll && !filters.island && <aside className="glass island-panel" aria-label="Atoll">
-          <AtollDetail key={filters.atoll} atoll={(atolls.data || []).find((a) => a.code === filters.atoll)} islands={islands.filter((i) => i.atoll_code === filters.atoll)}
-            onClose={() => setFilter({ atoll: '', island: '' })} onIsland={(i) => setFilter('island', i.id)} />
-        </aside>}
-      </section>;
-    }}</Async>
+    <Async state={state}>{(islands) => <IslandList islands={islands} atolls={atolls.data || []} technical={technical} filters={filters} setFilter={setFilter} />}</Async>
   </>;
 }
 
-// An atoll beside the map, as on the TV board: its figures, a card for each
-// island with open work, and the islands with none.
-function AtollDetail({ atoll, islands, onClose, onIsland }) {
-  if (!atoll) return null;
+const sum = (list, k) => list.reduce((n, i) => n + Number(i[k] || 0), 0);
+const needsAttention = (i) => i.down_count > 0 || i.open_incidents > 0 || i.licences_expired > 0;
+
+// Region totals, the filters, then each atoll's islands as cards. The atoll
+// and search filters go to the server; service and "needs attention" narrow
+// the list here.
+function IslandList({ islands, atolls, technical, filters, setFilter }) {
+  const [folded, setFolded] = useState(() => new Set());
+  const toggle = (code) => setFolded((prev) => { const next = new Set(prev); if (next.has(code)) next.delete(code); else next.add(code); return next; });
+  const shown = islands.filter((i) => (!filters.service || i.services.includes(filters.service)) && (!filters.attention || needsAttention(i)));
+  const groups = [];
+  for (const i of shown) {
+    let a = groups.at(-1);
+    if (!a || a.code !== i.atoll_code) groups.push(a = { code: i.atoll_code, name: i.atoll_name, islands: [] });
+    a.islands.push(i);
+  }
+  const count = (pred) => islands.filter(pred).length;
+  const chips = [['', 'All', islands.length], ...Object.entries(SERVICES).map(([k, s]) => [k, s.label, count((i) => i.services.includes(k))])];
+  const attention = count(needsAttention);
+
   return <>
-    <header className="ip-head">
-      <div>
-        <button type="button" className="ip-atoll" onClick={onClose}><Icon name="back" size={14} /> Overview</button>
-        <h2>{atoll.name} atoll</h2>
-        <p className="ip-sub">{atoll.code} · {num(islands.length)} islands</p>
+    <div className="stats">
+      <Stat label="Islands" value={num(islands.length)} sub={`in ${new Set(islands.map((i) => i.atoll_code)).size} atolls`} />
+      {technical && <>
+        <Stat label="Installed generation" value={power(sum(islands, 'installed_kw'))} sub={`${num(sum(islands, 'genset_count'))} gensets · ${num(sum(islands, 'running_count'))} running`} />
+        <Stat label="Gensets down" value={num(sum(islands, 'down_count'))} tone={sum(islands, 'down_count') ? 'alert' : ''}
+          sub={`on ${count((i) => i.down_count > 0)} islands`} />
+        <Stat label="Licences expired" value={num(sum(islands, 'licences_expired'))} tone={sum(islands, 'licences_expired') ? 'warn' : ''} sub="Water and sewerage" />
+      </>}
+      <Stat label="Open work" value={num(sum(islands, 'open_work'))} sub={`on ${count((i) => i.open_work > 0)} islands`} to="/work" />
+    </div>
+    <div className="filters toolbar">
+      <Select value={filters.atoll_id} onChange={(v) => setFilter('atoll_id', v)} placeholder="All atolls"
+        options={atolls.map((a) => [a.id, `${a.code} · ${a.name}`])} aria-label="Atoll" />
+      <input type="search" placeholder="Search island…" defaultValue={filters.q} onChange={(e) => setFilter('q', e.target.value)} aria-label="Search" />
+      <div className="chips">
+        {chips.map(([k, l, n]) => <button key={k} className={`chip ${(filters.service || '') === k ? 'on' : ''}`} onClick={() => setFilter('service', k)}>
+          {k && <span className={`svc-dot ${k}`} aria-hidden="true" />}{l}<strong>{n}</strong></button>)}
+        {technical && <button className={`chip ${filters.attention ? 'on' : ''}`} onClick={() => setFilter('attention', filters.attention ? '' : '1')}>Needs attention<strong>{attention}</strong></button>}
       </div>
-      <button type="button" className="btn ghost" onClick={onClose}>Close</button>
-    </header>
-    <ServicesOverview atollId={atoll.id} services={[...new Set(islands.flatMap((i) => i.services))]} onIsland={onIsland} />
+    </div>
+    {groups.length === 0 && <Card><Empty>No islands match these filters.</Empty></Card>}
+    {groups.map((a) => {
+      const shut = folded.has(a.code);
+      const down = sum(a.islands, 'down_count');
+      return <section key={a.code} className="atoll-group">
+        <button type="button" className={`atoll-head${shut ? ' collapsed' : ''}`} aria-expanded={!shut} onClick={() => toggle(a.code)}>
+          <span className="chev" aria-hidden="true">▾</span>
+          <h2>{a.code} · {a.name}</h2>
+          <span className="muted small">{a.islands.length} island{a.islands.length === 1 ? '' : 's'}</span>
+          {technical && <span className="sum small">
+            {sum(a.islands, 'genset_count') > 0 && <span>{num(sum(a.islands, 'running_count'))} of {num(sum(a.islands, 'genset_count'))} gensets running</span>}
+            {down > 0 && <span className="status bad">✕ {num(down)} down</span>}
+            {sum(a.islands, 'installed_kw') > 0 && <strong>{power(sum(a.islands, 'installed_kw'))}</strong>}
+          </span>}
+        </button>
+        {!shut && <div className="island-grid">{a.islands.map((i) => <IslandCard key={i.id} i={i} technical={technical} />)}</div>}
+      </section>;
+    })}
   </>;
 }
 
-// Esc closes the island panel.
-function EscClose({ on, close }) {
-  useEffect(() => {
-    if (!on) return undefined;
-    const esc = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal')) close(); };
-    window.addEventListener('keydown', esc);
-    return () => window.removeEventListener('keydown', esc);
-  });
-  return null;
+// One island: its services, a square per genset in tag order (colour plus
+// the "n of m running" text beside it), and flags for what needs a look.
+function IslandCard({ i, technical }) {
+  const flags = [
+    technical && i.down_count > 0 && ['bad', `✕ ${i.down_count} genset${i.down_count === 1 ? '' : 's'} down`],
+    i.open_incidents > 0 && ['bad', `${i.open_incidents} open interruption${i.open_incidents === 1 ? '' : 's'}`],
+    technical && i.licences_expired > 0 && ['bad', `${i.licences_expired === 1 ? 'Licence' : `${i.licences_expired} licences`} expired`],
+    i.open_work > 0 && ['info', `🔧 ${i.open_work} open work`],
+    i.active_projects > 0 && ['', `${i.active_projects} project${i.active_projects === 1 ? '' : 's'}`],
+  ].filter(Boolean);
+  return <Link to={`/islands/${i.id}`} className={`island-card${technical && needsAttention(i) ? ' alert' : ''}`}>
+    <div className="top">
+      <strong>{i.name}</strong>
+      <span className="svcs">{i.services.map((sv) => <span key={sv} className={`svc-badge ${sv}`} title={SERVICES[sv]?.label}><Icon name={sv} size={14} /></span>)}</span>
+    </div>
+    {technical && (i.genset_count > 0 ? <div className="gensets">
+      <span className="gdots" aria-hidden="true">{(i.genset_states || []).map((st, n) => <span key={n} className={`gdot ${st}`} title={ASSET_STATUS[st]?.label} />)}</span>
+      <span className="small">{i.running_count} of {i.genset_count} running{i.disconnected_count > 0 ? ` · ${i.disconnected_count} disconnected` : ''}{i.no_report_count > 0 ? ` · ${i.no_report_count} no report` : ''}</span>
+      <span className="kw">{power(Number(i.installed_kw))}</span>
+    </div> : <div className="gensets muted small">No gensets recorded</div>)}
+    {flags.length > 0 && <div className="flags">
+      {flags.map(([tone, text]) => <span key={text} className={`flag ${tone}`}>{text}</span>)}
+    </div>}
+  </Link>;
 }
 
 function AtollForm({ onClose, onSaved }) {
