@@ -77,6 +77,8 @@ export default async function takeoverRoutes(app) {
     const services = Object.fromEntries(TAKEOVER_SERVICES.map((k) => [k, {
       taken_over: islands.filter((i) => i[`${k}_status`] === 'taken_over').length,
       fenaka: islands.filter((i) => i[`${k}_status`] === 'fenaka').length,
+      // Of those, places outside the census list (e.g. Thilafushi, Kudagiri).
+      outside: islands.filter((i) => i.counted === false && ['taken_over', 'fenaka'].includes(i[`${k}_status`])).length,
     }]));
     return {
       expected_islands: INHABITED_ISLANDS,

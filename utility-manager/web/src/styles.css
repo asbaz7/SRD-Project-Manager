@@ -736,3 +736,4 @@ tr.picked > td { background: color-mix(in srgb, var(--accent) 14%, transparent);
 .tko-none { display: block; margin-top: 3px; }
 
 .row-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tko-outside { font-size: .72rem; opacity: .8; white-space: nowrap; }

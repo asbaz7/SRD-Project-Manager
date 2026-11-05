@@ -84,7 +84,8 @@ function TakeoverView({ t, reload }) {
             const of = s.taken_over + s.fenaka;
             return <div key={k} className="tko-svc"><span className="small">{label}</span>
               <div className="tko-bar thin"><span style={{ width: `${pct(s.taken_over, of)}%` }} /></div>
-              <small className="muted">{num(s.taken_over)} / {num(of)}</small></div>;
+              <small className="muted" title={s.outside ? `Includes ${s.outside} place${s.outside === 1 ? '' : 's'} outside the census list of inhabited islands (e.g. Thilafushi, Kudagiri)` : undefined}>
+                {num(s.taken_over)} / {num(of)}{s.outside ? <> <span className="tko-outside">incl. {s.outside} non-census</span></> : null}</small></div>;
           })}
           <div className="chips">
             {[['', 'All'], ['taken_over', 'Under STELCO'], ['pending', 'Under FENAKA'], ['other', 'Other operator'], ...(t.totals.not_set ? [['not_set', 'Not set']] : [])].map(([k, l]) =>
