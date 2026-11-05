@@ -410,7 +410,7 @@ describe('national takeover tracker', () => {
     // ('pending' was "survey ongoing" then; the services are FENAKA's now.)
     await db.exec(sql.slice(sql.indexOf('insert into takeover_islands')).replaceAll("'pending'", "'fenaka'"));
     let t = (await call('GET', '/takeover', { token: admin })).body;
-    assert.equal(t.expected_islands, 187);
+    assert.equal(t.expected_islands, 185);
     assert.equal(t.atolls.length, 20);
     // The census's inhabited islands for the atolls outside SCRD, in full.
     assert.deepEqual(['HA', 'Lh', 'L', 'Gn', 'S'].map((c) => t.atolls.find((a) => a.code === c).islands), [14, 4, 11, 1, 6]);
@@ -446,13 +446,13 @@ describe('national takeover tracker', () => {
     assert.equal(islandState({ electricity_status: 'fenaka' }), 'pending');
     assert.equal(islandState({ electricity_status: 'taken_over', water_status: 'other_operator' }), 'taken_over');
     assert.equal(islandState({ electricity_status: 'other_operator', water_status: 'other_operator' }), 'other');
-    assert.equal(t.islands.find((i) => i.atoll_code === 'R' && i.name === 'Dhuvaafaru').state, 'other');
+    assert.equal(t.islands.find((i) => i.atoll_code === 'R' && i.name === 'Dhuvaafaru'), undefined, 'off the list (migration 064)');
     assert.equal(t.atolls.find((a) => a.code === 'R').pending, 14);
     // Survey progress: of the islands still FENAKA's.
     assert.equal(t.survey.scope, t.totals.pending);
     assert.equal(t.survey.completed + t.survey.ongoing + t.survey.planned + t.survey.not_started, t.survey.scope);
     let sv = await call('POST', '/takeover/atolls/R/survey', { token: admin, body: { stage: 'ongoing', start: '2026-10-01', team: 'Survey team A' } });
-    assert.equal(sv.body.updated, 14, 'not Dhuvaafaru (MWSC)');
+    assert.equal(sv.body.updated, 14);
     const alifushi = (await call('GET', '/takeover', { token: admin })).body.islands.find((i) => i.atoll_code === 'R' && i.name === 'Alifushi');
     assert.deepEqual([alifushi.survey_stage, alifushi.survey_start, alifushi.survey_team], ['ongoing', '2026-10-01', 'Survey team A']);
     r = await call('PATCH', `/takeover/islands/${alifushi.id}`, { token: admin, body: { survey_stage: 'completed', survey_end: '2026-10-10', survey_link: 'https://stelco.sharepoint.com/r/alifushi.docx' } });
@@ -463,7 +463,7 @@ describe('national takeover tracker', () => {
     t = (await call('GET', '/takeover', { token: admin })).body;
     const rs = t.atolls.find((a) => a.code === 'R').survey;
     assert.deepEqual([rs.scope, rs.completed, rs.ongoing], [14, 1, 13]);
-    // Vilimalé and Gulhifalhu: on the list and the map, not in the 187.
+    // Vilimalé and Gulhifalhu: on the list and the map, not in the 185.
     assert.deepEqual(t.islands.filter((i) => !i.counted).map((i) => i.name).sort(), ['Gulhifalhu', 'Kudagiri', 'Thilafushi', 'Vilimalé']);
     assert.equal(t.services.water.taken_over >= 1, true);
 

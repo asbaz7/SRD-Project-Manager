@@ -8,5 +8,6 @@ export const NATIONAL_ATOLLS = [
   ['Gn', 'Gnaviyani'], ['S', 'Seenu'],
 ].map(([code, name], order) => ({ code, name, order }));
 
-// Inhabited islands in the country, as the takeover counts them.
-export const INHABITED_ISLANDS = 187;
+// Inhabited islands the takeover counts: the census's 187 less R. Dhuvaafaru
+// and ADh. Maamigili, run by other operators (migration 064).
+export const INHABITED_ISLANDS = 185;
