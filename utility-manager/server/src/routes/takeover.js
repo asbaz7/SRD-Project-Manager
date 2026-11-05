@@ -81,10 +81,14 @@ export default async function takeoverRoutes(app) {
       outside: islands.filter((i) => i.counted === false && ['taken_over', 'fenaka'].includes(i[`${k}_status`])).length,
     }]));
     return {
-      expected_islands: INHABITED_ISLANDS,
+      // The headline counts every place on the list (the 185 inhabited
+      // islands and the non-census sites such as Thilafushi), as the
+      // service bars do; census_islands says how many are inhabited.
+      expected_islands: islands.length,
+      census_islands: INHABITED_ISLANDS,
       totals: {
-        islands: counted.length, taken_over: count(counted, 'taken_over'), pending: count(counted, 'pending'),
-        other: count(counted, 'other'), not_set: count(counted, 'not_set'),
+        islands: islands.length, taken_over: count(islands, 'taken_over'), pending: count(islands, 'pending'),
+        other: count(islands, 'other'), not_set: count(islands, 'not_set'),
       },
       survey: surveyed(counted),
       services, atolls, islands,

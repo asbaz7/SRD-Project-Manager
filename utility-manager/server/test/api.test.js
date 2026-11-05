@@ -410,7 +410,8 @@ describe('national takeover tracker', () => {
     // ('pending' was "survey ongoing" then; the services are FENAKA's now.)
     await db.exec(sql.slice(sql.indexOf('insert into takeover_islands')).replaceAll("'pending'", "'fenaka'"));
     let t = (await call('GET', '/takeover', { token: admin })).body;
-    assert.equal(t.expected_islands, 185);
+    assert.equal(t.census_islands, 185);
+    assert.equal(t.expected_islands, t.islands.length);
     assert.equal(t.atolls.length, 20);
     // The census's inhabited islands for the atolls outside SCRD, in full.
     assert.deepEqual(['HA', 'Lh', 'L', 'Gn', 'S'].map((c) => t.atolls.find((a) => a.code === c).islands), [14, 4, 11, 1, 6]);
@@ -440,7 +441,7 @@ describe('national takeover tracker', () => {
     assert.equal((await call('POST', '/takeover/atolls/HA', { token: admin, body: { service: 'electricity', status: 'no_service' } })).status, 400);
     t = (await call('GET', '/takeover', { token: admin })).body;
     assert.equal(t.atolls.find((a) => a.code === 'HA').taken_over, 1);
-    assert.equal(t.totals.islands, t.islands.filter((i) => i.counted).length);
+    assert.equal(t.totals.islands, t.islands.length);
     // Under FENAKA without a survey, and run by another operator.
     const { islandState } = await import('../src/routes/takeover.js');
     assert.equal(islandState({ electricity_status: 'fenaka' }), 'pending');

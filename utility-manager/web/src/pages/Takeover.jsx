@@ -75,7 +75,7 @@ function TakeoverView({ t, reload }) {
         <button role="tab" aria-selected={survey} className={survey ? 'on' : ''} onClick={() => setFilter({ show: '', svc: '', svcst: '', view: 'survey' })}>Survey</button>
       </div>
       {!survey ? <>
-        <div className="tko-headline"><strong>{pct(done, total)}%</strong><span className="small">{num(done)} of {num(total)} inhabited islands under STELCO</span></div>
+        <div className="tko-headline"><strong>{pct(done, total)}%</strong><span className="small">{num(done)} of {num(total)} islands under STELCO</span></div>
         <div className="tko-bar"><span style={{ width: `${pct(done, total)}%` }} /></div>
         {summary && <>
           <p className="small muted">{num(t.totals.pending)} under FENAKA{t.totals.other ? ` · ${num(t.totals.other)} other operator` : ''}{t.totals.not_set ? ` · ${num(t.totals.not_set)} not set` : ''}</p>

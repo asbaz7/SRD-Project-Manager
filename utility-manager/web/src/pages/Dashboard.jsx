@@ -148,7 +148,7 @@ function ServiceTile({ svc, s, hero, facts }) {
 }
 
 // Pinned at the top: the national takeover (FENAKA → STELCO), the
-// department's top priority. Progress against the 187 inhabited islands,
+// department's top priority. Progress against every place on the takeover list,
 // each service, and every atoll (tap one to open it on the Takeover page).
 function TakeoverTile({ t }) {
   const p = (n, d) => (d ? Math.round((n / d) * 100) : 0);
@@ -157,7 +157,7 @@ function TakeoverTile({ t }) {
   return <Card className="pinned" title={<><span className="pin-label">📌 Priority project</span> National takeover: FENAKA → STELCO</>}
     actions={<Link to="/takeover" className="btn small primary">Open tracker</Link>}>
     <div className="pinned-row">
-      <div className="pinned-figure"><strong>{p(done, total)}%</strong><span className="muted small">{done} of {total} inhabited islands</span></div>
+      <div className="pinned-figure"><strong>{p(done, total)}%</strong><span className="muted small">{done} of {total} islands</span></div>
       <div className="grow">
         <div className="tko-bar"><span style={{ width: `${p(done, total)}%` }} /></div>
         <p className="small">
