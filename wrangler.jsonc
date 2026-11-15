@@ -1,0 +1,14 @@
+{
+  // Lets Cloudflare build the SCRD Operations Board from the repository root.
+  // Same settings as tasks-board/wrangler.jsonc, with paths from the root.
+  "name": "scrd-tasks-board",
+  "compatibility_date": "2026-09-28",
+  "assets": {
+    "directory": "./tasks-board/public",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    { "pattern": "tasks.islandsmanager.org", "custom_domain": true }
+  ],
+  "workers_dev": true
+}
