@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Static site: the SCRD Operations Board at tasks.islandsmanager.org
+  "name": "scrd-tasks-board",
+  "compatibility_date": "2026-09-28",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    { "pattern": "tasks.islandsmanager.org", "custom_domain": true }
+  ],
+  "workers_dev": true
+}
