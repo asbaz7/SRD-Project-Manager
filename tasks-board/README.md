@@ -2,7 +2,8 @@
 
 The department TV board for STELCO's South Central Regional Department: tasks,
 power interruptions and an interactive map of the seven atolls (AA, ADh, V, M,
-F, Dh, Th). Anyone with the link can view it. Editors sign in to add and change
+F, Dh, Th). Only people on the board's list can see it: everyone signs in,
+including the office TV (once). Some people on the list can also add and change
 records.
 
 - Site: `public/` (plain HTML, CSS and JavaScript; no build step)
@@ -27,13 +28,13 @@ records.
 ## One-time setup
 
 1. **Database.** Done on 2026-11-15: the tables exist and the 114 tasks are imported.
-2. **Editors.** For each person who should edit:
+2. **People.** For each person who should see the board (and for the office TV):
    - Supabase → Authentication → Users → *Add user* (email + password, tick *Auto confirm*).
-   - Add their email (lower case) to the editors list:
-     `insert into public.scrd_board_editors (email, name) values ('name@stelco.com.mv', 'Name');`
-   Everyone else, including the TV, views without signing in.
-   Removing a row from `scrd_board_editors` takes editing rights away at once.
-3. **Hosting.** In Cloudflare (the account that holds islandsmanager.org):
+   - Add their email (lower case) to the board's list. `can_edit` true lets them add and change records:
+     `insert into public.scrd_board_members (email, name, can_edit) values ('name@stelco.com.mv', 'Name', false);`
+   Deleting their row from `scrd_board_members` takes their access away at once.
+   Tip: turn off *Allow new users to sign up* under Authentication → Sign In / Providers, so only accounts you create exist.
+3. **Hosting.** Done: Cloudflare Workers project `scrd-tasks-board` deploys from `main` (root `wrangler.jsonc`). It was set up in Cloudflare (the account that holds islandsmanager.org):
    Workers & Pages → Create → Import a repository → this repo, with
    - Root directory: `tasks-board`
    - Build command: *(none)*

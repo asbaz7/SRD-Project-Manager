@@ -5,7 +5,7 @@
   const db = await claude.use('db');
   if (!db) {
     ['tasks', 'outages', 'team', 'islands'].forEach((k) => SCRD.fail(k, 'No data connection'));
-    say('The board can’t reach its database. Check the internet connection and reload.');
+    say('');
     return;
   }
   window.SCRD_DB = db;

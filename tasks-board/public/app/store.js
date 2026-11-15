@@ -114,14 +114,16 @@
 
   const db = { collection: (c) => query(c), doc };
 
-  // who is signed in, and may they edit?
-  let editorCheck = null;
-  const isEditor = () => editorCheck || (editorCheck = (async () => {
+  // who is signed in, and may they view or edit?
+  const rpcTrue = async (fn) => {
     const { data: s } = await sb.auth.getSession();
     if (!s.session) return false;
-    const { data, error } = await sb.rpc('is_scrd_board_editor');
+    const { data, error } = await sb.rpc(fn);
     return !error && data === true;
-  })());
+  };
+  let memberCheck = null, editorCheck = null;
+  const isMember = () => memberCheck || (memberCheck = rpcTrue('is_scrd_board_member'));
+  const isEditor = () => editorCheck || (editorCheck = rpcTrue('is_scrd_board_editor'));
   const user = {
     can: async (what) => (what === 'data.write' ? isEditor() : false),
     id: async () => { const { data } = await sb.auth.getSession(); return data.session ? data.session.user.id : null; },
@@ -129,6 +131,7 @@
     isOwner: async () => false,
   };
 
-  window.claude = { use: async (name) => (name === 'db' ? db : name === 'user' ? user : null) };
-  window.SCRD_AUTH = { isEditor, sb };
+  // the board's data is only handed out to approved, signed-in people
+  window.claude = { use: async (name) => (name === 'db' ? ((await isMember()) ? db : null) : name === 'user' ? user : null) };
+  window.SCRD_AUTH = { isMember, isEditor, sb };
 })();
