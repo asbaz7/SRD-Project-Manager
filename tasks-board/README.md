@@ -8,9 +8,9 @@ records.
 - Site: `public/` (plain HTML, CSS and JavaScript; no build step)
 - Host: a Cloudflare Worker serving static files, on the custom domain
   `tasks.islandsmanager.org` (see `wrangler.jsonc`)
-- Data: the same Supabase project as islandsmanager.org, in the `scrd_board_*`
-  tables created by
-  `branch-monitor/supabase/migrations/20261115090000_scrd_operations_board.sql`
+- Data: Supabase project **SRD Utility Manager** (`nupbpsowqhhkjvsdbstj`), the
+  database behind islandsmanager.org, in the `scrd_board_*` tables created by
+  `supabase/20261115090000_scrd_operations_board.sql` (applied 2026-11-15)
 
 ## Files
 
@@ -21,12 +21,12 @@ records.
 - `public/app/data.js` – loads tasks, interruptions, attendance and islands
 - `public/app/editor.js` – the + Add menu and the edit forms
 - `public/app/auth.js` – sign in / sign out
-- `seed/2026-11-15-tasks.sql` – one-off copy of the tasks entered on the earlier Claude-hosted board
+- `supabase/20261115090000_scrd_operations_board.sql` – the tables and access rules (already applied)
+- `supabase/2026-11-15-tasks.sql` – one-off copy of the tasks entered on the earlier Claude-hosted board (already imported)
 
 ## One-time setup
 
-1. **Database.** In the Supabase SQL editor, run the migration file above, then
-   `seed/2026-11-15-tasks.sql` to bring in the existing tasks.
+1. **Database.** Done on 2026-11-15: the tables exist and the 114 tasks are imported.
 2. **Editors.** For each person who should edit:
    - Supabase → Authentication → Users → *Add user* (email + password, tick *Auto confirm*).
    - Add their email (lower case) to the editors list:

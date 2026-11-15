@@ -92,7 +92,7 @@ returns boolean language sql stable security definer set search_path = '' as $$
   )
 $$;
 revoke all on function public.is_scrd_board_editor() from public;
-grant execute on function public.is_scrd_board_editor() to anon, authenticated;
+grant execute on function public.is_scrd_board_editor() to authenticated;
 
 -- Row level security
 alter table public.scrd_board_editors enable row level security;
@@ -129,6 +129,7 @@ create policy scrd_board_attendance_write on public.scrd_board_attendance for al
 
 grant select on public.scrd_board_islands, public.scrd_board_tasks, public.scrd_board_outages, public.scrd_board_attendance to anon, authenticated;
 grant insert, update, delete on public.scrd_board_islands, public.scrd_board_tasks, public.scrd_board_outages, public.scrd_board_attendance to authenticated;
+revoke all on public.scrd_board_editors from anon, authenticated;
 
 -- Live updates on the TV
 do $$
