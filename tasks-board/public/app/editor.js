@@ -127,10 +127,10 @@
   };
 
   // ---- task form ----
-  const taskForm = (t) => {
+  const taskForm = (t, preset) => {
     const rows = SCRD.get('tasks') || [];
     const isNew = !t;
-    t = t || { status: 'Planned', progress: 0, start: todayISO(), due: '', unit: UNITS[0], category: AREAS[0] };
+    t = t || Object.assign({ status: 'Planned', progress: 0, start: todayISO(), due: '', unit: UNITS[0], category: AREAS[0] }, preset || {});
     const f = {
       task: h('input', { id: 'f-task', type: 'text', required: true, maxlength: 120, value: t.task || '', placeholder: 'e.g. Genset #2 top overhaul' }),
       island: islandSelect('f-island', t.island, [...new Set(OFFSITE.concat(rows.map((r) => r.island).filter((x) => x && !(SCRD.get('islands') || []).some((i) => i.island === x))))].sort((a, b) => (OFFSITE.includes(b) - OFFSITE.includes(a)) || a.localeCompare(b))),
@@ -174,10 +174,10 @@
   };
 
   // ---- power interruption form ----
-  const outageForm = (o) => {
+  const outageForm = (o, preset) => {
     const rows = SCRD.get('outages') || [];
     const isNew = !o;
-    o = o || { type: 'Unplanned', start: new Date().toISOString(), end: '', unit: UNITS[1] };
+    o = o || Object.assign({ type: 'Unplanned', start: new Date().toISOString(), end: '', unit: UNITS[1] }, preset || {});
     const f = {
       island: islandSelect('f-oisland', o.island),
       type: listSelect('f-otype', ['Unplanned', 'Planned'], o.type),
@@ -268,6 +268,8 @@
   // ---- tap a task or an interruption on a detail screen to edit it ----
   const raw = (kind, id) => (SCRD.get(kind) || []).find((r) => r.id === id);
   document.getElementById('side').addEventListener('click', (e) => {
+    const add = e.target.closest('[data-add]');
+    if (add) { e.stopPropagation(); if (add.dataset.add === 'outage') outageForm(null, { island: add.dataset.island }); else taskForm(null, { island: add.dataset.island }); return; }
     const tc = e.target.closest('[data-tid]');
     if (tc) { const t = raw('tasks', tc.dataset.tid); if (t) { e.stopPropagation(); taskForm(t); } return; }
     const oc = e.target.closest('[data-oid], .log tr[data-key]');

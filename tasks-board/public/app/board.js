@@ -516,12 +516,19 @@ dash.calc('task_status', {
   };
   const sortTasks = (a, b) => a.rank - b.rank || a.days - b.days;
   const tile = (v, label, cls) => { const t = el('div', 'tile' + (cls ? ' ' + cls : '')); t.append(el('b', '', String(v)), el('span', '', label)); return t; };
-  const topBar = (title, sub, back) => {
+  const topBar = (title, sub, back, island) => {
     const top = el('div', 'dtop'); const tl = el('div');
     const bk = el('button', 'back', '‹ ' + (back ? back.label : 'Overview')); bk.type = 'button';
     bk.addEventListener('click', () => go(back ? back.view : { kind: 'list', tab: view.kind === 'unit' ? 'units' : 'atolls' }));
     tl.append(bk, el('h2', '', title), el('p', '', sub));
     const cb = el('button', 'closeb', 'Close'); cb.type = 'button'; cb.addEventListener('click', () => { zoom = 1; go({ kind: 'list', tab: 'atolls' }); });
+    if (island) {
+      // shown only to people who can edit (see .gx.can-edit in the styles)
+      const acts = el('div', 'dacts');
+      const at = el('button', 'addhere primary', '+ Add task'); at.type = 'button'; at.dataset.add = 'task'; at.dataset.island = island;
+      const ao = el('button', 'addhere', '+ Power interruption'); ao.type = 'button'; ao.dataset.add = 'outage'; ao.dataset.island = island;
+      acts.append(at, ao, cb); top.append(tl, acts); return top;
+    }
     top.append(tl, cb); return top;
   };
 
@@ -714,7 +721,7 @@ dash.calc('task_status', {
       const schO = (outs || []).filter((o) => names.has(o.island) && o.state === 'Scheduled');
       const staff = team.filter((p) => p.location && (names.has(p.location) || isl.some((r) => String(p.location).includes(short(r.island)))));
 
-      parts.push(topBar(title, sub, back));
+      parts.push(topBar(title, sub, back, view.kind === 'island' ? view.island : null));
       const tiles = el('div', 'tiles');
       const locs = new Set(open.map((t) => t.island)).size;
       const week = open.filter((t) => t.days >= 0 && t.days <= 7).length;
