@@ -1,7 +1,7 @@
 // Add and edit tasks and power interruptions straight from the board.
 (async () => {
   const UNITS = ['Electrical Services Unit', 'Mechanical Services Unit', 'Water and Sewage Services Unit', 'Administration and Support Service Unit', 'Logistics Unit'];
-  const AREAS = ['Mechanical', 'Electrical', 'Infrastructure', 'Office/CS', 'Maintenance', 'Store', 'Workshop', 'Staff area'];
+  const AREAS = ['Mechanical', 'Electrical', 'Water and Sewage', 'Infrastructure', 'Office/CS', 'Maintenance', 'Store', 'Workshop', 'Staff area'];
   const STATUSES = ['Planned', 'In progress', 'On hold', 'Completed'];
   const OFFSITE = ['SCRD office', 'SCRD workshop'];
   const TZ = 'Indian/Maldives';
