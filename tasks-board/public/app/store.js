@@ -7,8 +7,16 @@
     window.claude = { use: async () => null };
     return;
   }
+  // Links from invite and password-reset emails arrive with details after the #.
+  // Note what kind of link it was before the client reads and clears it.
+  const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const qs = new URLSearchParams(location.search);
+  window.SCRD_LINK = {
+    type: hash.get('type') || qs.get('type') || '',
+    error: hash.get('error_description') || qs.get('error_description') || '',
+  };
   const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
   });
   window.SCRD_SB = sb;
 
